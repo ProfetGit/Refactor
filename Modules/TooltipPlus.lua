@@ -190,6 +190,27 @@ local function ApplyCompactMode(tooltip)
 end
 
 ----------------------------------------------
+-- Apply Class Color to Player Name (always enabled)
+----------------------------------------------
+local function ApplyClassColorToName(tooltip, unit)
+    if not UnitIsPlayer(unit) then return end
+    
+    local _, class = UnitClass(unit)
+    if not class then return end
+    
+    local color = RAID_CLASS_COLORS[class]
+    if not color then return end
+    
+    -- Get the name line (first line of tooltip)
+    local tooltipName = tooltip:GetName()
+    local nameLine = _G[tooltipName .. "TextLeft1"]
+    if not nameLine then return end
+    
+    -- Color the name with class color
+    nameLine:SetTextColor(color.r, color.g, color.b)
+end
+
+----------------------------------------------
 -- Unit Tooltip Handler
 ----------------------------------------------
 local function OnTooltipSetUnit(tooltip)
@@ -198,6 +219,9 @@ local function OnTooltipSetUnit(tooltip)
     
     local _, unit = tooltip:GetUnit()
     if not unit then return end
+    
+    -- Apply class color to player name (always on)
+    ApplyClassColorToName(tooltip, unit)
     
     -- Apply border color
     ApplyBorderColor(tooltip, unit)

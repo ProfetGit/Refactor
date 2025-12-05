@@ -27,6 +27,7 @@ addon.L = {
     MODULE_AUTO_CONFIRM = "Auto-Confirm",
     MODULE_AUTO_INVITE = "Auto-Invite",
     MODULE_AUTO_RELEASE = "Auto-Release",
+    MODULE_QUEST_NAMEPLATES = "Quest Nameplates",
     
     -- Auto-Sell
     SOLD_JUNK = "Sold %d item(s) for %s",
@@ -123,6 +124,12 @@ addon.L = {
     SETTINGS_QUESTS = "Quests",
     SETTINGS_CINEMATICS = "Cinematics",
     SETTINGS_TOOLTIP = "Tooltip",
+    SETTINGS_NAMEPLATES = "Nameplates",
+    
+    -- Quest Nameplates Labels
+    SHOW_KILL_ICON = "Show Kill Objective Icon",
+    SHOW_LOOT_ICON = "Show Loot/Interact Icon",
+    TIP_QUEST_NAMEPLATES = "Display quest progress icons and text on nameplates of mobs needed for your active quests.",
     
     -- Settings Labels
     ENABLE = "Enable",

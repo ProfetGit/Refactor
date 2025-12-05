@@ -84,8 +84,8 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 ### 🔍 Tooltip Plus
 > Enhanced tooltip information
 
-- **Class-colored borders** — Player tooltips show class colors
-- **Reaction colors** — NPC tooltips colored by faction
+- **Class-colored names** — Player names display in their class color
+- **Class/Reaction borders** — Tooltip borders colored by class or NPC faction
 - **Item rarity borders** — Color-coded by item quality
 - **Transmog status** — See if you've collected an appearance
   - Works in bags, vendors, and loot windows

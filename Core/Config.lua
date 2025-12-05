@@ -182,6 +182,24 @@ addon.ModuleInfo = {
             },
         },
     },
+    {
+        key = "QuestNameplates",
+        name = L.MODULE_QUEST_NAMEPLATES,
+        description = "Show quest progress icons on enemy nameplates.",
+        category = "Nameplates",
+        options = {
+            {
+                key = "QuestNameplates_ShowKillIcon",
+                type = "checkbox",
+                label = L.SHOW_KILL_ICON,
+            },
+            {
+                key = "QuestNameplates_ShowLootIcon",
+                type = "checkbox",
+                label = L.SHOW_LOOT_ICON,
+            },
+        },
+    },
 }
 
 ----------------------------------------------
@@ -218,6 +236,7 @@ addon.Categories = {
     { key = "Quests", name = L.SETTINGS_QUESTS, icon = "Interface\\Icons\\INV_Misc_Note_01" },
     { key = "Cinematics", name = L.SETTINGS_CINEMATICS, icon = "Interface\\Icons\\INV_Misc_Film_01" },
     { key = "Tooltip", name = L.SETTINGS_TOOLTIP, icon = "Interface\\Icons\\INV_Misc_QuestionMark" },
+    { key = "Nameplates", name = L.SETTINGS_NAMEPLATES, icon = "Interface\\Icons\\Spell_Shadow_SacrificialShield" },
 }
 
 ----------------------------------------------

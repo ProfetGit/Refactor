@@ -163,6 +163,11 @@ local DefaultValues = {
     TooltipPlus_TransmogOverlay = true, -- Show transmog icon on item buttons
     TooltipPlus_TransmogCorner = "TOPRIGHT", -- TOPLEFT, TOPRIGHT, BOTTOMLEFT, BOTTOMRIGHT
     
+    -- Quest Nameplates
+    QuestNameplates = true, -- Enabled by default
+    QuestNameplates_ShowKillIcon = true, -- Sword icon for kill objectives
+    QuestNameplates_ShowLootIcon = true, -- Sparkle for loot/interact
+    
     -- Minimap Button
     MinimapButtonAngle = 220,
     MinimapButtonHidden = false,

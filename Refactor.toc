@@ -28,6 +28,7 @@ Modules\AutoConfirm.lua
 Modules\AutoInvite.lua
 Modules\AutoRelease.lua
 Modules\TooltipPlus.lua
+Modules\QuestNameplates.lua
 
 # Settings UI
 Settings\Init.lua
