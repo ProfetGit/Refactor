@@ -1,0 +1,35 @@
+## Interface: 110207, 110205
+## Title: Refactor
+## Notes: Quality of life automation - Auto-sell junk, auto-repair, auto-quest, fast loot, skip cinematics
+## Author: Refactor Development
+## Version: 1.0.0
+## SavedVariables: RefactorDB
+## SavedVariablesPerCharacter: RefactorCharDB
+## IconTexture: Interface\Icons\INV_Misc_Gear_01
+
+## Category-enUS: Quality of Life
+
+# Localization
+Locales.lua
+
+# Core
+Core\Init.lua
+Core\Config.lua
+Core\SlashCmd.lua
+Core\MinimapButton.lua
+
+# Modules
+Modules\AutoSellJunk.lua
+Modules\AutoRepair.lua
+Modules\AutoQuest.lua
+Modules\FastLoot.lua
+Modules\SkipCinematics.lua
+Modules\AutoConfirm.lua
+Modules\AutoInvite.lua
+Modules\AutoRelease.lua
+Modules\TooltipPlus.lua
+
+# Settings UI
+Settings\Init.lua
+Settings\Components.lua
+Settings\Main.lua
