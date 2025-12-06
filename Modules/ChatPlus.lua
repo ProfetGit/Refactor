@@ -45,6 +45,121 @@ local function UpdateCachedSettings()
 end
 
 ----------------------------------------------
+-- Atlas Button Helper (3-Part Red Button)
+-- Uses Left/Center/Right pieces for proper scaling
+----------------------------------------------
+local function StyleButtonWithAtlas(button)
+    -- Hide default UIPanelButtonTemplate textures
+    if button.Left then button.Left:Hide() end
+    if button.Middle then button.Middle:Hide() end
+    if button.Right then button.Right:Hide() end
+    
+    -- Create texture sets for each state
+    -- Atlas dimensions: Left=114x128, Center=64x128 (tiling), Right=292x128
+    local function CreateButtonTextures(suffix, layer)
+        local btnHeight = button:GetHeight()
+        -- Calculate scaled widths based on aspect ratio (original height is 128)
+        local leftWidth = math.floor(114 * (btnHeight / 128) + 0.5)
+        local rightWidth = math.floor(292 * (btnHeight / 128) + 0.5)
+        
+        local left = button:CreateTexture(nil, layer)
+        left:SetAtlas("128-RedButton-Left" .. suffix, false)
+        left:SetPoint("TOPLEFT", 0, 0)
+        left:SetPoint("BOTTOMLEFT", 0, 0)
+        left:SetWidth(leftWidth)
+        
+        local right = button:CreateTexture(nil, layer)
+        right:SetAtlas("128-RedButton-Right" .. suffix, false)
+        right:SetPoint("TOPRIGHT", 0, 0)
+        right:SetPoint("BOTTOMRIGHT", 0, 0)
+        right:SetWidth(rightWidth)
+        
+        local center = button:CreateTexture(nil, layer, nil, -1)
+        center:SetAtlas("_128-RedButton-Center" .. suffix, false)
+        center:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+        center:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
+        
+        return { left = left, center = center, right = right }
+    end
+    
+    -- Normal state
+    button.normalTex = CreateButtonTextures("", "BACKGROUND")
+    
+    -- Pressed state (hidden by default)
+    button.pushedTex = CreateButtonTextures("-Pressed", "BACKGROUND")
+    button.pushedTex.left:Hide()
+    button.pushedTex.center:Hide()
+    button.pushedTex.right:Hide()
+    
+    -- Disabled state (hidden by default)
+    button.disabledTex = CreateButtonTextures("-Disabled", "BACKGROUND")
+    button.disabledTex.left:Hide()
+    button.disabledTex.center:Hide()
+    button.disabledTex.right:Hide()
+    
+    -- Highlight overlay
+    local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetAtlas("128-RedButton-Highlight", false)
+    highlight:SetAllPoints()
+    highlight:SetBlendMode("ADD")
+    
+    -- Helper functions to show/hide texture sets
+    local function ShowTexSet(set)
+        set.left:Show()
+        set.center:Show()
+        set.right:Show()
+    end
+    
+    local function HideTexSet(set)
+        set.left:Hide()
+        set.center:Hide()
+        set.right:Hide()
+    end
+    
+    -- Handle button states via scripts
+    button:HookScript("OnMouseDown", function(self)
+        if self:IsEnabled() then
+            HideTexSet(self.normalTex)
+            ShowTexSet(self.pushedTex)
+        end
+    end)
+    
+    button:HookScript("OnMouseUp", function(self)
+        if self:IsEnabled() then
+            HideTexSet(self.pushedTex)
+            ShowTexSet(self.normalTex)
+        end
+    end)
+    
+    -- Reset state when leaving button while pressed
+    button:HookScript("OnLeave", function(self)
+        if self:IsEnabled() then
+            HideTexSet(self.pushedTex)
+            ShowTexSet(self.normalTex)
+        end
+    end)
+    
+    -- Handle disabled state
+    button:HookScript("OnDisable", function(self)
+        HideTexSet(self.normalTex)
+        HideTexSet(self.pushedTex)
+        ShowTexSet(self.disabledTex)
+    end)
+    
+    button:HookScript("OnEnable", function(self)
+        HideTexSet(self.disabledTex)
+        HideTexSet(self.pushedTex)
+        ShowTexSet(self.normalTex)
+    end)
+    
+    -- Update text appearance for red button
+    button:SetNormalFontObject(GameFontNormal)
+    button:SetHighlightFontObject(GameFontHighlight)
+    button:SetDisabledFontObject(GameFontDisable)
+    button:SetPushedTextOffset(0, -2)
+end
+
+----------------------------------------------
 -- Copy Frame
 ----------------------------------------------
 local CopyFrame = nil
@@ -99,10 +214,11 @@ local function CreateCopyFrame()
     frame.editBox = editBox
     
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    closeBtn:SetSize(80, 22)
+    closeBtn:SetSize(80, 24)
     closeBtn:SetPoint("BOTTOM", 0, 12)
     closeBtn:SetText(CLOSE or "Close")
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
+    StyleButtonWithAtlas(closeBtn)
     
     table_insert(UISpecialFrames, "RefactorChatCopyFrame")
     
@@ -258,9 +374,10 @@ local function CreateChatCopyButton(chatFrame)
     if chatFrame.RefactorCopyButton then return end
     
     local btn = CreateFrame("Button", nil, chatFrame, "UIPanelButtonTemplate")
-    btn:SetSize(20, 20)
+    btn:SetSize(22, 22)
     btn:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", -24, -4)
     btn:SetText("C")
+    StyleButtonWithAtlas(btn)
     btn:SetNormalFontObject(GameFontHighlightSmall)
     btn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")

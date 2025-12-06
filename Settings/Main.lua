@@ -1,5 +1,5 @@
 -- Refactor Addon - Settings Main Panel
--- Premium OPie-inspired 2-column layout (Optimized)
+-- Premium 2-column layout (Optimized)
 
 local addonName, addon = ...
 local L = addon.L
@@ -41,8 +41,123 @@ local SCROLL_STEP = 30
 -- Dropdown options are defined in Core/Constants.lua (addon.Constants)
 
 ----------------------------------------------
+-- Atlas Button Helper (3-Part Red Button)
+-- Uses Left/Center/Right pieces for proper scaling
+----------------------------------------------
+local function StyleButtonWithAtlas(button)
+    -- Hide default UIPanelButtonTemplate textures
+    if button.Left then button.Left:Hide() end
+    if button.Middle then button.Middle:Hide() end
+    if button.Right then button.Right:Hide() end
+    
+    -- Create texture sets for each state
+    -- Atlas dimensions: Left=114x128, Center=64x128 (tiling), Right=292x128
+    local function CreateButtonTextures(suffix, layer)
+        local btnHeight = button:GetHeight()
+        -- Calculate scaled widths based on aspect ratio (original height is 128)
+        local leftWidth = math.floor(114 * (btnHeight / 128) + 0.5)
+        local rightWidth = math.floor(292 * (btnHeight / 128) + 0.5)
+        
+        local left = button:CreateTexture(nil, layer)
+        left:SetAtlas("128-RedButton-Left" .. suffix, false)
+        left:SetPoint("TOPLEFT", 0, 0)
+        left:SetPoint("BOTTOMLEFT", 0, 0)
+        left:SetWidth(leftWidth)
+        
+        local right = button:CreateTexture(nil, layer)
+        right:SetAtlas("128-RedButton-Right" .. suffix, false)
+        right:SetPoint("TOPRIGHT", 0, 0)
+        right:SetPoint("BOTTOMRIGHT", 0, 0)
+        right:SetWidth(rightWidth)
+        
+        local center = button:CreateTexture(nil, layer, nil, -1)
+        center:SetAtlas("_128-RedButton-Center" .. suffix, false)
+        center:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
+        center:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
+        
+        return { left = left, center = center, right = right }
+    end
+    
+    -- Normal state
+    button.normalTex = CreateButtonTextures("", "BACKGROUND")
+    
+    -- Pressed state (hidden by default)
+    button.pushedTex = CreateButtonTextures("-Pressed", "BACKGROUND")
+    button.pushedTex.left:Hide()
+    button.pushedTex.center:Hide()
+    button.pushedTex.right:Hide()
+    
+    -- Disabled state (hidden by default)
+    button.disabledTex = CreateButtonTextures("-Disabled", "BACKGROUND")
+    button.disabledTex.left:Hide()
+    button.disabledTex.center:Hide()
+    button.disabledTex.right:Hide()
+    
+    -- Highlight overlay
+    local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetAtlas("128-RedButton-Highlight", false)
+    highlight:SetAllPoints()
+    highlight:SetBlendMode("ADD")
+    
+    -- Helper functions to show/hide texture sets
+    local function ShowTexSet(set)
+        set.left:Show()
+        set.center:Show()
+        set.right:Show()
+    end
+    
+    local function HideTexSet(set)
+        set.left:Hide()
+        set.center:Hide()
+        set.right:Hide()
+    end
+    
+    -- Handle button states via scripts
+    button:HookScript("OnMouseDown", function(self)
+        if self:IsEnabled() then
+            HideTexSet(self.normalTex)
+            ShowTexSet(self.pushedTex)
+        end
+    end)
+    
+    button:HookScript("OnMouseUp", function(self)
+        if self:IsEnabled() then
+            HideTexSet(self.pushedTex)
+            ShowTexSet(self.normalTex)
+        end
+    end)
+    
+    -- Reset state when leaving button while pressed
+    button:HookScript("OnLeave", function(self)
+        if self:IsEnabled() then
+            HideTexSet(self.pushedTex)
+            ShowTexSet(self.normalTex)
+        end
+    end)
+    
+    -- Handle disabled state
+    button:HookScript("OnDisable", function(self)
+        HideTexSet(self.normalTex)
+        HideTexSet(self.pushedTex)
+        ShowTexSet(self.disabledTex)
+    end)
+    
+    button:HookScript("OnEnable", function(self)
+        HideTexSet(self.disabledTex)
+        HideTexSet(self.pushedTex)
+        ShowTexSet(self.normalTex)
+    end)
+    
+    -- Update text appearance for red button
+    button:SetNormalFontObject(GameFontNormal)
+    button:SetHighlightFontObject(GameFontHighlight)
+    button:SetDisabledFontObject(GameFontDisable)
+    button:SetPushedTextOffset(0, -2)
+end
+
+----------------------------------------------
 -- Helper: Create Scrollable Tab Container
--- Scrollbar styling matches OPie's minimal scrollbar
+-- Scrollbar uses Blizzard's minimal scrollbar style
 ----------------------------------------------
 local function CreateTabContainer(parent)
     local container = CreateFrame("Frame", nil, parent)
@@ -57,7 +172,7 @@ local function CreateTabContainer(parent)
     content:SetHeight(1000)
     scrollFrame:SetScrollChild(content)
     
-    -- Scrollbar constants matching OPie's minimal style
+    -- Scrollbar constants for Blizzard's minimal style
     local TRACK_WIDTH = 10
     local THUMB_WIDTH = 8
     local THUMB_MIN_SIZE = 18
@@ -754,6 +869,7 @@ local function CreateSettingsFrame()
         }
         StaticPopup_Show("REFACTOR_RESET_DEFAULTS")
     end)
+    StyleButtonWithAtlas(defaultsBtn)
     
     local cancelBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     cancelBtn:SetSize(110, 24)
@@ -764,6 +880,7 @@ local function CreateSettingsFrame()
         frame:Hide()
         PlaySound(SOUNDKIT.IG_MAINMENU_CLOSE)
     end)
+    StyleButtonWithAtlas(cancelBtn)
     
     local okayBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     okayBtn:SetSize(110, 24)
@@ -773,6 +890,7 @@ local function CreateSettingsFrame()
         frame:Hide()
         PlaySound(SOUNDKIT.IG_MAINMENU_CLOSE)
     end)
+    StyleButtonWithAtlas(okayBtn)
     
     frame.DefaultsButton, frame.CancelButton, frame.OkayButton = defaultsBtn, cancelBtn, okayBtn
     

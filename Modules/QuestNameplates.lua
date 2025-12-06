@@ -42,7 +42,6 @@ local nameplateFrames = {} -- Track our overlay frames per nameplate
 
 ----------------------------------------------
 -- Quest Progress Detection (using proper APIs)
--- This is the CORRECT way to detect quest mobs, as used by QuestPlates addon
 ----------------------------------------------
 
 -- Get quest progress for a unit using C_TooltipInfo (Dragonflight+ API)

@@ -1,5 +1,4 @@
 -- Refactor Addon - Core Initialization
--- Inspired by Plumber's initialization pattern
 
 local addonName, addon = ...
 
@@ -12,7 +11,7 @@ local DB
 local DB_PC
 
 ----------------------------------------------
--- Callback Registry (Plumber-style)
+-- Callback Registry
 ----------------------------------------------
 local CallbackRegistry = {}
 CallbackRegistry.events = {}

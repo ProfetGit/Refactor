@@ -1,5 +1,5 @@
 -- Refactor Addon - Settings UI Components
--- Premium OPie-inspired design with 2-column layout
+-- Premium design with 2-column layout
 
 local addonName, addon = ...
 local L = addon.L
@@ -7,7 +7,7 @@ local L = addon.L
 local Components = addon.SettingsUI
 
 ----------------------------------------------
--- Color Definitions (OPie-style)
+-- Color Definitions
 ----------------------------------------------
 local Colors = {
     Header = { 1, 0.82, 0 },              -- Gold accent (WoW yellow)
@@ -36,7 +36,7 @@ local LAYOUT = {
 }
 
 ----------------------------------------------
--- Tab Button Component (OPie-style Modern Tabs)
+-- Tab Button Component (Modern Tabs)
 ----------------------------------------------
 local minitabs = {}
 
@@ -139,7 +139,7 @@ function Components.CreateTab(parent, text)
 end
 
 ----------------------------------------------
--- Section Header Component (OPie-style)
+-- Section Header Component
 ----------------------------------------------
 function Components.CreateSectionHeader(parent, text)
     local holder = CreateFrame("Frame", nil, parent)
@@ -607,7 +607,7 @@ function Components.CreateHeader(parent, text)
 end
 
 ----------------------------------------------
--- Info Box (for addon header - OPie style)
+-- Info Box (for addon header)
 ----------------------------------------------
 function Components.CreateInfoBox(parent, name, version, description)
     local holder = CreateFrame("Frame", nil, parent)
