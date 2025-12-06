@@ -611,7 +611,7 @@ function Components.CreateModuleSection(parent, title, description, moduleKey, h
     
     section.moduleKey = moduleKey
     section:UpdateState()
-    section:SetExpanded(true) -- Start expanded
+    section:SetExpanded(false) -- Start collapsed
     
     return section
 end

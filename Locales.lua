@@ -28,6 +28,20 @@ addon.L = {
     MODULE_AUTO_INVITE = "Auto-Invite",
     MODULE_AUTO_RELEASE = "Auto-Release",
     MODULE_QUEST_NAMEPLATES = "Quest Nameplates",
+    MODULE_LOOT_TOAST = "Loot Toast",
+    MODULE_ACTIONCAM = "Action Cam",
+    MODULE_COMBAT_FADE = "Combat Fade",
+    
+    -- Combat Fade Labels
+    TIP_COMBAT_FADE = "Hide UI elements when not in combat. Elements reveal on mouseover or when entering combat.",
+    COMBAT_FADE_ACTION_BARS = "Hide Action Bars",
+    TIP_COMBAT_FADE_ACTION_BARS = "Fade out action bars when out of combat.",
+    COMBAT_FADE_ACTION_BARS_OPACITY = "Action Bars Opacity",
+    TIP_COMBAT_FADE_ACTION_BARS_OPACITY = "How visible action bars are when hidden (0 = invisible, 100 = fully visible).",
+    COMBAT_FADE_PLAYER_FRAME = "Hide Player Frame",
+    TIP_COMBAT_FADE_PLAYER_FRAME = "Fade out the player frame when out of combat.",
+    COMBAT_FADE_PLAYER_FRAME_OPACITY = "Player Frame Opacity",
+    TIP_COMBAT_FADE_PLAYER_FRAME_OPACITY = "How visible the player frame is when hidden (0 = invisible, 100 = fully visible).",
     
     -- Auto-Sell
     SOLD_JUNK = "Sold %d item(s) for %s",
@@ -64,6 +78,8 @@ addon.L = {
     TIP_AUTO_ACCEPT = "Automatically accept quests from NPCs. Works with most quest givers.",
     TIP_AUTO_TURNIN = "Automatically turn in completed quests and select rewards.",
     TIP_SKIP_GOSSIP = "Skip NPC gossip dialogue and go straight to quest options.",
+    TIP_AUTO_SINGLE_OPTION = "Automatically select the dialogue option when an NPC has only one choice.",
+    TIP_AUTO_CONTINUE_DIALOGUE = "Automatically click 'Continue' and similar dialogue progression options.",
     TIP_DAILY_ONLY = "Only auto-accept daily and repeatable quests. Regular quests will require manual acceptance.",
     TIP_QUEST_MODIFIER = "Hold this key to pause automation and read quest text manually.",
     
@@ -115,6 +131,16 @@ addon.L = {
     TIP_RELEASE_MODE = "Choose when to automatically release your spirit after death.",
     TIP_RELEASE_NOTIFY = "Show a chat message when auto-releasing.",
     
+    -- ActionCam
+    ACTIONCAM_MODE = "Camera Mode",
+    ACTIONCAM_BASIC = "Basic",
+    ACTIONCAM_FULL = "Full",
+    ACTIONCAM_DEFAULT = "Default",
+    
+    -- ActionCam Tooltips
+    TIP_ACTIONCAM = "Automatically enable ActionCam modes (Motion sickness warning for 'Full' mode).",
+    TIP_ACTIONCAM_MODE = "Select which ActionCam mode to enforce on login/reload.",
+    
     -- Settings UI
     SETTINGS_TITLE = "Refactor Settings",
     SETTINGS_GENERAL = "General",
@@ -131,6 +157,17 @@ addon.L = {
     SHOW_LOOT_ICON = "Show Loot/Interact Icon",
     TIP_QUEST_NAMEPLATES = "Display quest progress icons and text on nameplates of mobs needed for your active quests.",
     
+    -- Loot Toast Labels
+    LOOT_TOAST_DURATION = "Toast Duration",
+    LOOT_TOAST_MAX_VISIBLE = "Max Visible Toasts",
+    LOOT_TOAST_SHOW_CURRENCY = "Show Currency",
+    LOOT_TOAST_SHOW_QUANTITY = "Show Item Quantity",
+    TIP_LOOT_TOAST = "Display looted items in elegant popup notifications on the bottom-left of the screen.",
+    TIP_LOOT_TOAST_DURATION = "How long each toast stays visible before fading out (in seconds).",
+    TIP_LOOT_TOAST_MAX = "Maximum number of toasts visible at once. Older ones fade out first.",
+    TIP_LOOT_TOAST_CURRENCY = "Show currency (gold, silver, copper) in the toast feed.",
+    TIP_LOOT_TOAST_QUANTITY = "Display the quantity next to items when looting multiple.",
+    
     -- Settings Labels
     ENABLE = "Enable",
     DISABLE = "Disable",
@@ -139,6 +176,8 @@ addon.L = {
     AUTO_ACCEPT = "Auto-Accept Quests",
     AUTO_TURNIN = "Auto Turn-in Quests",
     SKIP_GOSSIP = "Skip Gossip Dialogue",
+    AUTO_SINGLE_OPTION = "Auto-Select Single Option",
+    AUTO_CONTINUE_DIALOGUE = "Auto-Continue Dialogue",
     DAILY_QUESTS_ONLY = "Daily/Repeatable Quests Only",
     MODIFIER_KEY = "Hold Modifier to Pause",
     SKIP_SEEN_ONLY = "Skip Previously Seen Only",
@@ -170,6 +209,16 @@ addon.L = {
     TIP_TRANSMOG_CORNER = "Which corner of the item icon to display the transmog status indicator.",
     TIP_TRANSMOG_COLLECTED = "Show a green checkmark on items with appearances you've already collected.",
     TIP_TRANSMOG_NOT_COLLECTED = "Show an orange X on items with appearances you haven't collected yet.",
+    
+    -- Chat Plus Labels
+    MODULE_CHAT_PLUS = "Chat Plus",
+    SETTINGS_CHAT = "Chat",
+    CHAT_CLICKABLE_URLS = "Clickable URLs",
+    CHAT_COPY_BUTTON = "Show Copy Button",
+    CHAT_WOWHEAD_LOOKUP = "Wowhead Lookup",
+    
+    -- Chat Copy Dialog
+    CHAT_COPY_HINT = "Press Ctrl+C to copy, then Escape to close",
     
     -- Anchor Positions
     ANCHOR_DEFAULT = "Default",

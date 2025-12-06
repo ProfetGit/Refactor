@@ -61,6 +61,18 @@ local function HandleSlashCommand(msg)
             if addon.Modules.AutoRepair then
                 addon.Modules.AutoRepair:Repair()
             end
+        elseif argument == "toast" then
+            if addon.Modules.LootToast then
+                addon.Modules.LootToast:TestToast()
+            end
+        elseif argument == "toast waterfall" or argument == "toasts" then
+            if addon.Modules.LootToast then
+                addon.Modules.LootToast:TestWaterfall()
+            end
+        elseif argument == "currency" then
+            if addon.Modules.LootToast then
+                addon.Modules.LootToast:TestCurrency()
+            end
         end
         
     else

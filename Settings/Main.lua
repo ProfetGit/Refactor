@@ -1,5 +1,5 @@
 -- Refactor Addon - Settings Main Panel
--- Redesigned with 3 tabs: General, Automation, Tooltip
+-- Redesigned: Unified General & Automation tabs
 
 local addonName, addon = ...
 local L = addon.L
@@ -93,13 +93,13 @@ local function CreateTabContainer(parent)
 end
 
 ----------------------------------------------
--- Tab 1: General (Overview Dashboard)
+-- Tab 1: General (Main Dashboard + Automation)
 ----------------------------------------------
 local function SetupGeneralTab(parent)
     local container = CreateTabContainer(parent)
     local content = container.content
     
-    -- Logo/Title area
+    -- === 1. Header Section ===
     local infoInset = CreateFrame("Frame", nil, content, "InsetFrameTemplate")
     infoInset:SetPoint("TOP", 0, -10)
     infoInset:SetPoint("LEFT", 15, 0)
@@ -124,44 +124,9 @@ local function SetupGeneralTab(parent)
     desc:SetText(L.ADDON_DESCRIPTION)
     desc:SetPoint("BOTTOMLEFT", logo, "BOTTOMRIGHT", 10, 5)
     
-    -- Quick toggles header
-    local header = Components.CreateHeader(content, "Quick Toggles")
-    header:SetPoint("TOP", infoInset, "BOTTOM", 0, -20)
-    
-    -- Module quick toggles
-    local lastFrame = header
-    for _, moduleInfo in ipairs(addon.ModuleInfo) do
-        local toggle = Components.CreateModuleToggle(content, moduleInfo)
-        toggle:SetPoint("TOP", lastFrame, "BOTTOM", 0, -5)
-        lastFrame = toggle
-    end
-    
-    -- Calculate height
-    content:SetHeight(85 + 40 + (#addon.ModuleInfo * 55) + 50)
-    
-    container:SetScript("OnShow", function()
-        -- Refresh all toggle states
-        for i = 1, content:GetNumChildren() do
-            local child = select(i, content:GetChildren())
-            if child.UpdateState then
-                child:UpdateState()
-            end
-        end
-    end)
-    
-    return container
-end
-
-----------------------------------------------
--- Tab 2: Automation (All auto-features)
-----------------------------------------------
-local function SetupAutomationTab(parent)
-    local container = CreateTabContainer(parent)
-    local content = container.content
-    
-    -- Expand/Collapse All buttons container
+    -- === 2. Global Controls (Expand/Collapse) ===
     local controlBar = CreateFrame("Frame", nil, content)
-    controlBar:SetPoint("TOPLEFT", 30, -8)
+    controlBar:SetPoint("TOPLEFT", 30, -100)
     controlBar:SetPoint("RIGHT", -30, 0)
     controlBar:SetHeight(24)
     
@@ -177,9 +142,9 @@ local function SetupAutomationTab(parent)
     collapseAllBtn:SetText("Collapse All")
     collapseAllBtn:SetNormalFontObject(GameFontHighlightSmall)
     
-    -- Function to recalculate section positions
+    -- === 3. Layout Logic ===
     local function RecalculateLayout()
-        local yOffset = -40 -- Account for control bar
+        local yOffset = -135 -- Start below control bar
         for _, section in ipairs(container.sections) do
             section:ClearAllPoints()
             section:SetPoint("TOP", 0, yOffset)
@@ -191,7 +156,6 @@ local function SetupAutomationTab(parent)
         content:SetHeight(math.abs(yOffset) + 50)
     end
     
-    -- Button handlers
     expandAllBtn:SetScript("OnClick", function()
         for _, section in ipairs(container.sections) do
             section:SetExpanded(true)
@@ -206,15 +170,10 @@ local function SetupAutomationTab(parent)
         RecalculateLayout()
     end)
     
-    -- ========== AUTO-SELL JUNK (Smart Vendor) ==========
-    local sellSection = Components.CreateModuleSection(
-        content,
-        L.MODULE_AUTO_SELL,
-        "Sell junk + optionally old soulbound gear. BoE never sold.",
-        "AutoSellJunk",
-        true
-    )
-    sellSection:SetPoint("TOP", 0, -40)
+    -- === 4. Module Sections ===
+    
+    -- Auto-Sell Junk
+    local sellSection = Components.CreateModuleSection(content, L.MODULE_AUTO_SELL, "Sell junk + optionally old soulbound gear. BoE never sold.", "AutoSellJunk", true)
     sellSection:AddCheckbox(L.SHOW_NOTIFICATIONS, "AutoSellJunk_ShowNotify", L.TIP_SELL_NOTIFY)
     sellSection:AddCheckbox(L.SELL_KNOWN_TRANSMOG, "AutoSellJunk_SellKnownTransmog", L.TIP_SELL_KNOWN_TRANSMOG)
     sellSection:AddCheckbox(L.KEEP_TRANSMOG, "AutoSellJunk_KeepTransmog", L.TIP_KEEP_TRANSMOG)
@@ -223,41 +182,34 @@ local function SetupAutomationTab(parent)
     sellSection.OnExpandChanged = RecalculateLayout
     table.insert(container.sections, sellSection)
     
-    -- ========== AUTO-REPAIR ==========
-    local repairSection = Components.CreateModuleSection(
-        content,
-        L.MODULE_AUTO_REPAIR,
-        "Automatically repair gear when visiting a repair vendor.",
-        "AutoRepair",
-        true
-    )
+    -- Auto-Repair
+    local repairSection = Components.CreateModuleSection(content, L.MODULE_AUTO_REPAIR, "Automatically repair gear when visiting a repair vendor.", "AutoRepair", true)
     repairSection:AddCheckbox(L.USE_GUILD_FUNDS, "AutoRepair_UseGuild", L.TIP_USE_GUILD_FUNDS)
     repairSection:AddCheckbox(L.SHOW_NOTIFICATIONS, "AutoRepair_ShowNotify", L.TIP_REPAIR_NOTIFY)
     repairSection.OnExpandChanged = RecalculateLayout
     table.insert(container.sections, repairSection)
     
-    -- ========== FAST LOOT ==========
-    local lootSection = Components.CreateModuleSection(
-        content,
-        L.MODULE_FAST_LOOT,
-        "Instantly loot all items without showing the loot window.",
-        "FastLoot",
-        false
-    )
+    -- Fast Loot
+    local lootSection = Components.CreateModuleSection(content, L.MODULE_FAST_LOOT, "Instantly loot all items without showing the loot window.", "FastLoot", false)
     lootSection.OnExpandChanged = RecalculateLayout
     table.insert(container.sections, lootSection)
     
-    -- ========== AUTO-QUEST ==========
-    local questSection = Components.CreateModuleSection(
-        content,
-        L.MODULE_AUTO_QUEST,
-        "Automatically accept and turn in quests.",
-        "AutoQuest",
-        true
-    )
+    -- Loot Toast
+    local toastSection = Components.CreateModuleSection(content, L.MODULE_LOOT_TOAST, "Display looted items in popup notifications.", "LootToast", true)
+    toastSection:AddSliderWithTooltip(L.LOOT_TOAST_DURATION, "LootToast_Duration", 2, 10, 1, L.TIP_LOOT_TOAST_DURATION)
+    toastSection:AddSliderWithTooltip(L.LOOT_TOAST_MAX_VISIBLE, "LootToast_MaxVisible", 3, 10, 1, L.TIP_LOOT_TOAST_MAX)
+    toastSection:AddCheckbox(L.LOOT_TOAST_SHOW_CURRENCY, "LootToast_ShowCurrency", L.TIP_LOOT_TOAST_CURRENCY)
+    toastSection:AddCheckbox(L.LOOT_TOAST_SHOW_QUANTITY, "LootToast_ShowQuantity", L.TIP_LOOT_TOAST_QUANTITY)
+    toastSection.OnExpandChanged = RecalculateLayout
+    table.insert(container.sections, toastSection)
+    
+    -- Auto-Quest
+    local questSection = Components.CreateModuleSection(content, L.MODULE_AUTO_QUEST, "Automatically accept and turn in quests.", "AutoQuest", true)
     questSection:AddCheckbox(L.AUTO_ACCEPT, "AutoQuest_Accept", L.TIP_AUTO_ACCEPT)
     questSection:AddCheckbox(L.AUTO_TURNIN, "AutoQuest_TurnIn", L.TIP_AUTO_TURNIN)
     questSection:AddCheckbox(L.SKIP_GOSSIP, "AutoQuest_SkipGossip", L.TIP_SKIP_GOSSIP)
+    questSection:AddCheckbox(L.AUTO_SINGLE_OPTION, "AutoQuest_SingleOption", L.TIP_AUTO_SINGLE_OPTION)
+    questSection:AddCheckbox(L.AUTO_CONTINUE_DIALOGUE, "AutoQuest_ContinueDialogue", L.TIP_AUTO_CONTINUE_DIALOGUE)
     questSection:AddCheckbox(L.DAILY_QUESTS_ONLY, "AutoQuest_DailyOnly", L.TIP_DAILY_ONLY)
     questSection:AddDropdown(L.MODIFIER_KEY, "AutoQuest_ModifierKey", {
         { value = "SHIFT", label = L.MODIFIER_SHIFT },
@@ -268,14 +220,8 @@ local function SetupAutomationTab(parent)
     questSection.OnExpandChanged = RecalculateLayout
     table.insert(container.sections, questSection)
     
-    -- ========== SKIP CINEMATICS ==========
-    local cinSection = Components.CreateModuleSection(
-        content,
-        L.MODULE_SKIP_CINEMATICS,
-        "Skip cinematics and movies you've already seen.",
-        "SkipCinematics",
-        true
-    )
+    -- Skip Cinematics
+    local cinSection = Components.CreateModuleSection(content, L.MODULE_SKIP_CINEMATICS, "Skip cinematics and movies you've already seen.", "SkipCinematics", true)
     cinSection:AddCheckbox(L.ALWAYS_SKIP, "SkipCinematics_AlwaysSkip", L.TIP_ALWAYS_SKIP)
     cinSection:AddDropdown(L.MODIFIER_KEY, "SkipCinematics_ModifierKey", {
         { value = "SHIFT", label = L.MODIFIER_SHIFT },
@@ -286,14 +232,33 @@ local function SetupAutomationTab(parent)
     cinSection.OnExpandChanged = RecalculateLayout
     table.insert(container.sections, cinSection)
     
-    -- ========== AUTO-CONFIRM ==========
-    local confirmSection = Components.CreateModuleSection(
-        content,
-        L.MODULE_AUTO_CONFIRM,
-        "Auto-confirm ready checks, summons, role checks, and more.",
-        "AutoConfirm",
-        true
-    )
+    -- Quest Nameplates
+    local nameplateSection = Components.CreateModuleSection(content, L.MODULE_QUEST_NAMEPLATES, L.TIP_QUEST_NAMEPLATES, "QuestNameplates", true)
+    nameplateSection:AddCheckbox(L.SHOW_KILL_ICON, "QuestNameplates_ShowKillIcon")
+    nameplateSection:AddCheckbox(L.SHOW_LOOT_ICON, "QuestNameplates_ShowLootIcon")
+    nameplateSection.OnExpandChanged = RecalculateLayout
+    table.insert(container.sections, nameplateSection)
+
+    -- Combat Fade (Hide UI out of combat)
+    local fadeSection = Components.CreateModuleSection(content, L.MODULE_COMBAT_FADE, L.TIP_COMBAT_FADE, "CombatFade", true)
+    fadeSection:AddCheckbox(L.COMBAT_FADE_ACTION_BARS, "CombatFade_ActionBars", L.TIP_COMBAT_FADE_ACTION_BARS)
+    fadeSection:AddSliderWithTooltip(L.COMBAT_FADE_ACTION_BARS_OPACITY, "CombatFade_ActionBars_Opacity", 0, 100, 5, L.TIP_COMBAT_FADE_ACTION_BARS_OPACITY)
+    fadeSection:AddCheckbox(L.COMBAT_FADE_PLAYER_FRAME, "CombatFade_PlayerFrame", L.TIP_COMBAT_FADE_PLAYER_FRAME)
+    fadeSection:AddSliderWithTooltip(L.COMBAT_FADE_PLAYER_FRAME_OPACITY, "CombatFade_PlayerFrame_Opacity", 0, 100, 5, L.TIP_COMBAT_FADE_PLAYER_FRAME_OPACITY)
+    fadeSection.OnExpandChanged = RecalculateLayout
+    table.insert(container.sections, fadeSection)
+
+    -- Action Cam
+    local camSection = Components.CreateModuleSection(content, L.MODULE_ACTIONCAM, L.TIP_ACTIONCAM, "ActionCam", true)
+    camSection:AddDropdown(L.ACTIONCAM_MODE, "ActionCam_Mode", {
+        { value = "basic", label = L.ACTIONCAM_BASIC },
+        { value = "full", label = L.ACTIONCAM_FULL },
+    })
+    camSection.OnExpandChanged = RecalculateLayout
+    table.insert(container.sections, camSection)
+    
+    -- Auto-Confirm
+    local confirmSection = Components.CreateModuleSection(content, L.MODULE_AUTO_CONFIRM, "Auto-confirm ready checks, summons, role checks, and more.", "AutoConfirm", true)
     confirmSection:AddCheckbox(L.CONFIRM_READY_CHECK, "AutoConfirm_ReadyCheck", L.TIP_READY_CHECK)
     confirmSection:AddCheckbox(L.CONFIRM_SUMMON, "AutoConfirm_Summon", L.TIP_SUMMON)
     confirmSection:AddCheckbox(L.CONFIRM_ROLE_CHECK, "AutoConfirm_RoleCheck", L.TIP_ROLE_CHECK)
@@ -303,14 +268,8 @@ local function SetupAutomationTab(parent)
     confirmSection.OnExpandChanged = RecalculateLayout
     table.insert(container.sections, confirmSection)
     
-    -- ========== AUTO-INVITE ==========
-    local inviteSection = Components.CreateModuleSection(
-        content,
-        L.MODULE_AUTO_INVITE,
-        "Accept party invites from trusted sources.",
-        "AutoInvite",
-        true
-    )
+    -- Auto-Invite
+    local inviteSection = Components.CreateModuleSection(content, L.MODULE_AUTO_INVITE, "Accept party invites from trusted sources.", "AutoInvite", true)
     inviteSection:AddCheckbox(L.INVITE_FRIENDS, "AutoInvite_Friends", L.TIP_INVITE_FRIENDS)
     inviteSection:AddCheckbox(L.INVITE_BNET, "AutoInvite_BNetFriends", L.TIP_INVITE_BNET)
     inviteSection:AddCheckbox(L.INVITE_GUILD, "AutoInvite_Guild", L.TIP_INVITE_GUILD)
@@ -318,14 +277,8 @@ local function SetupAutomationTab(parent)
     inviteSection.OnExpandChanged = RecalculateLayout
     table.insert(container.sections, inviteSection)
     
-    -- ========== AUTO-RELEASE ==========
-    local releaseSection = Components.CreateModuleSection(
-        content,
-        L.MODULE_AUTO_RELEASE,
-        "Release spirit automatically in selected content.",
-        "AutoRelease",
-        true
-    )
+    -- Auto-Release
+    local releaseSection = Components.CreateModuleSection(content, L.MODULE_AUTO_RELEASE, "Release spirit automatically in selected content.", "AutoRelease", true)
     releaseSection:AddDropdown(L.RELEASE_MODE, "AutoRelease_Mode", {
         { value = "ALWAYS", label = L.RELEASE_ALWAYS },
         { value = "PVP", label = L.RELEASE_PVP },
@@ -340,8 +293,10 @@ local function SetupAutomationTab(parent)
     RecalculateLayout()
     
     container:SetScript("OnShow", function()
+        -- Refresh all toggle states and options
         for _, section in ipairs(container.sections) do
-            section:RefreshOptions()
+            section:UpdateState()     -- Update the main toggle
+            section:RefreshOptions()  -- Update sub-checkboxes/sliders
         end
     end)
     
@@ -533,12 +488,87 @@ local function SetupTooltipTab(parent)
 end
 
 ----------------------------------------------
+-- Tab 4: Chat
+----------------------------------------------
+local function SetupChatTab(parent)
+    local container = CreateTabContainer(parent)
+    local content = container.content
+    
+    -- Header
+    local header = Components.CreateHeader(content, L.MODULE_CHAT_PLUS or "Chat Plus")
+    header:SetPoint("TOP", 0, -10)
+    
+    -- Enable
+    local enableChat = Components.CreateCheckbox(content, L.ENABLE, 28, function(state)
+        addon.SetDBValue("ChatPlus", state, true)
+    end)
+    enableChat.option = "ChatPlus"
+    enableChat:SetPoint("TOP", header, "BOTTOM", 0, 0)
+    
+    -- Wowhead Lookup
+    local wowheadLookup = Components.CreateCheckbox(content, L.CHAT_WOWHEAD_LOOKUP or "Wowhead Lookup", 28, function(state)
+        addon.SetDBValue("ChatPlus_WowheadLookup", state, true)
+    end)
+    wowheadLookup.option = "ChatPlus_WowheadLookup"
+    wowheadLookup:SetPoint("TOP", enableChat, "BOTTOM", 0, -15)
+    
+    local wowheadHint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    wowheadHint:SetPoint("TOPLEFT", wowheadLookup, "BOTTOMLEFT", 28, 2)
+    wowheadHint:SetText("Shift+Click on item/spell/quest links in chat to get Wowhead URL")
+    wowheadHint:SetTextColor(0.5, 0.5, 0.5)
+    wowheadHint:SetWidth(350)
+    wowheadHint:SetJustifyH("LEFT")
+    
+    -- Clickable URLs
+    local clickableURLs = Components.CreateCheckbox(content, L.CHAT_CLICKABLE_URLS or "Clickable URLs", 28, function(state)
+        addon.SetDBValue("ChatPlus_ClickableURLs", state, true)
+    end)
+    clickableURLs.option = "ChatPlus_ClickableURLs"
+    clickableURLs:SetPoint("TOP", wowheadHint, "BOTTOM", -28, -15)
+    
+    local urlHint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    urlHint:SetPoint("TOPLEFT", clickableURLs, "BOTTOMLEFT", 28, 2)
+    urlHint:SetText("Makes URLs in chat clickable for easy copying")
+    urlHint:SetTextColor(0.5, 0.5, 0.5)
+    urlHint:SetWidth(350)
+    urlHint:SetJustifyH("LEFT")
+    
+    -- Copy Button
+    local copyButton = Components.CreateCheckbox(content, L.CHAT_COPY_BUTTON or "Show Copy Button", 28, function(state)
+        addon.SetDBValue("ChatPlus_CopyButton", state, true)
+    end)
+    copyButton.option = "ChatPlus_CopyButton"
+    copyButton:SetPoint("TOP", urlHint, "BOTTOM", -28, -15)
+    
+    local copyHint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    copyHint:SetPoint("TOPLEFT", copyButton, "BOTTOMLEFT", 28, 2)
+    copyHint:SetText("Shows a copy button on chat frames when hovering")
+    copyHint:SetTextColor(0.5, 0.5, 0.5)
+    copyHint:SetWidth(350)
+    copyHint:SetJustifyH("LEFT")
+    
+    content:SetHeight(300)
+    
+    local allCheckboxes = { enableChat, wowheadLookup, clickableURLs, copyButton }
+    
+    container:SetScript("OnShow", function()
+        for _, cb in ipairs(allCheckboxes) do
+            if cb.SetValue and cb.option then
+                cb:SetValue(addon.GetDBBool(cb.option))
+            end
+        end
+    end)
+    
+    return container
+end
+
+----------------------------------------------
 -- Tab Configuration (3 Tabs)
 ----------------------------------------------
 local TabSetups = {
     { name = L.SETTINGS_GENERAL, callback = SetupGeneralTab },
-    { name = L.SETTINGS_AUTOMATION, callback = SetupAutomationTab },
     { name = L.SETTINGS_TOOLTIP, callback = SetupTooltipTab },
+    { name = L.SETTINGS_CHAT, callback = SetupChatTab },
 }
 
 ----------------------------------------------
@@ -549,7 +579,7 @@ local function CreateSettingsFrame()
     
     frame = CreateFrame("Frame", "RefactorSettingsDialog", UIParent, "ButtonFrameTemplate")
     frame:SetToplevel(true)
-    frame:SetSize(500, 550)
+    frame:SetSize(500, 600) -- Slightly taller for single-page view
     frame:SetPoint("CENTER")
     frame:Raise()
     

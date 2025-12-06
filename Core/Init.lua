@@ -110,6 +110,8 @@ local DefaultValues = {
     AutoQuest_Accept = true,
     AutoQuest_TurnIn = true,
     AutoQuest_SkipGossip = true,
+    AutoQuest_SingleOption = true, -- Auto-select when NPC has only 1 dialogue option
+    AutoQuest_ContinueDialogue = true, -- Auto-click "Continue" type dialogue options
     AutoQuest_DailyOnly = false,
     AutoQuest_ModifierKey = "SHIFT", -- SHIFT, CTRL, ALT, NONE
     
@@ -168,9 +170,33 @@ local DefaultValues = {
     QuestNameplates_ShowKillIcon = true, -- Sword icon for kill objectives
     QuestNameplates_ShowLootIcon = true, -- Sparkle for loot/interact
     
+    -- Loot Toast
+    LootToast = true, -- Enabled by default
+    LootToast_Duration = 4, -- seconds
+    LootToast_MaxVisible = 6,
+    LootToast_ShowCurrency = true,
+    LootToast_ShowQuantity = true,
+    
     -- Minimap Button
     MinimapButtonAngle = 220,
     MinimapButtonHidden = false,
+
+    -- ActionCam
+    ActionCam = false, -- Disabled by default
+    ActionCam_Mode = "basic",
+    
+    -- Chat Plus
+    ChatPlus = true,
+    ChatPlus_ClickableURLs = true,
+    ChatPlus_CopyButton = true,
+    ChatPlus_WowheadLookup = true, -- Shift+Click links for Wowhead
+
+    -- Combat Fade (Hide UI out of combat)
+    CombatFade = false, -- Disabled by default (master toggle)
+    CombatFade_ActionBars = true, -- Hide action bars
+    CombatFade_ActionBars_Opacity = 0, -- 0-100
+    CombatFade_PlayerFrame = false, -- Hide player frame
+    CombatFade_PlayerFrame_Opacity = 0, -- 0-100
 }
 
 local DefaultCharValues = {

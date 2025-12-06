@@ -11,13 +11,22 @@ local Module = {}
 ----------------------------------------------
 local isEnabled = false
 local nameplateFrames = {} -- Track our overlay frames per nameplate
+-- Cache of GUIDs confirmed to be quest-related via tooltip scan
+local tooltipQuestMobs = {}
+local tooltipScanTime = {}
+local TOOLTIP_CACHE_DURATION = 5 -- Seconds before re-scanning a mob's tooltip
 
 ----------------------------------------------
 -- Quest Objective Cache
 ----------------------------------------------
 local questObjectiveCache = {}
+local questObjectiveByTarget = {} -- Pre-indexed by extracted target name (lowercase)
 local cacheUpdateTime = 0
 local CACHE_DURATION = 0.5 -- Refresh cache every 0.5 seconds
+
+-- Create a scanning tooltip (hidden, just for data extraction)
+local scanningTooltip = CreateFrame("GameTooltip", "RefactorQuestNameplateScanTooltip", nil, "GameTooltipTemplate")
+scanningTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
 
 local function UpdateQuestObjectiveCache()
     local now = GetTime()
@@ -26,6 +35,7 @@ local function UpdateQuestObjectiveCache()
     end
     
     wipe(questObjectiveCache)
+    wipe(questObjectiveByTarget)
     cacheUpdateTime = now
     
     -- Iterate through all quests in the quest log
@@ -43,8 +53,7 @@ local function UpdateQuestObjectiveCache()
                         local text = objective.text or ""
                         local objectiveType = objective.type -- "monster", "item", "object", etc.
                         
-                        -- Store objective info by text
-                        questObjectiveCache[text] = {
+                        local objectiveData = {
                             questID = questID,
                             questTitle = questInfo.title,
                             numFulfilled = objective.numFulfilled or 0,
@@ -54,14 +63,24 @@ local function UpdateQuestObjectiveCache()
                             text = text,
                         }
                         
-                        -- Try to extract creature/item names from objective text
-                        -- Common formats: "Creature Name slain: 0/10" or "0/10 Item Name"
-                        -- For item quests, extract the item name
+                        -- Store objective info by text
+                        questObjectiveCache[text] = objectiveData
+                        
+                        -- Extract and index by target name for faster lookups
+                        local targetName = Module.ExtractTargetFromObjective(text)
+                        if targetName then
+                            local lowerTarget = targetName:lower()
+                            questObjectiveByTarget[lowerTarget] = objectiveData
+                            
+                            -- Also store the original case version for reference
+                            objectiveData.extractedTarget = targetName
+                        end
+                        
+                        -- For item quests, also index by item name
                         if objectiveType == "item" then
-                            -- Format is usually "0/8 Item Name" or "Item Name: 0/8"
                             local itemName = text:match("^%d+/%d+%s+(.+)$") or text:match("^(.+):%s*%d+/%d+$")
                             if itemName then
-                                questObjectiveCache["ITEM:" .. itemName:lower()] = questObjectiveCache[text]
+                                questObjectiveCache["ITEM:" .. itemName:lower()] = objectiveData
                             end
                         end
                     end
@@ -74,80 +93,169 @@ local function UpdateQuestObjectiveCache()
 end
 
 ----------------------------------------------
--- Helper: Check if unit is related to any quest
--- Uses multiple detection methods
+-- Helper: Extract target name from objective text
+-- Handles formats like:
+--   "Creature Name slain: 0/10"
+--   "0/10 Creature Name slain"
+--   "0/10 Creature Name"
+--   "Creature Name: 0/10"
 ----------------------------------------------
-local function IsUnitQuestRelated(unitId)
-    -- Method 1: Direct API check
-    if UnitIsQuestBoss(unitId) then
-        return true, "questboss"
-    end
+function Module.ExtractTargetFromObjective(text)
+    if not text then return nil end
     
-    -- Method 2: Check unit's quest icon via widget (if visible)
-    local guid = UnitGUID(unitId)
-    if guid then
-        local mobId = select(6, strsplit("-", guid))
-        if mobId and tonumber(mobId) then
-            -- Some quest mobs have specific markers we can detect later
-        end
-    end
+    -- Remove progress counters like "0/10" or "5/5"
+    local cleaned = text:gsub("%d+/%d+", "")
     
-    -- Method 3: Check if unit has quest-related classification
-    local classification = UnitClassification(unitId)
-    -- questboss classification is a hint but not definitive
+    -- Remove common suffix words (case insensitive, but preserve case for output)
+    cleaned = cleaned:gsub("%s+[Ss]lain%s*$", "")
+    cleaned = cleaned:gsub("%s+[Kk]illed%s*$", "")
+    cleaned = cleaned:gsub("%s+[Dd]efeated%s*$", "")
+    cleaned = cleaned:gsub("%s+[Dd]estroyed%s*$", "")
     
-    return false, nil
+    -- Remove leading/trailing colons and whitespace
+    cleaned = cleaned:gsub("^[%s:]+", "")
+    cleaned = cleaned:gsub("[%s:]+$", "")
+    
+    -- Trim any remaining whitespace
+    cleaned = cleaned:match("^%s*(.-)%s*$")
+    
+    return cleaned ~= "" and cleaned or nil
 end
 
 ----------------------------------------------
--- Helper: Find matching quest objective for a unit
--- More flexible matching for item-drop quests
+-- Helper: Check if unit's tooltip contains quest-related lines
+-- This is the most reliable way to detect quest mobs
 ----------------------------------------------
-local function FindQuestObjective(unitName, unitId)
-    if not unitName then return nil end
+local function IsUnitQuestRelatedByTooltip(unitId)
+    local guid = UnitGUID(unitId)
+    if not guid then return false, nil end
     
-    local objectives = UpdateQuestObjectiveCache()
-    local lowerName = unitName:lower()
+    -- Check cache first
+    local now = GetTime()
+    local cachedTime = tooltipScanTime[guid]
+    if cachedTime and (now - cachedTime) < TOOLTIP_CACHE_DURATION then
+        return tooltipQuestMobs[guid] ~= nil, tooltipQuestMobs[guid]
+    end
     
-    -- Method 1: Search for the unit name in objective text
-    for text, objectiveData in pairs(objectives) do
-        -- Skip the ITEM: prefixed entries for direct name matching
-        if not text:match("^ITEM:") then
-            local lowerText = text:lower()
-            -- Check if the unit name appears in the objective text
-            if lowerText:find(lowerName, 1, true) then
-                return objectiveData
+    -- Scan the tooltip
+    scanningTooltip:ClearLines()
+    scanningTooltip:SetUnit(unitId)
+    
+    local foundQuestLine = false
+    local questProgress = nil
+    
+    -- Scan tooltip lines for quest-related content
+    -- Quest objectives typically show up with specific formatting
+    for i = 2, scanningTooltip:NumLines() do
+        local leftText = _G["RefactorQuestNameplateScanTooltipTextLeft" .. i]
+        if leftText then
+            local text = leftText:GetText()
+            if text then
+                -- Check for progress format like "0/8" or "3/5"
+                local current, required = text:match("(%d+)%s*//%s*(%d+)")
+                if not current then
+                    current, required = text:match("(%d+)/(%d+)")
+                end
+                
+                if current and required then
+                    foundQuestLine = true
+                    questProgress = {
+                        numFulfilled = tonumber(current) or 0,
+                        numRequired = tonumber(required) or 1,
+                        tooltipLine = text,
+                    }
+                    break
+                end
+                
+                -- Check for percentage format
+                local percentage = text:match("(%d+)%%")
+                if percentage then
+                    foundQuestLine = true
+                    questProgress = {
+                        numFulfilled = tonumber(percentage) or 0,
+                        numRequired = 100,
+                        tooltipLine = text,
+                        isPercentage = true,
+                    }
+                    break
+                end
             end
         end
     end
     
-    -- Method 2: Check if ANY word from mob name (4+ chars) appears in objective
-    for word in lowerName:gmatch("%w+") do
-        if #word >= 4 then
-            for text, objectiveData in pairs(objectives) do
-                if not text:match("^ITEM:") then
-                    local lowerText = text:lower()
-                    if lowerText:find(word, 1, true) then
-                        return objectiveData
+    -- Cache the result
+    tooltipScanTime[guid] = now
+    if foundQuestLine then
+        tooltipQuestMobs[guid] = questProgress
+    else
+        tooltipQuestMobs[guid] = nil
+    end
+    
+    return foundQuestLine, questProgress
+end
+
+----------------------------------------------
+-- Helper: Find matching quest objective for a unit
+-- Uses STRICT matching to avoid false positives
+----------------------------------------------
+local function FindQuestObjective(unitName, unitId)
+    if not unitName then return nil end
+    
+    UpdateQuestObjectiveCache()
+    local lowerName = unitName:lower()
+    
+    -- PRIORITY 1: Exact match in pre-indexed target names
+    local exactMatch = questObjectiveByTarget[lowerName]
+    if exactMatch then
+        return exactMatch, "exact"
+    end
+    
+    -- PRIORITY 2: Check if UnitIsQuestBoss and we have a matching monster objective
+    -- (Only match if the mob name appears in the objective text)
+    if UnitIsQuestBoss(unitId) then
+        for text, objectiveData in pairs(questObjectiveCache) do
+            if not text:match("^ITEM:") then
+                if objectiveData.objectiveType == "monster" then
+                    -- Check if mob name appears in the objective text (case-insensitive)
+                    if text:lower():find(lowerName, 1, true) then
+                        return objectiveData, "questboss_match"
                     end
                 end
             end
         end
     end
     
-    -- Method 3: Check if ANY word from objective (4+ chars) appears in mob name
-    for text, objectiveData in pairs(objectives) do
-        if not text:match("^ITEM:") then
-            local lowerText = text:lower()
-            for word in lowerText:gmatch("%w+") do
-                if #word >= 4 and lowerName:find(word, 1, true) then
-                    return objectiveData
+    -- PRIORITY 3: For mobs that are UnitIsQuestBoss, try tooltip verification
+    -- This catches cases where the API knows it's a quest mob but name matching failed
+    if UnitIsQuestBoss(unitId) then
+        local hasQuestTooltip, tooltipData = IsUnitQuestRelatedByTooltip(unitId)
+        if hasQuestTooltip and tooltipData then
+            -- Find the best matching objective based on progress
+            for text, objectiveData in pairs(questObjectiveCache) do
+                if not text:match("^ITEM:") and not objectiveData.finished then
+                    -- Match by progress numbers
+                    if objectiveData.numFulfilled == tooltipData.numFulfilled and
+                       objectiveData.numRequired == tooltipData.numRequired then
+                        return objectiveData, "tooltip_progress"
+                    end
                 end
             end
+            
+            -- If we have tooltip data but no matching objective, return tooltip data as-is
+            return {
+                numFulfilled = tooltipData.numFulfilled,
+                numRequired = tooltipData.numRequired,
+                objectiveType = "monster",
+                text = tooltipData.tooltipLine,
+            }, "tooltip_only"
         end
     end
     
-    return nil
+    -- NO FALLBACK: We specifically avoid loose matching to prevent false positives
+    -- If we couldn't find a match through exact name, questboss + name, or tooltip,
+    -- then we should NOT show anything on this mob.
+    
+    return nil, nil
 end
 
 ----------------------------------------------
@@ -204,126 +312,61 @@ local function UpdateNameplate(unitId)
         return
     end
     
-    -- Check if this unit is quest-related using MULTIPLE methods:
-    -- 1. UnitIsQuestBoss() API
-    -- 2. Unit name matches quest objective text
-    
-    local isQuestMob = UnitIsQuestBoss(unitId)
-    
-    -- Try to find a matching objective by name
-    local objectiveData = FindQuestObjective(unitName, unitId)
-    
-    -- FALLBACK: For item-drop quests where UnitIsQuestBoss doesn't work
-    -- Check if this is an attackable enemy and we have any item objectives
-    local itemFallback = nil
-    if not isQuestMob and not objectiveData then
-        -- Is this an attackable enemy?
-        local isEnemy = UnitCanAttack("player", unitId) and not UnitIsDead(unitId)
-        if isEnemy then
-            local objectives = UpdateQuestObjectiveCache()
-            local lowerName = unitName:lower()
-            
-            -- Find item objective where quest title matches mob name
-            for text, data in pairs(objectives) do
-                if not text:match("^ITEM:") and data.objectiveType == "item" and not data.finished then
-                    -- Check if quest title has any word (4+ chars) matching mob name
-                    if data.questTitle then
-                        local lowerTitle = data.questTitle:lower()
-                        for word in lowerTitle:gmatch("%w+") do
-                            if #word >= 4 and lowerName:find(word, 1, true) then
-                                itemFallback = data
-                                break
-                            end
-                        end
-                        if itemFallback then break end
-                    end
-                end
-            end
-            -- No fallback to random item quests - only show when title matches
-        end
-    end
-    
-    -- If no detection method works, hide
-    if not isQuestMob and not objectiveData and not itemFallback then
+    -- Skip dead units
+    if UnitIsDead(unitId) then
         overlay:Hide()
         return
     end
     
-    -- If UnitIsQuestBoss is true but no name match, try to find ANY item objective
-    if not objectiveData and isQuestMob then
-        local objectives = UpdateQuestObjectiveCache()
-        for text, data in pairs(objectives) do
-            if not text:match("^ITEM:") and data.objectiveType == "item" and not data.finished then
-                objectiveData = data
-                break
-            end
-        end
-        -- Still no match? Try any incomplete objective
-        if not objectiveData then
-            for text, data in pairs(objectives) do
-                if not text:match("^ITEM:") and not data.finished then
-                    objectiveData = data
-                    break
-                end
-            end
-        end
+    -- Skip friendly units (NPCs we can't attack usually aren't quest targets)
+    if not UnitCanAttack("player", unitId) and not UnitIsQuestBoss(unitId) then
+        overlay:Hide()
+        return
     end
     
-    -- Use itemFallback if we still don't have objective data
-    if not objectiveData and itemFallback then
-        objectiveData = itemFallback
+    -- Try to find a matching quest objective
+    local objectiveData, matchType = FindQuestObjective(unitName, unitId)
+    
+    -- If no match found, hide the overlay
+    if not objectiveData then
+        overlay:Hide()
+        return
     end
     
+    -- Get display preferences
     local showKillIcon = addon.GetDBBool("QuestNameplates_ShowKillIcon")
     local showLootIcon = addon.GetDBBool("QuestNameplates_ShowLootIcon")
     
-    if objectiveData then
-        local objectiveType = objectiveData.objectiveType
-        
-        if objectiveType == "monster" then
-            if not showKillIcon then
-                overlay:Hide()
-                return
-            end
-            -- Use swords icon for kill objectives
-            overlay.icon:SetTexture("Interface\\CURSOR\\Attack")
-            overlay.icon:SetTexCoord(0, 1, 0, 1)
-            overlay.icon:SetVertexColor(1, 1, 1) -- White/normal
-        else
-            -- item, object, or other types - use bag/loot icon
-            if not showLootIcon then
-                overlay:Hide()
-                return
-            end
-            overlay.icon:SetTexture("Interface\\Minimap\\Tracking\\Banker")
-            overlay.icon:SetTexCoord(0, 1, 0, 1)
-            overlay.icon:SetVertexColor(1, 0.85, 0.1) -- Gold tint for loot
-        end
-        
-        -- Set progress text
-        local progressText = string.format("%d/%d", 
-            objectiveData.numFulfilled, 
-            objectiveData.numRequired
-        )
-        overlay.text:SetText(progressText)
-        overlay:Show()
-    else
-        -- Quest mob detected but couldn't find specific objective
-        -- Show a generic indicator
-        if showLootIcon then
-            overlay.icon:SetTexture("Interface\\Minimap\\Tracking\\Banker")
-            overlay.icon:SetVertexColor(1, 0.82, 0) -- Gold
-            overlay.text:SetText("?")
-            overlay:Show()
-        elseif showKillIcon then
-            overlay.icon:SetTexture("Interface\\CURSOR\\Attack")
-            overlay.icon:SetVertexColor(1, 0.82, 0) -- Gold
-            overlay.text:SetText("?")
-            overlay:Show()
-        else
+    local objectiveType = objectiveData.objectiveType or "monster"
+    
+    -- Determine icon and whether to show based on objective type
+    if objectiveType == "monster" then
+        if not showKillIcon then
             overlay:Hide()
+            return
         end
+        -- Use swords icon for kill objectives
+        overlay.icon:SetTexture("Interface\\CURSOR\\Attack")
+        overlay.icon:SetTexCoord(0, 1, 0, 1)
+        overlay.icon:SetVertexColor(1, 1, 1) -- White/normal
+    else
+        -- item, object, or other types - use bag/loot icon
+        if not showLootIcon then
+            overlay:Hide()
+            return
+        end
+        overlay.icon:SetTexture("Interface\\Minimap\\Tracking\\Banker")
+        overlay.icon:SetTexCoord(0, 1, 0, 1)
+        overlay.icon:SetVertexColor(1, 0.85, 0.1) -- Gold tint for loot
     end
+    
+    -- Set progress text
+    local progressText = string.format("%d/%d", 
+        objectiveData.numFulfilled, 
+        objectiveData.numRequired
+    )
+    overlay.text:SetText(progressText)
+    overlay:Show()
 end
 
 ----------------------------------------------
@@ -358,6 +401,21 @@ local function UpdateAllNameplates()
 end
 
 ----------------------------------------------
+-- Periodic cache cleanup (prevent memory leaks)
+----------------------------------------------
+local function CleanupTooltipCache()
+    local now = GetTime()
+    local expireTime = now - TOOLTIP_CACHE_DURATION * 2
+    
+    for guid, time in pairs(tooltipScanTime) do
+        if time < expireTime then
+            tooltipScanTime[guid] = nil
+            tooltipQuestMobs[guid] = nil
+        end
+    end
+end
+
+----------------------------------------------
 -- Event Handler
 ----------------------------------------------
 local eventFrame = CreateFrame("Frame")
@@ -374,10 +432,12 @@ local function OnEvent(self, event, ...)
     elseif event == "QUEST_LOG_UPDATE" or event == "QUEST_ACCEPTED" or 
            event == "QUEST_REMOVED" or event == "QUEST_POI_UPDATE" then
         -- Quest data changed, update all nameplates
+        cacheUpdateTime = 0 -- Force cache refresh
         C_Timer.After(0.1, UpdateAllNameplates)
         
     elseif event == "UNIT_QUEST_LOG_CHANGED" then
         -- Specific quest progress changed
+        cacheUpdateTime = 0 -- Force cache refresh
         C_Timer.After(0.1, UpdateAllNameplates)
     end
 end
@@ -399,6 +459,9 @@ local function EnableModule()
     eventFrame:RegisterEvent("QUEST_POI_UPDATE")
     eventFrame:RegisterEvent("UNIT_QUEST_LOG_CHANGED")
     
+    -- Set up periodic cache cleanup
+    C_Timer.NewTicker(30, CleanupTooltipCache)
+    
     -- Update any currently visible nameplates
     UpdateAllNameplates()
 end
@@ -413,6 +476,10 @@ local function DisableModule()
     for _, frame in pairs(nameplateFrames) do
         frame:Hide()
     end
+    
+    -- Clear caches
+    wipe(tooltipQuestMobs)
+    wipe(tooltipScanTime)
 end
 
 ----------------------------------------------

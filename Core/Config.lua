@@ -200,6 +200,64 @@ addon.ModuleInfo = {
             },
         },
     },
+    {
+        key = "LootToast",
+        name = L.MODULE_LOOT_TOAST,
+        description = "Display looted items in popup toasts.",
+        category = "Loot",
+        options = {
+            {
+                key = "LootToast_ShowCurrency",
+                type = "checkbox",
+                label = L.LOOT_TOAST_SHOW_CURRENCY,
+            },
+            {
+                key = "LootToast_ShowQuantity",
+                type = "checkbox",
+                label = L.LOOT_TOAST_SHOW_QUANTITY,
+            },
+        },
+    },
+    {
+        key = "ChatPlus",
+        name = L.MODULE_CHAT_PLUS,
+        description = "Shift+Click chat links for Wowhead, clickable URLs, copy button.",
+        category = "Chat",
+        options = {
+            {
+                key = "ChatPlus_WowheadLookup",
+                type = "checkbox",
+                label = L.CHAT_WOWHEAD_LOOKUP,
+            },
+            {
+                key = "ChatPlus_ClickableURLs",
+                type = "checkbox",
+                label = L.CHAT_CLICKABLE_URLS,
+            },
+            {
+                key = "ChatPlus_CopyButton",
+                type = "checkbox",
+                label = L.CHAT_COPY_BUTTON,
+            },
+        },
+    },
+    {
+        key = "ActionCam",
+        name = L.MODULE_ACTIONCAM,
+        description = L.TIP_ACTIONCAM,
+        category = "Camera",
+        options = {
+            {
+                key = "ActionCam_Mode",
+                type = "dropdown",
+                label = L.ACTIONCAM_MODE,
+                options = {
+                    { value = "basic", label = L.ACTIONCAM_BASIC },
+                    { value = "full", label = L.ACTIONCAM_FULL },
+                },
+            },
+        },
+    },
 }
 
 ----------------------------------------------
@@ -237,6 +295,7 @@ addon.Categories = {
     { key = "Cinematics", name = L.SETTINGS_CINEMATICS, icon = "Interface\\Icons\\INV_Misc_Film_01" },
     { key = "Tooltip", name = L.SETTINGS_TOOLTIP, icon = "Interface\\Icons\\INV_Misc_QuestionMark" },
     { key = "Nameplates", name = L.SETTINGS_NAMEPLATES, icon = "Interface\\Icons\\Spell_Shadow_SacrificialShield" },
+    { key = "Chat", name = L.SETTINGS_CHAT, icon = "Interface\\Icons\\INV_Letter_15" },
 }
 
 ----------------------------------------------
@@ -271,6 +330,13 @@ function addon.ParseModuleKey(input)
         ["tooltipplus"] = "TooltipPlus",
         ["tooltip"] = "TooltipPlus",
         ["tip"] = "TooltipPlus",
+        
+        ["chatplus"] = "ChatPlus",
+        ["chat"] = "ChatPlus",
+        
+        ["actioncam"] = "ActionCam",
+        ["cam"] = "ActionCam",
+        ["camera"] = "ActionCam",
     }
     
     return aliases[input]
