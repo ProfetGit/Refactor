@@ -40,11 +40,43 @@ local f = CreateFrame("Frame")
 local FADE_IN_TIME = 0.2
 local FADE_OUT_TIME = 0.5
 
+-- Current alpha states
 local actionBarAlpha = 1
 local playerFrameAlpha = 1
 local actionBarGryphonsHidden = false
 
+----------------------------------------------
+-- PERFORMANCE OPTIMIZATION: Cached settings
+-- Updated only when settings change, not every frame
+----------------------------------------------
+local cachedSettings = {
+    moduleEnabled = false,
+    actionBarsEnabled = false,
+    playerFrameEnabled = false,
+    actionBarMinAlpha = 0,
+    playerFrameMinAlpha = 0,
+}
+
+-- Throttle: only run expensive checks every N seconds
+local UPDATE_INTERVAL = 0.05 -- 20 times per second instead of 60+
+local timeSinceLastUpdate = 0
+
+-- Track if alpha needs updating (dirty flag)
+local needsAlphaUpdate = true
+local lastInCombat = nil
+local lastMouseOver = nil
+
+local function UpdateCachedSettings()
+    cachedSettings.moduleEnabled = addon.GetDBBool("CombatFade")
+    cachedSettings.actionBarsEnabled = addon.GetDBBool("CombatFade_ActionBars")
+    cachedSettings.playerFrameEnabled = addon.GetDBBool("CombatFade_PlayerFrame")
+    cachedSettings.actionBarMinAlpha = (addon.GetDBValue("CombatFade_ActionBars_Opacity") or 0) / 100
+    cachedSettings.playerFrameMinAlpha = (addon.GetDBValue("CombatFade_PlayerFrame_Opacity") or 0) / 100
+    needsAlphaUpdate = true
+end
+
 function CombatFade:OnInitialize()
+    UpdateCachedSettings()
     C_Timer.After(1, function()
         self:UpdateState()
     end)
@@ -150,11 +182,9 @@ local function InitFrames()
 end
 
 function CombatFade:UpdateState()
-    local moduleEnabled = addon.GetDBBool("CombatFade")
-    local actionBarsEnabled = addon.GetDBBool("CombatFade_ActionBars")
-    local playerFrameEnabled = addon.GetDBBool("CombatFade_PlayerFrame")
+    UpdateCachedSettings()
     
-    if moduleEnabled and (actionBarsEnabled or playerFrameEnabled) then
+    if cachedSettings.moduleEnabled and (cachedSettings.actionBarsEnabled or cachedSettings.playerFrameEnabled) then
         if not initialized then InitFrames() end
         f:SetScript("OnUpdate", self.OnUpdate)
     else
@@ -183,6 +213,7 @@ function CombatFade:ForceShow()
     actionBarGryphonsHidden = false
 end
 
+-- OPTIMIZED: Only check mouse over when needed
 local function IsMouseOverList(list)
     for _, obj in ipairs(list) do
         if obj.IsShown and obj:IsShown() and obj.IsMouseOver and obj:IsMouseOver() then
@@ -193,89 +224,118 @@ local function IsMouseOverList(list)
 end
 
 function CombatFade.OnUpdate(self, elapsed)
-    if not initialized then InitFrames() end
-
-    local inCombat = InCombatLockdown()
-    local moduleEnabled = addon.GetDBBool("CombatFade")
-    local actionBarsEnabled = moduleEnabled and addon.GetDBBool("CombatFade_ActionBars")
-    local playerFrameEnabled = moduleEnabled and addon.GetDBBool("CombatFade_PlayerFrame")
+    -- OPTIMIZATION: Throttle updates to 20/sec instead of 60+
+    timeSinceLastUpdate = timeSinceLastUpdate + elapsed
+    if timeSinceLastUpdate < UPDATE_INTERVAL then
+        return
+    end
+    local actualElapsed = timeSinceLastUpdate
+    timeSinceLastUpdate = 0
     
-    -- Get opacity settings (0-100) and convert to alpha (0-1)
-    local actionBarMinAlpha = (addon.GetDBValue("CombatFade_ActionBars_Opacity") or 0) / 100
-    local playerFrameMinAlpha = (addon.GetDBValue("CombatFade_PlayerFrame_Opacity") or 0) / 100
+    if not initialized then InitFrames() end
+    
+    -- Use cached settings (updated only on setting change)
+    local settings = cachedSettings
+    
+    -- Check combat state (cheap)
+    local inCombat = InCombatLockdown()
+    
+    -- Only check mouse over if we're not in combat (expensive)
+    local mouseOverBars = false
+    local mouseOverPlayer = false
+    
+    if not inCombat then
+        if settings.actionBarsEnabled then
+            mouseOverBars = IsMouseOverList(actionBarObjects) or 
+                           IsMouseOverList(actionBarGryphons) or
+                           (SpellFlyout and SpellFlyout:IsShown() and SpellFlyout:IsMouseOver())
+        end
+        if settings.playerFrameEnabled then
+            mouseOverPlayer = IsMouseOverList(playerFrameObjects)
+        end
+    end
     
     -- Calculate target alpha for action bars
-    local actionBarTarget = actionBarMinAlpha
-    if not actionBarsEnabled then
+    local actionBarTarget = settings.actionBarMinAlpha
+    if not settings.actionBarsEnabled then
         actionBarTarget = 1
-    elseif inCombat then
-        actionBarTarget = 1
-    elseif IsMouseOverList(actionBarObjects) or IsMouseOverList(actionBarGryphons) then
-        actionBarTarget = 1
-    elseif SpellFlyout and SpellFlyout:IsShown() and SpellFlyout:IsMouseOver() then
+    elseif inCombat or mouseOverBars then
         actionBarTarget = 1
     end
     
     -- Calculate target alpha for player frame
-    local playerFrameTarget = playerFrameMinAlpha
-    if not playerFrameEnabled then
+    local playerFrameTarget = settings.playerFrameMinAlpha
+    if not settings.playerFrameEnabled then
         playerFrameTarget = 1
-    elseif inCombat then
-        playerFrameTarget = 1
-    elseif IsMouseOverList(playerFrameObjects) then
+    elseif inCombat or mouseOverPlayer then
         playerFrameTarget = 1
     end
     
+    -- OPTIMIZATION: Skip alpha updates if already at target
+    local actionBarNeedsUpdate = math.abs(actionBarAlpha - actionBarTarget) > 0.001
+    local playerFrameNeedsUpdate = math.abs(playerFrameAlpha - playerFrameTarget) > 0.001
+    
+    if not actionBarNeedsUpdate and not playerFrameNeedsUpdate then
+        return -- Nothing to do, skip expensive iterations
+    end
+    
     -- Smooth transition for action bars
-    if actionBarAlpha ~= actionBarTarget then
-        local change = elapsed / (actionBarTarget > actionBarAlpha and FADE_IN_TIME or FADE_OUT_TIME)
+    if actionBarNeedsUpdate then
+        local change = actualElapsed / (actionBarTarget > actionBarAlpha and FADE_IN_TIME or FADE_OUT_TIME)
         if actionBarTarget > actionBarAlpha then
             actionBarAlpha = math.min(actionBarTarget, actionBarAlpha + change)
         else
             actionBarAlpha = math.max(actionBarTarget, actionBarAlpha - change)
         end
+        
+        -- Apply action bar alpha
+        for _, obj in ipairs(actionBarObjects) do
+            if obj.SetAlpha then
+                obj:SetAlpha(actionBarAlpha)
+            end
+        end
+        
+        -- Handle gryphons (Hide/Show at threshold)
+        local gryphonThreshold = settings.actionBarMinAlpha + 0.05
+        if actionBarAlpha <= gryphonThreshold and not actionBarGryphonsHidden then
+            for _, obj in ipairs(actionBarGryphons) do
+                if obj.Hide then obj:Hide() end
+            end
+            actionBarGryphonsHidden = true
+        elseif actionBarAlpha > gryphonThreshold + 0.4 and actionBarGryphonsHidden then
+            for _, obj in ipairs(actionBarGryphons) do
+                if obj.Show then obj:Show() end
+            end
+            actionBarGryphonsHidden = false
+        end
     end
     
     -- Smooth transition for player frame
-    if playerFrameAlpha ~= playerFrameTarget then
-        local change = elapsed / (playerFrameTarget > playerFrameAlpha and FADE_IN_TIME or FADE_OUT_TIME)
+    if playerFrameNeedsUpdate then
+        local change = actualElapsed / (playerFrameTarget > playerFrameAlpha and FADE_IN_TIME or FADE_OUT_TIME)
         if playerFrameTarget > playerFrameAlpha then
             playerFrameAlpha = math.min(playerFrameTarget, playerFrameAlpha + change)
         else
             playerFrameAlpha = math.max(playerFrameTarget, playerFrameAlpha - change)
         end
-    end
-    
-    -- Apply action bar alpha
-    for _, obj in ipairs(actionBarObjects) do
-        if obj.SetAlpha then
-            obj:SetAlpha(actionBarAlpha)
-        end
-    end
-    
-    -- Handle gryphons (Hide/Show at threshold)
-    local gryphonThreshold = actionBarMinAlpha + 0.05
-    if actionBarAlpha <= gryphonThreshold and not actionBarGryphonsHidden then
-        for _, obj in ipairs(actionBarGryphons) do
-            if obj.Hide then obj:Hide() end
-        end
-        actionBarGryphonsHidden = true
-    elseif actionBarAlpha > gryphonThreshold + 0.4 and actionBarGryphonsHidden then
-        for _, obj in ipairs(actionBarGryphons) do
-            if obj.Show then obj:Show() end
-        end
-        actionBarGryphonsHidden = false
-    end
-    
-    -- Apply player frame alpha
-    for _, obj in ipairs(playerFrameObjects) do
-        if obj.SetAlpha then
-            obj:SetAlpha(playerFrameAlpha)
+        
+        -- Apply player frame alpha
+        for _, obj in ipairs(playerFrameObjects) do
+            if obj.SetAlpha then
+                obj:SetAlpha(playerFrameAlpha)
+            end
         end
     end
 end
 
--- Listen for setting changes
-addon.CallbackRegistry:Register("SettingChanged.CombatFade", CombatFade.UpdateState, CombatFade)
-addon.CallbackRegistry:Register("SettingChanged.CombatFade_ActionBars", CombatFade.UpdateState, CombatFade)
-addon.CallbackRegistry:Register("SettingChanged.CombatFade_PlayerFrame", CombatFade.UpdateState, CombatFade)
+-- Listen for setting changes - update cached values
+local function OnSettingChanged()
+    UpdateCachedSettings()
+    CombatFade:UpdateState()
+end
+
+addon.CallbackRegistry:Register("SettingChanged.CombatFade", OnSettingChanged)
+addon.CallbackRegistry:Register("SettingChanged.CombatFade_ActionBars", OnSettingChanged)
+addon.CallbackRegistry:Register("SettingChanged.CombatFade_PlayerFrame", OnSettingChanged)
+addon.CallbackRegistry:Register("SettingChanged.CombatFade_ActionBars_Opacity", OnSettingChanged)
+addon.CallbackRegistry:Register("SettingChanged.CombatFade_PlayerFrame_Opacity", OnSettingChanged)

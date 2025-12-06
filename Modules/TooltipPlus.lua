@@ -1,16 +1,68 @@
--- Refactor Addon - Tooltip Plus Module
--- Comprehensive tooltip customization
-
 local addonName, addon = ...
 local L = addon.L
 local Module = {}
 
+----------------------------------------------
+-- Performance: Cache globals
+----------------------------------------------
+local pairs, ipairs, type, pcall = pairs, ipairs, type, pcall
+local tremove, tinsert, wipe = tremove, tinsert, wipe
+local GetItemInfo, GetItemInfoInstant = GetItemInfo, GetItemInfoInstant
+local UnitIsPlayer, UnitClass, UnitReaction, GetGuildInfo = UnitIsPlayer, UnitClass, UnitReaction, GetGuildInfo
+local C_Container_GetContainerNumSlots = C_Container.GetContainerNumSlots
+local C_Container_GetContainerItemLink = C_Container.GetContainerItemLink
+local InCombatLockdown = InCombatLockdown
+local GetTime = GetTime
+
+----------------------------------------------
 -- Module State
+----------------------------------------------
 local isEnabled = false
 local hooksInitialized = false
 local healthbarHooked = false
 
+----------------------------------------------
+-- Cached Settings (updated on change)
+----------------------------------------------
+local cachedClassColors = true
+local cachedRarityBorder = true
+local cachedShowTransmog = true
+local cachedTransmogOverlay = true
+local cachedTransmogCorner = "TOPRIGHT"
+local cachedHideGuild = false
+local cachedHidePvP = false
+local cachedHideRealm = false
+local cachedHideFaction = false
+local cachedHideHealthbar = false
+local cachedShowItemID = false
+local cachedShowSpellID = false
+local cachedAnchor = "DEFAULT"
+local cachedMouseSide = "RIGHT"
+local cachedMouseOffset = 20
+local cachedScale = 100
+
+local function UpdateCachedSettings()
+    cachedClassColors = addon.GetDBBool("TooltipPlus_ClassColors")
+    cachedRarityBorder = addon.GetDBBool("TooltipPlus_RarityBorder")
+    cachedShowTransmog = addon.GetDBBool("TooltipPlus_ShowTransmog")
+    cachedTransmogOverlay = addon.GetDBBool("TooltipPlus_TransmogOverlay")
+    cachedTransmogCorner = addon.GetDBValue("TooltipPlus_TransmogCorner") or "TOPRIGHT"
+    cachedHideGuild = addon.GetDBBool("TooltipPlus_HideGuild")
+    cachedHidePvP = addon.GetDBBool("TooltipPlus_HidePvP")
+    cachedHideRealm = addon.GetDBBool("TooltipPlus_HideRealm")
+    cachedHideFaction = addon.GetDBBool("TooltipPlus_HideFaction")
+    cachedHideHealthbar = addon.GetDBBool("TooltipPlus_HideHealthbar")
+    cachedShowItemID = addon.GetDBBool("TooltipPlus_ShowItemID")
+    cachedShowSpellID = addon.GetDBBool("TooltipPlus_ShowSpellID")
+    cachedAnchor = addon.GetDBValue("TooltipPlus_Anchor") or "DEFAULT"
+    cachedMouseSide = addon.GetDBValue("TooltipPlus_MouseSide") or "RIGHT"
+    cachedMouseOffset = addon.GetDBValue("TooltipPlus_MouseOffset") or 20
+    cachedScale = addon.GetDBValue("TooltipPlus_Scale") or 100
+end
+
+----------------------------------------------
 -- Pre-cached constants
+----------------------------------------------
 local NINESLICE_PIECES = {
     "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner",
     "TopEdge", "BottomEdge", "LeftEdge", "RightEdge"
@@ -63,7 +115,7 @@ end
 -- Unit Tooltip Functions
 ----------------------------------------------
 local function ApplyBorderColor(tooltip, unit)
-    if not addon.GetDBBool("TooltipPlus_ClassColors") then return end
+    if not cachedClassColors then return end
     
     if UnitIsPlayer(unit) then
         local _, class = UnitClass(unit)
@@ -88,12 +140,8 @@ end
 local function ModifyTooltipText(tooltip, unit)
     if not unit then return end
     
-    local hideGuild = addon.GetDBBool("TooltipPlus_HideGuild")
-    local hidePvP = addon.GetDBBool("TooltipPlus_HidePvP")
-    local hideRealm = addon.GetDBBool("TooltipPlus_HideRealm")
-    local hideFaction = addon.GetDBBool("TooltipPlus_HideFaction")
-    
-    if not (hideGuild or hidePvP or hideRealm or hideFaction) then return end
+    -- Use cached settings
+    if not (cachedHideGuild or cachedHidePvP or cachedHideRealm or cachedHideFaction) then return end
     
     local guildName = GetGuildInfo(unit)
     local isPlayer = UnitIsPlayer(unit)
@@ -109,7 +157,7 @@ local function ModifyTooltipText(tooltip, unit)
                 local shouldHide = false
                 
                 -- Realm removal (line 1, players only)
-                if i == 1 and hideRealm and isPlayer then
+                if i == 1 and cachedHideRealm and isPlayer then
                     local cleanText = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
                     if cleanText:find("%-") then
                         leftLine:SetText(text:gsub("%-[^|]+", ""))
@@ -117,17 +165,17 @@ local function ModifyTooltipText(tooltip, unit)
                 end
                 
                 -- Guild name (enclosed in < >)
-                if hideGuild and guildName and (text:find("^<.*>$") or text:find(guildName, 1, true)) then
+                if cachedHideGuild and guildName and (text:find("^<.*>$") or text:find(guildName, 1, true)) then
                     shouldHide = true
                 end
                 
                 -- PvP text
-                if hidePvP and (text == "PvP" or text == PVP_ENABLED or text == "PVP") then
+                if cachedHidePvP and (text == "PvP" or text == PVP_ENABLED or text == "PVP") then
                     shouldHide = true
                 end
                 
                 -- Faction text
-                if hideFaction then
+                if cachedHideFaction then
                     local factionText = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):trim()
                     if factionText == FACTION_ALLIANCE or factionText == FACTION_HORDE or
                        factionText == "Alliance" or factionText == "Horde" then
@@ -378,9 +426,34 @@ local function UpdateLootButtons()
     end
 end
 
+-- Debounce state for performance
+local pendingContainerUpdate = false
+local lastContainerUpdate = 0
+local CONTAINER_UPDATE_THROTTLE = 0.3 -- Max once per 0.3 seconds
+
 local function ScheduleContainerUpdate()
-    C_Timer.After(0.1, UpdateAllContainerButtons)
-    C_Timer.After(0.3, UpdateAllContainerButtons)
+    -- Skip during combat for performance
+    if InCombatLockdown() then return end
+    
+    -- Debounce: if already pending, skip
+    if pendingContainerUpdate then return end
+    
+    local now = GetTime()
+    local timeSince = now - lastContainerUpdate
+    
+    if timeSince < CONTAINER_UPDATE_THROTTLE then
+        -- Too soon, schedule for later
+        pendingContainerUpdate = true
+        C_Timer.After(CONTAINER_UPDATE_THROTTLE - timeSince, function()
+            pendingContainerUpdate = false
+            lastContainerUpdate = GetTime()
+            UpdateAllContainerButtons()
+        end)
+    else
+        -- Run immediately
+        lastContainerUpdate = now
+        UpdateAllContainerButtons()
+    end
 end
 
 ----------------------------------------------
@@ -400,13 +473,16 @@ overlayFrame:RegisterEvent("BAG_CLOSED")
 
 overlayFrame:SetScript("OnEvent", function(self, event)
     if event == "BAG_UPDATE" or event == "BAG_UPDATE_DELAYED" or event == "BAG_OPEN" then
-        ScheduleContainerUpdate()
+        ScheduleContainerUpdate() -- Now debounced
     elseif event == "MERCHANT_SHOW" or event == "MERCHANT_UPDATE" then
-        C_Timer.After(0.1, UpdateMerchantButtons)
+        if not InCombatLockdown() then
+            C_Timer.After(0.1, UpdateMerchantButtons)
+        end
     elseif event == "LOOT_OPENED" or event == "LOOT_SLOT_CLEARED" then
         C_Timer.After(0.1, UpdateLootButtons)
     elseif event == "LOOT_CLOSED" or event == "MERCHANT_CLOSED" or event == "BAG_CLOSED" then
         ClearAllOverlays()
+        pendingContainerUpdate = false -- Cancel pending updates
     end
 end)
 
@@ -483,8 +559,8 @@ local function OnTooltipSetItem(tooltip)
     local _, link = tooltip:GetItem()
     if not link then return end
     
-    -- Rarity border
-    if addon.GetDBBool("TooltipPlus_RarityBorder") then
+    -- Rarity border (use cached setting)
+    if cachedRarityBorder then
         local _, _, rarity = GetItemInfo(link)
         if rarity and rarity >= 0 then
             local color = ITEM_QUALITY_COLORS[rarity]
@@ -494,8 +570,8 @@ local function OnTooltipSetItem(tooltip)
         end
     end
     
-    -- Transmog status
-    if addon.GetDBBool("TooltipPlus_ShowTransmog") and CanItemBeTransmogged(link) then
+    -- Transmog status (use cached setting)
+    if cachedShowTransmog and CanItemBeTransmogged(link) then
         local isCollected = IsTransmogCollected(link)
         if isCollected ~= nil then
             if isCollected then
@@ -507,8 +583,8 @@ local function OnTooltipSetItem(tooltip)
         end
     end
     
-    -- Item ID
-    if addon.GetDBBool("TooltipPlus_ShowItemID") then
+    -- Item ID (use cached setting)
+    if cachedShowItemID then
         local itemID = GetItemInfoInstant(link)
         if itemID then
             tooltip:AddLine("|cff808080Item ID: " .. itemID .. "|r", 0.5, 0.5, 0.5)
@@ -517,7 +593,7 @@ local function OnTooltipSetItem(tooltip)
 end
 
 local function OnTooltipSetSpell(tooltip)
-    if not isEnabled or not addon.GetDBBool("TooltipPlus_ShowSpellID") then return end
+    if not isEnabled or not cachedShowSpellID then return end
     
     local _, id = tooltip:GetSpell()
     if id then
@@ -533,7 +609,7 @@ local function HookHealthbar()
     healthbarHooked = true
     
     GameTooltip.StatusBar:HookScript("OnShow", function(self)
-        if isEnabled and addon.GetDBBool("TooltipPlus_HideHealthbar") then
+        if isEnabled and cachedHideHealthbar then
             self:Hide()
         end
     end)
@@ -612,6 +688,9 @@ function Module:Disable()
 end
 
 function Module:OnInitialize()
+    -- Cache initial settings
+    UpdateCachedSettings()
+    
     if addon.GetDBBool("TooltipPlus") then
         self:Enable()
     end
@@ -620,9 +699,23 @@ function Module:OnInitialize()
         if value then Module:Enable() else Module:Disable() end
     end)
     
+    -- Cache updates for all settings
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_Scale", function()
+        UpdateCachedSettings()
         if isEnabled then ApplyScale() end
     end)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_ClassColors", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_RarityBorder", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_ShowTransmog", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_TransmogOverlay", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_TransmogCorner", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_HideGuild", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_HidePvP", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_HideRealm", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_HideFaction", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_HideHealthbar", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_ShowItemID", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_ShowSpellID", UpdateCachedSettings)
 end
 
 addon.RegisterModule("TooltipPlus", Module)

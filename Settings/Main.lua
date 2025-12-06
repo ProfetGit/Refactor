@@ -4,6 +4,7 @@
 local addonName, addon = ...
 local L = addon.L
 local Components = addon.SettingsUI
+local C = addon.Constants
 
 ----------------------------------------------
 -- Panel State
@@ -37,22 +38,7 @@ local COL_X = {
 local SCROLL_SPEED, SCROLL_SMOOTHNESS, SCROLL_THRESHOLD = 50, 0.22, 0.5
 local SCROLL_STEP = 30
 
-----------------------------------------------
--- Common Dropdown Options (Reusable)
-----------------------------------------------
-local MODIFIER_OPTIONS = {
-    { value = "SHIFT", label = L.MODIFIER_SHIFT },
-    { value = "CTRL", label = L.MODIFIER_CTRL },
-    { value = "ALT", label = L.MODIFIER_ALT },
-    { value = "NONE", label = L.MODIFIER_NONE },
-}
-
-local CORNER_OPTIONS = {
-    { value = "TOPLEFT", label = L.ANCHOR_TOPLEFT },
-    { value = "TOPRIGHT", label = L.ANCHOR_TOPRIGHT },
-    { value = "BOTTOMLEFT", label = L.ANCHOR_BOTTOMLEFT },
-    { value = "BOTTOMRIGHT", label = L.ANCHOR_BOTTOMRIGHT },
-}
+-- Dropdown options are defined in Core/Constants.lua (addon.Constants)
 
 ----------------------------------------------
 -- Helper: Create Scrollable Tab Container
@@ -445,10 +431,10 @@ local function SetupGeneralTab(parent)
     layout:AddSubCheckboxLeft(L.AUTO_SINGLE_OPTION, "AutoQuest_SingleOption", L.TIP_AUTO_SINGLE_OPTION, questToggle)
     layout:AddSubCheckboxLeft(L.AUTO_CONTINUE_DIALOGUE, "AutoQuest_ContinueDialogue", L.TIP_AUTO_CONTINUE_DIALOGUE, questToggle)
     layout:AddSubCheckboxLeft(L.DAILY_QUESTS_ONLY, "AutoQuest_DailyOnly", L.TIP_DAILY_ONLY, questToggle)
-    layout:AddSubDropdownLeft(L.MODIFIER_KEY, "AutoQuest_ModifierKey", MODIFIER_OPTIONS, nil, questToggle)
+    layout:AddSubDropdownLeft(L.MODIFIER_KEY, "AutoQuest_ModifierKey", C.MODIFIER_OPTIONS, nil, questToggle)
     
     layout:AddSubCheckboxRight(L.ALWAYS_SKIP, "SkipCinematics_AlwaysSkip", L.TIP_ALWAYS_SKIP, cinToggle)
-    layout:AddSubDropdownRight(L.MODIFIER_KEY, "SkipCinematics_ModifierKey", MODIFIER_OPTIONS, nil, cinToggle)
+    layout:AddSubDropdownRight(L.MODIFIER_KEY, "SkipCinematics_ModifierKey", C.MODIFIER_OPTIONS, nil, cinToggle)
     layout:NextRow()
     
     -- LOOTING SECTION
@@ -486,10 +472,7 @@ local function SetupGeneralTab(parent)
     local camToggle = layout:AddModuleLeft(L.MODULE_ACTIONCAM, "ActionCam", L.TIP_ACTIONCAM)
     layout:NextRow()
     
-    layout:AddSubDropdownLeft(L.ACTIONCAM_MODE, "ActionCam_Mode", {
-        { value = "basic", label = L.ACTIONCAM_BASIC },
-        { value = "full", label = L.ACTIONCAM_FULL },
-    }, nil, camToggle)
+    layout:AddSubDropdownLeft(L.ACTIONCAM_MODE, "ActionCam_Mode", C.ACTIONCAM_MODE_OPTIONS, nil, camToggle)
     layout:NextRow()
     
     -- CONFIRMATIONS SECTION
@@ -518,12 +501,7 @@ local function SetupGeneralTab(parent)
     local releaseToggle = layout:AddModuleLeft(L.MODULE_AUTO_RELEASE, "AutoRelease", "Release spirit automatically.")
     layout:NextRow()
     
-    layout:AddSubDropdownLeft(L.RELEASE_MODE, "AutoRelease_Mode", {
-        { value = "ALWAYS", label = L.RELEASE_ALWAYS },
-        { value = "PVP", label = L.RELEASE_PVP },
-        { value = "PVE", label = L.RELEASE_PVE },
-        { value = "OPENWORLD", label = L.RELEASE_OPENWORLD },
-    }, nil, releaseToggle)
+    layout:AddSubDropdownLeft(L.RELEASE_MODE, "AutoRelease_Mode", C.RELEASE_MODE_OPTIONS, nil, releaseToggle)
     layout:AddSubCheckboxLeft(L.SHOW_NOTIFICATIONS, "AutoRelease_Notify", L.TIP_RELEASE_NOTIFY, releaseToggle)
     layout:NextRow()
     
@@ -605,7 +583,7 @@ local function SetupTooltipTab(parent)
     -- TRANSMOG OVERLAY
     layout:AddSection("Transmog Overlay")
     layout:AddSubCheckboxLeft(L.TOOLTIP_TRANSMOG_OVERLAY, "TooltipPlus_TransmogOverlay", "Show collection status icons on item buttons in bags, vendors, and loot windows.", tooltipToggle)
-    layout:AddSubDropdownLeft(L.TOOLTIP_TRANSMOG_CORNER, "TooltipPlus_TransmogCorner", CORNER_OPTIONS, "Which corner to display the transmog collection icon.", tooltipToggle)
+    layout:AddSubDropdownLeft(L.TOOLTIP_TRANSMOG_CORNER, "TooltipPlus_TransmogCorner", C.CORNER_OPTIONS, "Which corner to display the transmog collection icon.", tooltipToggle)
     layout:NextRow()
     
     -- HIDE ELEMENTS

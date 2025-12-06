@@ -7,255 +7,117 @@ local L = addon.L
 local Module = {}
 
 ----------------------------------------------
+-- Performance: Cache globals
+----------------------------------------------
+local pairs, ipairs, tonumber, ceil = pairs, ipairs, tonumber, math.ceil
+local strmatch = strmatch or string.match
+local GetTime = GetTime
+local UnitIsDead = UnitIsDead
+
+-- Cache the critical APIs
+local C_NamePlate_GetNamePlateForUnit = C_NamePlate.GetNamePlateForUnit
+local C_NamePlate_GetNamePlates = C_NamePlate.GetNamePlates
+-- The KEY API: This is the authoritative source for quest-related units
+local C_QuestLog_UnitIsRelatedToActiveQuest = C_QuestLog.UnitIsRelatedToActiveQuest
+-- Modern tooltip API (Dragonflight+)
+local C_TooltipInfo_GetUnit = C_TooltipInfo and C_TooltipInfo.GetUnit
+local GetQuestObjectiveInfo = GetQuestObjectiveInfo
+
+----------------------------------------------
+-- Cached Settings
+----------------------------------------------
+local cachedShowKillIcon = true
+local cachedShowLootIcon = true
+
+local function UpdateCachedSettings()
+    cachedShowKillIcon = addon.GetDBBool("QuestNameplates_ShowKillIcon")
+    cachedShowLootIcon = addon.GetDBBool("QuestNameplates_ShowLootIcon")
+end
+
+----------------------------------------------
 -- Module State
 ----------------------------------------------
 local isEnabled = false
 local nameplateFrames = {} -- Track our overlay frames per nameplate
--- Cache of GUIDs confirmed to be quest-related via tooltip scan
-local tooltipQuestMobs = {}
-local tooltipScanTime = {}
-local TOOLTIP_CACHE_DURATION = 5 -- Seconds before re-scanning a mob's tooltip
 
 ----------------------------------------------
--- Quest Objective Cache
+-- Quest Progress Detection (using proper APIs)
+-- This is the CORRECT way to detect quest mobs, as used by QuestPlates addon
 ----------------------------------------------
-local questObjectiveCache = {}
-local questObjectiveByTarget = {} -- Pre-indexed by extracted target name (lowercase)
-local cacheUpdateTime = 0
-local CACHE_DURATION = 0.5 -- Refresh cache every 0.5 seconds
 
--- Create a scanning tooltip (hidden, just for data extraction)
-local scanningTooltip = CreateFrame("GameTooltip", "RefactorQuestNameplateScanTooltip", nil, "GameTooltipTemplate")
-scanningTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
-
-local function UpdateQuestObjectiveCache()
-    local now = GetTime()
-    if now - cacheUpdateTime < CACHE_DURATION then
-        return questObjectiveCache
+-- Get quest progress for a unit using C_TooltipInfo (Dragonflight+ API)
+-- Returns: progressText, objectiveType, objectiveCount, questID
+local function GetQuestProgress(unitID)
+    -- CRITICAL: This is the ONLY reliable gate for quest-related mobs
+    -- If the game says this unit is NOT related to an active quest, do NOT show anything
+    if not C_QuestLog_UnitIsRelatedToActiveQuest(unitID) then
+        return nil
     end
     
-    wipe(questObjectiveCache)
-    wipe(questObjectiveByTarget)
-    cacheUpdateTime = now
+    -- Use the modern tooltip API to get quest data
+    if not C_TooltipInfo_GetUnit then
+        -- Fallback for older clients (pre-Dragonflight)
+        return nil
+    end
     
-    -- Iterate through all quests in the quest log
-    local numEntries = C_QuestLog.GetNumQuestLogEntries()
+    local tooltipData = C_TooltipInfo_GetUnit(unitID)
+    if not tooltipData or not tooltipData.lines then
+        return nil
+    end
     
-    for i = 1, numEntries do
-        local questInfo = C_QuestLog.GetInfo(i)
-        if questInfo and not questInfo.isHeader and not questInfo.isHidden then
-            local questID = questInfo.questID
-            local objectives = C_QuestLog.GetQuestObjectives(questID)
+    local progressText = nil
+    local objectiveCount = 0
+    local questID = nil
+    local hasItemObjective = false
+    
+    -- Scan tooltip lines for quest information
+    for i = 3, #tooltipData.lines do
+        local line = tooltipData.lines[i]
+        
+        -- Type 17 indicates a quest-related tooltip line
+        if line.type == 17 and line.id then
+            questID = line.id
             
-            if objectives then
-                for objIndex, objective in ipairs(objectives) do
-                    if not objective.finished then
-                        local text = objective.text or ""
-                        local objectiveType = objective.type -- "monster", "item", "object", etc.
-                        
-                        local objectiveData = {
-                            questID = questID,
-                            questTitle = questInfo.title,
-                            numFulfilled = objective.numFulfilled or 0,
-                            numRequired = objective.numRequired or 1,
-                            objectiveType = objectiveType,
-                            finished = objective.finished,
-                            text = text,
-                        }
-                        
-                        -- Store objective info by text
-                        questObjectiveCache[text] = objectiveData
-                        
-                        -- Extract and index by target name for faster lookups
-                        local targetName = Module.ExtractTargetFromObjective(text)
-                        if targetName then
-                            local lowerTarget = targetName:lower()
-                            questObjectiveByTarget[lowerTarget] = objectiveData
-                            
-                            -- Also store the original case version for reference
-                            objectiveData.extractedTarget = targetName
-                        end
-                        
-                        -- For item quests, also index by item name
-                        if objectiveType == "item" then
-                            local itemName = text:match("^%d+/%d+%s+(.+)$") or text:match("^(.+):%s*%d+/%d+$")
-                            if itemName then
-                                questObjectiveCache["ITEM:" .. itemName:lower()] = objectiveData
-                            end
-                        end
+            -- Get objective info from the quest
+            local text, objectiveType, finished = GetQuestObjectiveInfo(line.id, 1, false)
+            if text and not finished then
+                -- Extract progress numbers
+                local x, y = strmatch(text, "(%d+)/(%d+)")
+                if x and y then
+                    local numLeft = tonumber(y) - tonumber(x)
+                    if numLeft > objectiveCount then
+                        objectiveCount = numLeft
                     end
-                end
-            end
-        end
-    end
-    
-    return questObjectiveCache
-end
-
-----------------------------------------------
--- Helper: Extract target name from objective text
--- Handles formats like:
---   "Creature Name slain: 0/10"
---   "0/10 Creature Name slain"
---   "0/10 Creature Name"
---   "Creature Name: 0/10"
-----------------------------------------------
-function Module.ExtractTargetFromObjective(text)
-    if not text then return nil end
-    
-    -- Remove progress counters like "0/10" or "5/5"
-    local cleaned = text:gsub("%d+/%d+", "")
-    
-    -- Remove common suffix words (case insensitive, but preserve case for output)
-    cleaned = cleaned:gsub("%s+[Ss]lain%s*$", "")
-    cleaned = cleaned:gsub("%s+[Kk]illed%s*$", "")
-    cleaned = cleaned:gsub("%s+[Dd]efeated%s*$", "")
-    cleaned = cleaned:gsub("%s+[Dd]estroyed%s*$", "")
-    
-    -- Remove leading/trailing colons and whitespace
-    cleaned = cleaned:gsub("^[%s:]+", "")
-    cleaned = cleaned:gsub("[%s:]+$", "")
-    
-    -- Trim any remaining whitespace
-    cleaned = cleaned:match("^%s*(.-)%s*$")
-    
-    return cleaned ~= "" and cleaned or nil
-end
-
-----------------------------------------------
--- Helper: Check if unit's tooltip contains quest-related lines
--- This is the most reliable way to detect quest mobs
-----------------------------------------------
-local function IsUnitQuestRelatedByTooltip(unitId)
-    local guid = UnitGUID(unitId)
-    if not guid then return false, nil end
-    
-    -- Check cache first
-    local now = GetTime()
-    local cachedTime = tooltipScanTime[guid]
-    if cachedTime and (now - cachedTime) < TOOLTIP_CACHE_DURATION then
-        return tooltipQuestMobs[guid] ~= nil, tooltipQuestMobs[guid]
-    end
-    
-    -- Scan the tooltip
-    scanningTooltip:ClearLines()
-    scanningTooltip:SetUnit(unitId)
-    
-    local foundQuestLine = false
-    local questProgress = nil
-    
-    -- Scan tooltip lines for quest-related content
-    -- Quest objectives typically show up with specific formatting
-    for i = 2, scanningTooltip:NumLines() do
-        local leftText = _G["RefactorQuestNameplateScanTooltipTextLeft" .. i]
-        if leftText then
-            local text = leftText:GetText()
-            if text then
-                -- Check for progress format like "0/8" or "3/5"
-                local current, required = text:match("(%d+)%s*//%s*(%d+)")
-                if not current then
-                    current, required = text:match("(%d+)/(%d+)")
+                    progressText = text
+                else
+                    -- Check for percentage format
+                    local progress = tonumber(strmatch(text, "([%d%.]+)%%"))
+                    if progress and progress <= 100 then
+                        objectiveCount = ceil(100 - progress)
+                        progressText = text
+                    end
                 end
                 
-                if current and required then
-                    foundQuestLine = true
-                    questProgress = {
-                        numFulfilled = tonumber(current) or 0,
-                        numRequired = tonumber(required) or 1,
-                        tooltipLine = text,
-                    }
-                    break
-                end
-                
-                -- Check for percentage format
-                local percentage = text:match("(%d+)%%")
-                if percentage then
-                    foundQuestLine = true
-                    questProgress = {
-                        numFulfilled = tonumber(percentage) or 0,
-                        numRequired = 100,
-                        tooltipLine = text,
-                        isPercentage = true,
-                    }
-                    break
-                end
-            end
-        end
-    end
-    
-    -- Cache the result
-    tooltipScanTime[guid] = now
-    if foundQuestLine then
-        tooltipQuestMobs[guid] = questProgress
-    else
-        tooltipQuestMobs[guid] = nil
-    end
-    
-    return foundQuestLine, questProgress
-end
-
-----------------------------------------------
--- Helper: Find matching quest objective for a unit
--- Uses STRICT matching to avoid false positives
-----------------------------------------------
-local function FindQuestObjective(unitName, unitId)
-    if not unitName then return nil end
-    
-    UpdateQuestObjectiveCache()
-    local lowerName = unitName:lower()
-    
-    -- PRIORITY 1: Exact match in pre-indexed target names
-    local exactMatch = questObjectiveByTarget[lowerName]
-    if exactMatch then
-        return exactMatch, "exact"
-    end
-    
-    -- PRIORITY 2: Check if UnitIsQuestBoss and we have a matching monster objective
-    -- (Only match if the mob name appears in the objective text)
-    if UnitIsQuestBoss(unitId) then
-        for text, objectiveData in pairs(questObjectiveCache) do
-            if not text:match("^ITEM:") then
-                if objectiveData.objectiveType == "monster" then
-                    -- Check if mob name appears in the objective text (case-insensitive)
-                    if text:lower():find(lowerName, 1, true) then
-                        return objectiveData, "questboss_match"
+                -- Check if this quest has item objectives (for icon type)
+                for objIdx = 1, 10 do
+                    local objText, objType, objFinished = GetQuestObjectiveInfo(questID, objIdx, false)
+                    if not objText then break end
+                    if not objFinished and (objType == "item" or objType == "object") then
+                        hasItemObjective = true
+                        break
                     end
                 end
             end
         end
     end
     
-    -- PRIORITY 3: For mobs that are UnitIsQuestBoss, try tooltip verification
-    -- This catches cases where the API knows it's a quest mob but name matching failed
-    if UnitIsQuestBoss(unitId) then
-        local hasQuestTooltip, tooltipData = IsUnitQuestRelatedByTooltip(unitId)
-        if hasQuestTooltip and tooltipData then
-            -- Find the best matching objective based on progress
-            for text, objectiveData in pairs(questObjectiveCache) do
-                if not text:match("^ITEM:") and not objectiveData.finished then
-                    -- Match by progress numbers
-                    if objectiveData.numFulfilled == tooltipData.numFulfilled and
-                       objectiveData.numRequired == tooltipData.numRequired then
-                        return objectiveData, "tooltip_progress"
-                    end
-                end
-            end
-            
-            -- If we have tooltip data but no matching objective, return tooltip data as-is
-            return {
-                numFulfilled = tooltipData.numFulfilled,
-                numRequired = tooltipData.numRequired,
-                objectiveType = "monster",
-                text = tooltipData.tooltipLine,
-            }, "tooltip_only"
-        end
+    if progressText then
+        return progressText, hasItemObjective and "item" or "monster", objectiveCount, questID
     end
     
-    -- NO FALLBACK: We specifically avoid loose matching to prevent false positives
-    -- If we couldn't find a match through exact name, questboss + name, or tooltip,
-    -- then we should NOT show anything on this mob.
-    
-    return nil, nil
+    -- If we got here, the unit IS quest-related but we couldn't parse tooltip
+    -- Return minimal data
+    return "Quest Objective", "monster", 0, questID
 end
 
 ----------------------------------------------
@@ -263,22 +125,45 @@ end
 ----------------------------------------------
 local function CreateNameplateOverlay(nameplate)
     local frame = CreateFrame("Frame", nil, nameplate)
-    frame:SetSize(60, 18)
+    frame:SetSize(24, 24)
     
-    -- Anchor to nameplate, positioned just above the health bar area
+    -- Anchor to nameplate frame
     local anchorFrame = nameplate.UnitFrame or nameplate
-    frame:SetPoint("BOTTOM", anchorFrame, "TOP", 0, -8)
+    
+    -- Position to the left of the nameplate (offset to center the visual)
+    frame:SetPoint("RIGHT", anchorFrame, "LEFT", 2, -2)
     frame:SetFrameStrata("HIGH")
+    frame:SetFrameLevel(10)
     
-    -- Progress text (centered)
-    frame.text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.text:SetPoint("CENTER", frame, "CENTER", 6, 0)
-    frame.text:SetTextColor(1, 0.82, 0) -- Gold color
+    -- Modern button background (Dragonflight style)
+    frame.bg = frame:CreateTexture(nil, "BACKGROUND")
+    frame.bg:SetSize(24, 24)
+    frame.bg:SetPoint("CENTER")
+    frame.bg:SetAtlas("common-button-square-gray-down")
+    frame.bg:SetVertexColor(1, 0.85, 0.3, 1) -- Gold tint
     
-    -- Icon texture (left of text)
-    frame.icon = frame:CreateTexture(nil, "OVERLAY")
-    frame.icon:SetSize(14, 14)
-    frame.icon:SetPoint("RIGHT", frame.text, "LEFT", -2, 0)
+    -- Progress count text (centered on the atlas visual)
+    frame.text = frame:CreateFontString(nil, "OVERLAY")
+    frame.text:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    frame.text:SetPoint("CENTER", 0, 0)
+    frame.text:SetTextColor(1, 0.82, 0) -- WoW quest yellow
+    frame.text:SetShadowOffset(1, -1)
+    frame.text:SetShadowColor(0, 0, 0, 1)
+    
+    -- Kill indicator icon (sword, shown for kill objectives)
+    frame.killIcon = frame:CreateTexture(nil, "OVERLAY")
+    frame.killIcon:SetSize(14, 14)
+    frame.killIcon:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 4, -4)
+    frame.killIcon:SetTexture("Interface\\CURSOR\\Attack")
+    frame.killIcon:SetTexCoord(1, 0, 0, 1) -- Flip horizontally
+    frame.killIcon:Hide()
+    
+    -- Loot indicator icon (bag, shown for item objectives)
+    frame.lootIcon = frame:CreateTexture(nil, "OVERLAY")
+    frame.lootIcon:SetSize(12, 12)
+    frame.lootIcon:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 4, -4)
+    frame.lootIcon:SetAtlas("Banker")
+    frame.lootIcon:Hide()
     
     frame:Hide()
     return frame
@@ -295,22 +180,15 @@ local function GetNameplateOverlay(nameplate)
 end
 
 ----------------------------------------------
--- Update a single nameplate
+-- Update nameplate overlay
 ----------------------------------------------
 local function UpdateNameplate(unitId)
     if not isEnabled then return end
     
-    local nameplate = C_NamePlate.GetNamePlateForUnit(unitId)
+    local nameplate = C_NamePlate_GetNamePlateForUnit(unitId)
     if not nameplate then return end
     
     local overlay = GetNameplateOverlay(nameplate)
-    
-    -- Get unit name first
-    local unitName = UnitName(unitId)
-    if not unitName then
-        overlay:Hide()
-        return
-    end
     
     -- Skip dead units
     if UnitIsDead(unitId) then
@@ -318,54 +196,43 @@ local function UpdateNameplate(unitId)
         return
     end
     
-    -- Skip friendly units (NPCs we can't attack usually aren't quest targets)
-    if not UnitCanAttack("player", unitId) and not UnitIsQuestBoss(unitId) then
+    -- Get quest progress using the proper API
+    local progressText, objectiveType, objectiveCount, questID = GetQuestProgress(unitId)
+    
+    -- If no quest progress, hide overlay
+    if not progressText then
         overlay:Hide()
         return
     end
     
-    -- Try to find a matching quest objective
-    local objectiveData, matchType = FindQuestObjective(unitName, unitId)
+    -- Determine if this is an item/loot objective
+    local isItemObjective = (objectiveType == "item" or objectiveType == "object")
     
-    -- If no match found, hide the overlay
-    if not objectiveData then
+    -- Check settings
+    if isItemObjective and not cachedShowLootIcon then
+        overlay:Hide()
+        return
+    elseif not isItemObjective and not cachedShowKillIcon then
         overlay:Hide()
         return
     end
     
-    -- Get display preferences
-    local showKillIcon = addon.GetDBBool("QuestNameplates_ShowKillIcon")
-    local showLootIcon = addon.GetDBBool("QuestNameplates_ShowLootIcon")
-    
-    local objectiveType = objectiveData.objectiveType or "monster"
-    
-    -- Determine icon and whether to show based on objective type
-    if objectiveType == "monster" then
-        if not showKillIcon then
-            overlay:Hide()
-            return
-        end
-        -- Use swords icon for kill objectives
-        overlay.icon:SetTexture("Interface\\CURSOR\\Attack")
-        overlay.icon:SetTexCoord(0, 1, 0, 1)
-        overlay.icon:SetVertexColor(1, 1, 1) -- White/normal
+    -- Show appropriate indicator icon
+    if isItemObjective then
+        overlay.lootIcon:Show()
+        overlay.killIcon:Hide()
     else
-        -- item, object, or other types - use bag/loot icon
-        if not showLootIcon then
-            overlay:Hide()
-            return
-        end
-        overlay.icon:SetTexture("Interface\\Minimap\\Tracking\\Banker")
-        overlay.icon:SetTexCoord(0, 1, 0, 1)
-        overlay.icon:SetVertexColor(1, 0.85, 0.1) -- Gold tint for loot
+        overlay.killIcon:Show()
+        overlay.lootIcon:Hide()
     end
     
-    -- Set progress text
-    local progressText = string.format("%d/%d", 
-        objectiveData.numFulfilled, 
-        objectiveData.numRequired
-    )
-    overlay.text:SetText(progressText)
+    -- Set progress count text
+    if objectiveCount > 0 then
+        overlay.text:SetText(objectiveCount)
+    else
+        overlay.text:SetText("!")
+    end
+    
     overlay:Show()
 end
 
@@ -373,23 +240,23 @@ end
 -- Clear nameplate overlay
 ----------------------------------------------
 local function ClearNameplate(unitId)
-    local nameplate = C_NamePlate.GetNamePlateForUnit(unitId)
+    local nameplate = C_NamePlate_GetNamePlateForUnit(unitId)
     if nameplate and nameplateFrames[nameplate] then
         nameplateFrames[nameplate]:Hide()
     end
 end
 
 ----------------------------------------------
--- Update all visible nameplates
+-- Update all visible nameplates (with throttling)
 ----------------------------------------------
+local pendingNameplateUpdate = false
+local lastNameplateUpdate = 0
+local NAMEPLATE_UPDATE_THROTTLE = 0.2
+
 local function UpdateAllNameplates()
     if not isEnabled then return end
     
-    -- Clear the cache to force refresh
-    cacheUpdateTime = 0
-    
-    -- Update all visible nameplates
-    local nameplates = C_NamePlate.GetNamePlates()
+    local nameplates = C_NamePlate_GetNamePlates()
     if nameplates then
         for _, nameplate in ipairs(nameplates) do
             local unitId = nameplate.namePlateUnitToken
@@ -400,18 +267,22 @@ local function UpdateAllNameplates()
     end
 end
 
-----------------------------------------------
--- Periodic cache cleanup (prevent memory leaks)
-----------------------------------------------
-local function CleanupTooltipCache()
-    local now = GetTime()
-    local expireTime = now - TOOLTIP_CACHE_DURATION * 2
+local function ScheduleNameplateUpdate()
+    if pendingNameplateUpdate then return end
     
-    for guid, time in pairs(tooltipScanTime) do
-        if time < expireTime then
-            tooltipScanTime[guid] = nil
-            tooltipQuestMobs[guid] = nil
-        end
+    local now = GetTime()
+    local timeSince = now - lastNameplateUpdate
+    
+    if timeSince < NAMEPLATE_UPDATE_THROTTLE then
+        pendingNameplateUpdate = true
+        C_Timer.After(NAMEPLATE_UPDATE_THROTTLE - timeSince + 0.05, function()
+            pendingNameplateUpdate = false
+            lastNameplateUpdate = GetTime()
+            UpdateAllNameplates()
+        end)
+    else
+        lastNameplateUpdate = now
+        C_Timer.After(0.1, UpdateAllNameplates)
     end
 end
 
@@ -431,14 +302,12 @@ local function OnEvent(self, event, ...)
         
     elseif event == "QUEST_LOG_UPDATE" or event == "QUEST_ACCEPTED" or 
            event == "QUEST_REMOVED" or event == "QUEST_POI_UPDATE" then
-        -- Quest data changed, update all nameplates
-        cacheUpdateTime = 0 -- Force cache refresh
-        C_Timer.After(0.1, UpdateAllNameplates)
+        -- Quest data changed, update all nameplates (throttled)
+        ScheduleNameplateUpdate()
         
     elseif event == "UNIT_QUEST_LOG_CHANGED" then
-        -- Specific quest progress changed
-        cacheUpdateTime = 0 -- Force cache refresh
-        C_Timer.After(0.1, UpdateAllNameplates)
+        -- Specific quest progress changed (throttled)
+        ScheduleNameplateUpdate()
     end
 end
 
@@ -459,9 +328,6 @@ local function EnableModule()
     eventFrame:RegisterEvent("QUEST_POI_UPDATE")
     eventFrame:RegisterEvent("UNIT_QUEST_LOG_CHANGED")
     
-    -- Set up periodic cache cleanup
-    C_Timer.NewTicker(30, CleanupTooltipCache)
-    
     -- Update any currently visible nameplates
     UpdateAllNameplates()
 end
@@ -476,10 +342,6 @@ local function DisableModule()
     for _, frame in pairs(nameplateFrames) do
         frame:Hide()
     end
-    
-    -- Clear caches
-    wipe(tooltipQuestMobs)
-    wipe(tooltipScanTime)
 end
 
 ----------------------------------------------
@@ -497,8 +359,19 @@ end
 -- Module Initialization
 ----------------------------------------------
 function Module:OnInitialize()
+    -- Cache initial settings
+    UpdateCachedSettings()
+    
     -- Register for setting changes
     addon.CallbackRegistry:Register("SettingChanged.QuestNameplates", OnSettingChanged)
+    addon.CallbackRegistry:Register("SettingChanged.QuestNameplates_ShowKillIcon", function()
+        UpdateCachedSettings()
+        ScheduleNameplateUpdate()
+    end)
+    addon.CallbackRegistry:Register("SettingChanged.QuestNameplates_ShowLootIcon", function()
+        UpdateCachedSettings()
+        ScheduleNameplateUpdate()
+    end)
     
     -- Check initial state
     if addon.GetDBBool("QuestNameplates") then

@@ -8,14 +8,41 @@ local ChatPlus = {}
 addon.Modules.ChatPlus = ChatPlus
 
 ----------------------------------------------
+-- Performance: Cache globals
+----------------------------------------------
+local pairs, ipairs = pairs, ipairs
+local string_match, string_gsub, string_lower, string_sub = string.match, string.gsub, string.lower, string.sub
+local table_insert, table_concat = table.insert, table.concat
+local IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown = IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown
+local C_Item_GetItemNameByID = C_Item.GetItemNameByID
+local C_Spell_GetSpellName = C_Spell.GetSpellName
+local C_QuestLog_GetTitleForQuestID = C_QuestLog.GetTitleForQuestID
+local C_CurrencyInfo_GetCurrencyInfo = C_CurrencyInfo.GetCurrencyInfo
+
+----------------------------------------------
 -- Constants
 ----------------------------------------------
 local URL_PATTERNS = {
-    "(https?://[%w_%-%.%/%?%%=&#:~]+)",
-    "(www%.[%w_%-%.%/%?%%=&#:~]+)",
+    "https?://[%w_%-%.%/%?%%=&#:~]+",
+    "www%.[%w_%-%.%/%?%%=&#:~]+",
 }
 
 local WOWHEAD_BASE = "https://www.wowhead.com/"
+
+----------------------------------------------
+-- Cached Settings (updated on setting change)
+----------------------------------------------
+local cachedEnabled = false
+local cachedClickableURLs = false
+local cachedWowheadLookup = false
+local cachedCopyButton = false
+
+local function UpdateCachedSettings()
+    cachedEnabled = addon.GetDBBool("ChatPlus")
+    cachedClickableURLs = addon.GetDBBool("ChatPlus_ClickableURLs")
+    cachedWowheadLookup = addon.GetDBBool("ChatPlus_WowheadLookup")
+    cachedCopyButton = addon.GetDBBool("ChatPlus_CopyButton")
+end
 
 ----------------------------------------------
 -- Copy Frame
@@ -77,7 +104,7 @@ local function CreateCopyFrame()
     closeBtn:SetText(CLOSE or "Close")
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
     
-    table.insert(UISpecialFrames, "RefactorChatCopyFrame")
+    table_insert(UISpecialFrames, "RefactorChatCopyFrame")
     
     frame:Hide()
     CopyFrame = frame
@@ -111,37 +138,38 @@ end
 local originalSetItemRef = SetItemRef
 
 local function HookedSetItemRef(link, text, button, chatFrame)
-    if not addon.GetDBBool("ChatPlus") then
-        return originalSetItemRef(link, text, button, chatFrame)
-    end
-    
-    if not addon.GetDBBool("ChatPlus_WowheadLookup") then
+    -- Fast path: check cached settings
+    if not cachedEnabled or not cachedWowheadLookup then
         return originalSetItemRef(link, text, button, chatFrame)
     end
     
     -- Shift+Click = Wowhead lookup
     if IsShiftKeyDown() and not IsControlKeyDown() and not IsAltKeyDown() then
-        local linkType, linkID = link:match("^(%w+):(-?%d+)")
+        local linkType, linkID = string_match(link, "^(%w+):(-?%d+)")
+        if not linkType or not linkID then
+            return originalSetItemRef(link, text, button, chatFrame)
+        end
         
+        local numericID = tonumber(linkID)
         if linkType == "item" then
-            local itemName = C_Item.GetItemNameByID(tonumber(linkID))
+            local itemName = C_Item_GetItemNameByID(numericID)
             ShowWowheadLink("item", linkID, itemName)
             return
         elseif linkType == "spell" or linkType == "enchant" then
-            local spellName = C_Spell.GetSpellName(tonumber(linkID))
+            local spellName = C_Spell_GetSpellName(numericID)
             ShowWowheadLink("spell", linkID, spellName)
             return
         elseif linkType == "quest" then
-            local questName = C_QuestLog.GetTitleForQuestID(tonumber(linkID))
+            local questName = C_QuestLog_GetTitleForQuestID(numericID)
             ShowWowheadLink("quest", linkID, questName)
             return
         elseif linkType == "achievement" then
-            local _, name = GetAchievementInfo(tonumber(linkID))
-            ShowWowheadLink("achievement", linkID, name)
+            local _, name = GetAchievementInfo(numericID)
+            ShowWowheadLink("achievement", linkID, name or "")
             return
         elseif linkType == "currency" then
-            local info = C_CurrencyInfo.GetCurrencyInfo(tonumber(linkID))
-            ShowWowheadLink("currency", linkID, info and info.name)
+            local info = C_CurrencyInfo_GetCurrencyInfo(numericID)
+            ShowWowheadLink("currency", linkID, info and info.name or "")
             return
         end
     end
@@ -150,15 +178,28 @@ local function HookedSetItemRef(link, text, button, chatFrame)
 end
 
 ----------------------------------------------
--- Clickable URLs
+-- Clickable URLs (OPTIMIZED)
 ----------------------------------------------
+-- Pre-compiled pattern check - fast rejection before expensive gsub
+local function ContainsURL(text)
+    -- Quick checks before regex
+    if not text then return false end
+    local len = #text
+    if len < 10 then return false end -- URLs are at least 10 chars
+    
+    -- Fast substring checks
+    if string.find(text, "http", 1, true) then return true end
+    if string.find(text, "www.", 1, true) then return true end
+    return false
+end
+
 local function MakeURLsClickable(text)
-    if not text then return text end
+    if not ContainsURL(text) then return text end
     
     for _, pattern in ipairs(URL_PATTERNS) do
-        text = text:gsub(pattern, function(url)
+        text = string_gsub(text, "(" .. pattern .. ")", function(url)
             local cleanUrl = url
-            if cleanUrl:sub(1, 4) == "www." then
+            if string_sub(cleanUrl, 1, 4) == "www." then
                 cleanUrl = "https://" .. cleanUrl
             end
             return "|cff00ccff|Hrefactor_url:" .. cleanUrl .. "|h[" .. url .. "]|h|r"
@@ -169,11 +210,13 @@ local function MakeURLsClickable(text)
 end
 
 local function ChatMessageFilter(self, event, msg, ...)
-    if not addon.GetDBBool("ChatPlus") then
+    -- Fast path: check cached settings (no function call overhead)
+    if not cachedEnabled or not cachedClickableURLs then
         return false, msg, ...
     end
     
-    if not addon.GetDBBool("ChatPlus_ClickableURLs") then
+    -- Fast rejection: no URL found
+    if not ContainsURL(msg) then
         return false, msg, ...
     end
     
@@ -196,8 +239,8 @@ local function HookChatFrame(chatFrame)
     
     local originalHandler = chatFrame:GetScript("OnHyperlinkClick")
     chatFrame:SetScript("OnHyperlinkClick", function(self, link, text, button)
-        if addon.GetDBBool("ChatPlus") and link:match("^refactor_url:") then
-            local url = link:gsub("^refactor_url:", "")
+        if cachedEnabled and string_match(link, "^refactor_url:") then
+            local url = string_gsub(link, "^refactor_url:", "")
             ShowCopyFrame(url, "Copy URL", nil)
             return
         end
@@ -227,34 +270,43 @@ local function CreateChatCopyButton(chatFrame)
     end)
     btn:SetScript("OnLeave", GameTooltip_Hide)
     btn:SetScript("OnClick", function()
-        if not addon.GetDBBool("ChatPlus") then return end
+        if not cachedEnabled then return end
+        if not chatFrame.GetNumMessages or not chatFrame.GetMessageInfo then return end
         
         local numMessages = chatFrame:GetNumMessages()
         if numMessages > 0 then
             local allText = {}
-            for j = 1, math.min(numMessages, 100) do
+            local limit = numMessages < 100 and numMessages or 100
+            for j = 1, limit do
                 local msg = chatFrame:GetMessageInfo(j)
-                if msg then
-                    local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h", ""):gsub("|h", "")
-                    table.insert(allText, clean)
+                if msg and msg ~= "" then
+                    -- Strip color codes and hyperlinks in one efficient pass
+                    local clean = msg
+                    clean = string_gsub(clean, "|c%x%x%x%x%x%x%x%x", "")
+                    clean = string_gsub(clean, "|r", "")
+                    clean = string_gsub(clean, "|H.-|h", "")
+                    clean = string_gsub(clean, "|h", "")
+                    if clean ~= "" then
+                        table_insert(allText, clean)
+                    end
                 end
             end
             
             if #allText > 0 then
-                ShowCopyFrame(table.concat(allText, "\n"), "Recent Chat", nil)
+                ShowCopyFrame(table_concat(allText, "\n"), "Recent Chat", nil)
             end
         end
     end)
     
     btn:SetAlpha(0)
     chatFrame:HookScript("OnEnter", function() 
-        if addon.GetDBBool("ChatPlus") and addon.GetDBBool("ChatPlus_CopyButton") then
+        if cachedEnabled and cachedCopyButton then
             btn:SetAlpha(0.6) 
         end
     end)
     chatFrame:HookScript("OnLeave", function() btn:SetAlpha(0) end)
     btn:HookScript("OnEnter", function() 
-        if addon.GetDBBool("ChatPlus") and addon.GetDBBool("ChatPlus_CopyButton") then
+        if cachedEnabled and cachedCopyButton then
             btn:SetAlpha(1) 
         end
     end)
@@ -267,6 +319,9 @@ end
 -- Initialize
 ----------------------------------------------
 local function Initialize()
+    -- Cache initial settings
+    UpdateCachedSettings()
+    
     -- Hook SetItemRef for Wowhead lookup
     SetItemRef = HookedSetItemRef
     
@@ -304,6 +359,12 @@ local function Initialize()
     for _, event in ipairs(chatEvents) do
         ChatFrame_AddMessageEventFilter(event, ChatMessageFilter)
     end
+    
+    -- Register setting change callbacks
+    addon.CallbackRegistry:Register("SettingChanged.ChatPlus", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.ChatPlus_ClickableURLs", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.ChatPlus_WowheadLookup", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.ChatPlus_CopyButton", UpdateCachedSettings)
 end
 
 ----------------------------------------------

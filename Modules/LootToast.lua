@@ -7,6 +7,18 @@ local L = addon.L
 local Module = {}
 
 ----------------------------------------------
+-- Performance: Cache globals
+----------------------------------------------
+local pairs, ipairs, tonumber, type = pairs, ipairs, tonumber, type
+local math_random, math_min = math.random, math.min
+local table_insert, table_remove = table.insert, table.remove
+local string_match = string.match
+local GetTime = GetTime
+local C_Item_GetItemInfo = C_Item.GetItemInfo
+local C_CurrencyInfo_GetCurrencyInfo = C_CurrencyInfo.GetCurrencyInfo
+local UnitName = UnitName
+
+----------------------------------------------
 -- Module State
 ----------------------------------------------
 local isEnabled = false
@@ -14,7 +26,9 @@ local activeToasts = {}
 local toastPool = {}
 local containerFrame = nil
 
--- Quality colors (Blizzard standard)
+----------------------------------------------
+-- Pre-cached Colors (avoid CreateColor allocation)
+----------------------------------------------
 local QUALITY_COLORS = {
     [0] = { 0.62, 0.62, 0.62 }, -- Poor
     [1] = { 1.00, 1.00, 1.00 }, -- Common
@@ -27,6 +41,14 @@ local QUALITY_COLORS = {
     [8] = { 0.00, 0.80, 1.00 }, -- WoW Token
 }
 
+-- Pre-create gradient color objects (avoids allocation per-use)
+local GRADIENT_NORMAL_START = CreateColor(0.2, 0.2, 0.2, 0.8)
+local GRADIENT_NORMAL_END = CreateColor(0.2, 0.2, 0.2, 0)
+local GRADIENT_HOVER_START = CreateColor(0.3, 0.3, 0.3, 0.9)
+local GRADIENT_HOVER_END = CreateColor(0.3, 0.3, 0.3, 0)
+local GRADIENT_CURRENCY_START = CreateColor(0.3, 0.3, 0.3, 0.8)
+local GRADIENT_CURRENCY_END = CreateColor(0.3, 0.3, 0.3, 0)
+
 -- Constants
 local TOAST_HEIGHT = 40
 local TOAST_WIDTH = 280
@@ -35,13 +57,29 @@ local TOAST_SLIDE_DURATION = 0.2
 local TOAST_FADE_DURATION = 0.3
 
 ----------------------------------------------
+-- Cached Settings
+----------------------------------------------
+local cachedDuration = 4
+local cachedMaxVisible = 6
+local cachedShowCurrency = true
+local cachedShowQuantity = true
+
+local function UpdateCachedSettings()
+    cachedDuration = tonumber(addon.GetDBValue("LootToast_Duration")) or 4
+    if cachedDuration < 1 then cachedDuration = 1 end
+    cachedMaxVisible = addon.GetDBValue("LootToast_MaxVisible") or 6
+    cachedShowCurrency = addon.GetDBBool("LootToast_ShowCurrency")
+    cachedShowQuantity = addon.GetDBBool("LootToast_ShowQuantity")
+end
+
+----------------------------------------------
 -- Helper Functions
 ----------------------------------------------
 local function KillToast(toast)
     -- Remove from active list if present
     for i, t in ipairs(activeToasts) do
         if t == toast then
-            table.remove(activeToasts, i)
+            table_remove(activeToasts, i)
             break
         end
     end
@@ -59,7 +97,7 @@ local function KillToast(toast)
     toast:SetAlpha(1)
     
     -- Return to pool
-    table.insert(toastPool, toast)
+    table_insert(toastPool, toast)
     
     -- Trigger reposition of remaining toasts
     Module:RepositionToasts()
@@ -72,11 +110,11 @@ local function CreateToastFrame()
     local toast = CreateFrame("Frame", nil, containerFrame)
     toast:SetSize(TOAST_WIDTH, TOAST_HEIGHT)
     
-    -- Background Gradient
+    -- Background Gradient (use pre-cached colors)
     toast.bg = toast:CreateTexture(nil, "BACKGROUND")
     toast.bg:SetAllPoints()
     toast.bg:SetColorTexture(1, 1, 1, 1)
-    toast.bg:SetGradient("HORIZONTAL", CreateColor(0.2, 0.2, 0.2, 0.8), CreateColor(0.2, 0.2, 0.2, 0))
+    toast.bg:SetGradient("HORIZONTAL", GRADIENT_NORMAL_START, GRADIENT_NORMAL_END)
 
     -- Icon
     toast.icon = toast:CreateTexture(nil, "ARTWORK")
@@ -107,7 +145,7 @@ local function CreateToastFrame()
     fadeIn:SetSmoothing("OUT")
     
     local slideIn = toast.slideAnim:CreateAnimation("Translation")
-    slideIn:SetOffset(40, 0) -- Move 40px right (from -40 to 0)
+    slideIn:SetOffset(40, 0)
     slideIn:SetDuration(TOAST_SLIDE_DURATION)
     slideIn:SetSmoothing("OUT")
     
@@ -141,11 +179,10 @@ local function CreateToastFrame()
     
     -- Interaction
     toast:EnableMouse(true)
-
     
     toast:SetScript("OnEnter", function(self)
         if self.fadeTimer then self.fadeTimer:Cancel() end
-        self.bg:SetGradient("HORIZONTAL", CreateColor(0.3, 0.3, 0.3, 0.9), CreateColor(0.3, 0.3, 0.3, 0))
+        self.bg:SetGradient("HORIZONTAL", GRADIENT_HOVER_START, GRADIENT_HOVER_END)
         
         if self.link then
             GameTooltip:SetOwner(self, "ANCHOR_LEFT", 0, 0)
@@ -155,11 +192,10 @@ local function CreateToastFrame()
     end)
     
     toast:SetScript("OnLeave", function(self)
-        self.bg:SetGradient("HORIZONTAL", CreateColor(0.2, 0.2, 0.2, 0.8), CreateColor(0.2, 0.2, 0.2, 0))
+        self.bg:SetGradient("HORIZONTAL", GRADIENT_NORMAL_START, GRADIENT_NORMAL_END)
         GameTooltip:Hide()
         
-        local duration = addon.GetDBValue("LootToast_Duration") or 4
-        self.fadeTimer = C_Timer.NewTimer(duration * 0.5, function() self.fadeAnim:Play() end)
+        self.fadeTimer = C_Timer.NewTimer(cachedDuration * 0.5, function() self.fadeAnim:Play() end)
     end)
     
     return toast
@@ -172,7 +208,6 @@ function Module:RepositionToasts()
     for i, toast in ipairs(activeToasts) do
         local targetY = (i - 1) * (TOAST_HEIGHT + TOAST_SPACING)
         
-        -- If target changed and not currently sliding in
         if toast.targetY ~= targetY then
             local currentY = toast.targetY or targetY
             toast.targetY = targetY
@@ -192,22 +227,21 @@ end
 local function ShowToast(icon, name, quantity, quality, isCurrency, link)
     if not isEnabled or not containerFrame then return end
     
-    -- Maintain Max Visible limit
-    local maxVisible = addon.GetDBValue("LootToast_MaxVisible") or 6
-    while #activeToasts >= maxVisible do
+    -- Maintain Max Visible limit (use cached value)
+    while #activeToasts >= cachedMaxVisible do
         KillToast(activeToasts[1])
     end
     
     -- Get/Create Toast
-    local toast = table.remove(toastPool)
+    local toast = table_remove(toastPool)
     if not toast then toast = CreateToastFrame() end
     
-    -- Reset State (Just to be safe, though KillToast handles most)
+    -- Reset State
     toast.slideAnim:Stop()
     toast.moveAnim:Stop()
     toast.fadeAnim:Stop()
     if toast.fadeTimer then toast.fadeTimer:Cancel() end
-    toast:SetAlpha(0) -- Start invisible for slide-in
+    toast:SetAlpha(0)
     
     toast.link = link
     
@@ -218,24 +252,23 @@ local function ShowToast(icon, name, quantity, quality, isCurrency, link)
     toast.name:SetText(name or "Unknown")
     toast.name:SetTextColor(color[1], color[2], color[3])
     
-    local showQuantity = addon.GetDBBool("LootToast_ShowQuantity")
-    if showQuantity and quantity and quantity > 1 then
+    -- Use cached setting
+    if cachedShowQuantity and quantity and quantity > 1 then
         toast.quantity:SetText("x" .. quantity)
         toast.quantity:Show()
     else
         toast.quantity:Hide()
     end
     
-    -- Styling
-    -- Styling
+    -- Styling (use pre-cached gradient colors)
     if isCurrency then
-       toast.bg:SetGradient("HORIZONTAL", CreateColor(0.3, 0.3, 0.3, 0.8), CreateColor(0.3, 0.3, 0.3, 0))
+       toast.bg:SetGradient("HORIZONTAL", GRADIENT_CURRENCY_START, GRADIENT_CURRENCY_END)
     else
-       toast.bg:SetGradient("HORIZONTAL", CreateColor(0.2, 0.2, 0.2, 0.8), CreateColor(0.2, 0.2, 0.2, 0))
+       toast.bg:SetGradient("HORIZONTAL", GRADIENT_NORMAL_START, GRADIENT_NORMAL_END)
     end
     
     -- Position & Animation
-    table.insert(activeToasts, toast)
+    table_insert(activeToasts, toast)
     local index = #activeToasts
     local targetY = (index - 1) * (TOAST_HEIGHT + TOAST_SPACING)
     toast.targetY = targetY
@@ -245,11 +278,8 @@ local function ShowToast(icon, name, quantity, quality, isCurrency, link)
     toast:Show()
     toast.slideAnim:Play()
     
-    -- Auto Fade Timer
-    -- Auto Fade Timer
-    local duration = tonumber(addon.GetDBValue("LootToast_Duration")) or 4
-    if duration < 1 then duration = 1 end
-    toast.fadeTimer = C_Timer.NewTimer(duration, function()
+    -- Auto Fade Timer (use cached duration)
+    toast.fadeTimer = C_Timer.NewTimer(cachedDuration, function()
         if toast:IsShown() then toast.fadeAnim:Play() end
     end)
 end
@@ -260,41 +290,41 @@ end
 local function OnLootReceived(msg)
     if not isEnabled then return end
     
-    local itemLink = msg:match("(|c%x+|Hitem:.-|h%[.-%]|h|r)") or msg:match("(|Hitem:.-|h%[.-%]|h)")
+    local itemLink = string_match(msg, "(|c%x+|Hitem:.-|h%[.-%]|h|r)") or string_match(msg, "(|Hitem:.-|h%[.-%]|h)")
     if not itemLink then return end
     
-    local quantity = tonumber(msg:match("x%s*(%d+)") or 1)
+    local quantity = tonumber(string_match(msg, "x%s*(%d+)") or 1)
     
-    local itemName, _, itemQuality, _, _, _, _, _, _, itemIcon = C_Item.GetItemInfo(itemLink)
+    local itemName, _, itemQuality, _, _, _, _, _, _, itemIcon = C_Item_GetItemInfo(itemLink)
     if itemName then
         ShowToast(itemIcon, itemName, quantity, itemQuality, false, itemLink)
     else
         local item = Item:CreateFromItemLink(itemLink)
         item:ContinueOnItemLoad(function()
-            local name, _, quality, _, _, _, _, _, _, icon = C_Item.GetItemInfo(itemLink)
+            local name, _, quality, _, _, _, _, _, _, icon = C_Item_GetItemInfo(itemLink)
             ShowToast(icon, name, quantity, quality, false, itemLink)
         end)
     end
 end
 
 local function OnCurrencyReceived(msg)
-    if not isEnabled or not addon.GetDBBool("LootToast_ShowCurrency") then return end
+    if not isEnabled or not cachedShowCurrency then return end
     
-    local currencyLink = msg:match("|c%x+|Hcurrency:.-|h%[.-%]|h|r")
+    local currencyLink = string_match(msg, "|c%x+|Hcurrency:.-|h%[.-%]|h|r")
     if currencyLink then
-        local id = tonumber(currencyLink:match("currency:(%d+)"))
+        local id = tonumber(string_match(currencyLink, "currency:(%d+)"))
         if id then
-            local info = C_CurrencyInfo.GetCurrencyInfo(id)
+            local info = C_CurrencyInfo_GetCurrencyInfo(id)
             if info then
-                local quantity = tonumber(msg:match("x(%d+)") or 1)
+                local quantity = tonumber(string_match(msg, "x(%d+)") or 1)
                 ShowToast(info.iconFileID, info.name, quantity, 1, true, currencyLink)
             end
         end
     else
         -- Money
-        local g = tonumber(msg:match("(%d+) Gold") or msg:match("(%d+)g") or 0)
-        local s = tonumber(msg:match("(%d+) Silver") or msg:match("(%d+)s") or 0)
-        local c = tonumber(msg:match("(%d+) Copper") or msg:match("(%d+)c") or 0)
+        local g = tonumber(string_match(msg, "(%d+) Gold") or string_match(msg, "(%d+)g") or 0)
+        local s = tonumber(string_match(msg, "(%d+) Silver") or string_match(msg, "(%d+)s") or 0)
+        local c = tonumber(string_match(msg, "(%d+) Copper") or string_match(msg, "(%d+)c") or 0)
         local total = (g * 10000) + (s * 100) + c
         if total > 0 then
             ShowToast("Interface\\Icons\\INV_Misc_Coin_01", addon.FormatMoney(total), nil, 1, true, nil)
@@ -353,7 +383,7 @@ local function CreateContainerFrame()
     containerFrame:SetClampedToScreen(true)
     containerFrame:SetMovable(true)
     containerFrame:RegisterForDrag("LeftButton")
-    containerFrame:EnableMouse(false) -- Default passthrough
+    containerFrame:EnableMouse(false)
     
     containerFrame.editHighlight = CreateEditModeHighlight(containerFrame)
     
@@ -385,11 +415,14 @@ local function CreateContainerFrame()
 end
 
 local eventFrame = CreateFrame("Frame")
+local playerName = nil
+
 eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "CHAT_MSG_LOOT" then
-        local msg, _, _, _, playerName = ...
-        local myName = UnitName("player")
-        if not playerName or playerName == "" or playerName == myName or playerName:find(myName) then
+        local msg, _, _, _, msgPlayerName = ...
+        -- Cache player name on first use
+        if not playerName then playerName = UnitName("player") end
+        if not msgPlayerName or msgPlayerName == "" or msgPlayerName == playerName or string.find(msgPlayerName, playerName, 1, true) then
             OnLootReceived(msg)
         end
     elseif event == "CHAT_MSG_CURRENCY" or event == "CHAT_MSG_MONEY" then
@@ -402,6 +435,7 @@ end)
 ----------------------------------------------
 function Module:Enable()
     isEnabled = true
+    UpdateCachedSettings()
     CreateContainerFrame()
     containerFrame:Show()
     
@@ -418,7 +452,6 @@ function Module:Enable()
         end)
     end
     
-    -- Check initial state
     if EditModeManagerFrame and EditModeManagerFrame:IsShown() then
         Module.inEditMode = true 
         containerFrame:EnableMouse(true)
@@ -434,7 +467,6 @@ function Module:Disable()
     isEnabled = false
     eventFrame:UnregisterAllEvents()
 
-    -- Robust clear
     while #activeToasts > 0 do KillToast(activeToasts[1]) end
     
     if containerFrame then containerFrame:Hide() end
@@ -455,7 +487,7 @@ function Module:ResetPosition()
     end
 end
 
--- Test functions
+-- Test functions (only loaded, not executed unless called)
 function Module:TestToast()
     local t = {
         {"Interface\\Icons\\INV_Ingot_Eternium", "Enchanted Thorium Bar", 1, 1},
@@ -466,7 +498,7 @@ function Module:TestToast()
         {"Interface\\Icons\\INV_Misc_Gem_Diamond_02", "Large Prismatic Shard", 3, 3},
         {"Interface\\Icons\\INV_Staff_30", "Atiesh", 1, 5}
     }
-    local item = t[math.random(#t)]
+    local item = t[math_random(#t)]
     ShowToast(item[1], item[2], item[3], item[4], false, "item:12640")
 end
 
@@ -482,13 +514,17 @@ function Module:TestCurrency()
         {1602, "Conquest", 25},
         {1792, "Honor", 150},
     }
-    local c = t[math.random(#t)]
-    ShowToast(C_CurrencyInfo.GetCurrencyInfo(c[1]).iconFileID, c[2], c[3], 1, true, "currency:"..c[1])
+    local c = t[math_random(#t)]
+    ShowToast(C_CurrencyInfo_GetCurrencyInfo(c[1]).iconFileID, c[2], c[3], 1, true, "currency:"..c[1])
 end
 
 function Module:OnInitialize()
     if addon.GetDBBool("LootToast") then self:Enable() end
     addon.CallbackRegistry:Register("SettingChanged.LootToast", function(v) if v then self:Enable() else self:Disable() end end)
+    addon.CallbackRegistry:Register("SettingChanged.LootToast_Duration", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.LootToast_MaxVisible", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.LootToast_ShowCurrency", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.LootToast_ShowQuantity", UpdateCachedSettings)
 end
 
 addon.RegisterModule("LootToast", Module)

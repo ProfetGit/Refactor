@@ -7,71 +7,74 @@ local L = addon.L
 local Module = {}
 
 ----------------------------------------------
+-- Performance: Cache globals
+----------------------------------------------
+local tonumber = tonumber
+local strsplit = strsplit
+local bit_band = bit.band
+local table_insert = table.insert
+local string_lower = string.lower
+local string_find = string.find
+
+----------------------------------------------
 -- Module State
 ----------------------------------------------
 local isEnabled = false
 
 ----------------------------------------------
+-- Cached Settings (updated on change)
+----------------------------------------------
+local cachedModifierKey = "SHIFT"
+local cachedAccept = true
+local cachedTurnIn = true
+local cachedSkipGossip = true
+local cachedSingleOption = true
+local cachedContinueDialogue = true
+
+local function UpdateCachedSettings()
+    cachedModifierKey = addon.GetDBValue("AutoQuest_ModifierKey") or "SHIFT"
+    cachedAccept = addon.GetDBBool("AutoQuest_Accept")
+    cachedTurnIn = addon.GetDBBool("AutoQuest_TurnIn")
+    cachedSkipGossip = addon.GetDBBool("AutoQuest_SkipGossip")
+    cachedSingleOption = addon.GetDBBool("AutoQuest_SingleOption")
+    cachedContinueDialogue = addon.GetDBBool("AutoQuest_ContinueDialogue")
+end
+
+----------------------------------------------
 -- NPC Blacklist (Creature IDs)
--- These NPCs should never have dialogue auto-selected
 ----------------------------------------------
 local NPC_BLACKLIST = {
-    -- Class Trainers (generic - will add specifics if needed)
-    -- Talent/Spec NPCs
-    -- Transmogrifiers
-    [64515] = true,  -- Warpweaver Hashom (Transmog, Shrine)
-    [93529] = true,  -- Warpweaver Dushar (Transmog, Horde Warspear)
-    [93528] = true,  -- Warpweaver Fareeya (Transmog, Alliance Stormshield)
-    
-    -- Barbers
-    [143926] = true, -- Barber (Generic)
-    
-    -- Void Storage
-    [64517] = true,  -- Vaultkeeper Razhid (Horde)
-    [64518] = true,  -- Vaultkeeper Sharadris (Alliance)
-    
-    -- Important Story NPCs (Dragonflight)
-    [189901] = true, -- Nozdormu (various interactions)
+    [64515] = true,  -- Warpweaver Hashom (Transmog)
+    [93529] = true,  -- Warpweaver Dushar (Transmog)
+    [93528] = true,  -- Warpweaver Fareeya (Transmog)
+    [143926] = true, -- Barber
+    [64517] = true,  -- Vaultkeeper Razhid (Void Storage)
+    [64518] = true,  -- Vaultkeeper Sharadris (Void Storage)
+    [189901] = true, -- Nozdormu
     [187678] = true, -- Alexstrasza
-    
-    -- Reputation Vendors (might have multiple purchase options)
-    -- Flight Masters on first visit handled by option type check
 }
 
 ----------------------------------------------
 -- Gossip Option Types to Skip
--- These types should not be auto-selected even with single option
 ----------------------------------------------
 local SKIP_OPTION_TYPES = {
-    ["vendor"] = true,
-    ["trainer"] = true,
-    ["binder"] = true,       -- Innkeepers
-    ["taxi"] = true,         -- Flight masters
-    ["banker"] = true,
-    ["transmogrify"] = true,
+    vendor = true,
+    trainer = true,
+    binder = true,
+    taxi = true,
+    banker = true,
+    transmogrify = true,
     ["void-storage"] = true,
 }
 
 ----------------------------------------------
 -- Continue/Proceed Text Patterns
--- Options matching these are "continue" type dialogue
 ----------------------------------------------
 local CONTINUE_PATTERNS = {
-    "continue",
-    "go on",
-    "tell me more",
-    "proceed",
-    "next",
-    "what else",
-    "i'm ready",
-    "i am ready",
-    "let's go",
-    "let us go",
-    "i understand",
-    "understood",
-    "very well",
-    "indeed",
-    "of course",
+    "continue", "go on", "tell me more", "proceed", "next",
+    "what else", "i'm ready", "i am ready", "let's go",
+    "let us go", "i understand", "understood", "very well",
+    "indeed", "of course",
 }
 
 ----------------------------------------------
@@ -80,9 +83,8 @@ local CONTINUE_PATTERNS = {
 local function ShouldProcess()
     if not isEnabled then return false end
     
-    -- Check if modifier key is held to pause automation
-    local modKey = addon.GetDBValue("AutoQuest_ModifierKey")
-    if modKey and modKey ~= "NONE" and addon.IsModifierKeyDown(modKey) then
+    -- Use cached modifier key
+    if cachedModifierKey and cachedModifierKey ~= "NONE" and addon.IsModifierKeyDown(cachedModifierKey) then
         return false
     end
     
@@ -104,10 +106,10 @@ end
 
 local function IsContinueOption(optionText)
     if not optionText then return false end
-    local lowerText = optionText:lower()
+    local lowerText = string_lower(optionText)
     
-    for _, pattern in ipairs(CONTINUE_PATTERNS) do
-        if lowerText:find(pattern, 1, true) then
+    for i = 1, #CONTINUE_PATTERNS do
+        if string_find(lowerText, CONTINUE_PATTERNS[i], 1, true) then
             return true
         end
     end
@@ -115,14 +117,12 @@ local function IsContinueOption(optionText)
 end
 
 local function ShouldSkipOptionType(optionType)
-    return optionType and SKIP_OPTION_TYPES[optionType:lower()]
+    return optionType and SKIP_OPTION_TYPES[string_lower(optionType)]
 end
 
 local function IsQuestRelatedOption(option)
-    -- Check flags for quest-related indicators
     if option.flags then
-        -- Flags can indicate quest-giver or quest-related content
-        if bit.band(option.flags, 0x02) > 0 then -- Quest flag
+        if bit_band(option.flags, 0x02) > 0 then
             return true
         end
     end
@@ -138,23 +138,21 @@ local function ProcessGossipOptions()
     local options = C_GossipInfo.GetOptions()
     if not options or #options == 0 then return false end
     
-    -- Filter out options we shouldn't auto-select
     local validOptions = {}
     local continueOptions = {}
     local questOptions = {}
     
-    for _, option in ipairs(options) do
+    for i = 1, #options do
+        local option = options[i]
         local optionType = option.type or ""
         
-        -- Skip trainer/vendor/etc types
         if not ShouldSkipOptionType(optionType) then
-            -- Categorize the option
             if IsQuestRelatedOption(option) then
-                table.insert(questOptions, option)
+                table_insert(questOptions, option)
             elseif IsContinueOption(option.name) then
-                table.insert(continueOptions, option)
+                table_insert(continueOptions, option)
             else
-                table.insert(validOptions, option)
+                table_insert(validOptions, option)
             end
         end
     end
@@ -165,24 +163,21 @@ local function ProcessGossipOptions()
         return true
     end
     
-    -- Priority 2: Continue dialogue options
-    if addon.GetDBBool("AutoQuest_ContinueDialogue") and #continueOptions > 0 then
+    -- Priority 2: Continue dialogue (use cached setting)
+    if cachedContinueDialogue and #continueOptions > 0 then
         C_GossipInfo.SelectOption(continueOptions[1].gossipOptionID)
         return true
     end
     
-    -- Priority 3: Single valid option remaining
-    if addon.GetDBBool("AutoQuest_SingleOption") and #validOptions == 1 then
-        -- Double-check it's not a risky option
-        local option = validOptions[1]
-        if not ShouldSkipOptionType(option.type) then
-            C_GossipInfo.SelectOption(option.gossipOptionID)
-            return true
-        end
+    -- Priority 3: Single valid option (use cached setting)
+    -- No need to re-check ShouldSkipOptionType - validOptions already filtered
+    if cachedSingleOption and #validOptions == 1 then
+        C_GossipInfo.SelectOption(validOptions[1].gossipOptionID)
+        return true
     end
     
-    -- Priority 4: Only one option total and it's safe
-    if addon.GetDBBool("AutoQuest_SingleOption") and #options == 1 then
+    -- Priority 4: Only one option total
+    if cachedSingleOption and #options == 1 then
         local option = options[1]
         if not ShouldSkipOptionType(option.type) then
             C_GossipInfo.SelectOption(option.gossipOptionID)
@@ -192,119 +187,100 @@ local function ProcessGossipOptions()
     
     return false
 end
-
 ----------------------------------------------
 -- Quest Detail (Accept Quest)
 ----------------------------------------------
 local function OnQuestDetail()
-    if not ShouldProcess() then return end
-    if not addon.GetDBBool("AutoQuest_Accept") then return end
+    if not ShouldProcess() or not cachedAccept then return end
     
-    -- Delay slightly to ensure frame is ready
-    C_Timer.After(0.1, function()
-        if QuestFrame and QuestFrame:IsShown() then
-            AcceptQuest()
-        end
-    end)
+    -- Skip if Blizzard's auto-accept is already handling this quest
+    if QuestGetAutoAccept() then return end
+    
+    -- Accept immediately - no delay needed
+    AcceptQuest()
 end
 
 ----------------------------------------------
--- Quest Progress (Quest Requirements Check)
+-- Quest Progress
 ----------------------------------------------
 local function OnQuestProgress()
-    if not ShouldProcess() then return end
-    if not addon.GetDBBool("AutoQuest_TurnIn") then return end
+    if not ShouldProcess() or not cachedTurnIn then return end
     
-    -- Check if we can complete the quest (all objectives done)
-    C_Timer.After(0.1, function()
-        if IsQuestCompletable() then
-            CompleteQuest()
-        end
-    end)
+    -- Complete immediately if quest is ready
+    if IsQuestCompletable() then
+        CompleteQuest()
+    end
 end
 
 ----------------------------------------------
--- Quest Complete (Turn-in with Rewards)
+-- Quest Complete
 ----------------------------------------------
 local function OnQuestComplete()
-    if not ShouldProcess() then return end
-    if not addon.GetDBBool("AutoQuest_TurnIn") then return end
+    if not ShouldProcess() or not cachedTurnIn then return end
     
-    -- Check number of reward choices
     local numChoices = GetNumQuestChoices()
     
-    C_Timer.After(0.1, function()
-        if numChoices <= 1 then
-            -- No choice or only one - auto select
-            GetQuestReward(numChoices)
-        end
-        -- If multiple choices, let player choose
-    end)
+    -- Turn in immediately if no reward choice needed
+    if numChoices <= 1 then
+        GetQuestReward(numChoices)
+    end
 end
 
 ----------------------------------------------
--- Gossip Frame (Quest Giver Dialogue)
+-- Gossip Frame
 ----------------------------------------------
 local function OnGossipShow()
-    if not ShouldProcess() then return end
-    if not addon.GetDBBool("AutoQuest_SkipGossip") then return end
+    if not ShouldProcess() or not cachedSkipGossip then return end
     
-    C_Timer.After(0.1, function()
-        -- First, check for quest-related actions (highest priority)
-        local availableQuests = C_GossipInfo.GetAvailableQuests()
-        local activeQuests = C_GossipInfo.GetActiveQuests()
-        
-        -- Priority 1: Turn in completed quests
-        if #activeQuests > 0 and addon.GetDBBool("AutoQuest_TurnIn") then
-            for _, quest in ipairs(activeQuests) do
-                if quest.isComplete then
-                    C_GossipInfo.SelectActiveQuest(quest.questID)
-                    return
-                end
+    local availableQuests = C_GossipInfo.GetAvailableQuests()
+    local activeQuests = C_GossipInfo.GetActiveQuests()
+    
+    -- Priority 1: Turn in completed quests
+    if cachedTurnIn then
+        for i = 1, #activeQuests do
+            local quest = activeQuests[i]
+            if quest.isComplete then
+                C_GossipInfo.SelectActiveQuest(quest.questID)
+                return
             end
         end
-        
-        -- Priority 2: Accept available quests
-        if #availableQuests > 0 and addon.GetDBBool("AutoQuest_Accept") then
-            C_GossipInfo.SelectAvailableQuest(availableQuests[1].questID)
-            return
-        end
-        
-        -- Priority 3: Process gossip options (single option, continue, etc.)
-        if ProcessGossipOptions() then
-            return
-        end
-    end)
+    end
+    
+    -- Priority 2: Accept available quests
+    if cachedAccept and #availableQuests > 0 then
+        C_GossipInfo.SelectAvailableQuest(availableQuests[1].questID)
+        return
+    end
+    
+    -- Priority 3: Process gossip options
+    ProcessGossipOptions()
 end
 
 ----------------------------------------------
--- Quest Greeting (Multiple Quests from NPC)
+-- Quest Greeting
 ----------------------------------------------
 local function OnQuestGreeting()
     if not ShouldProcess() then return end
     
-    C_Timer.After(0.1, function()
-        -- Check for quests to turn in
-        if addon.GetDBBool("AutoQuest_TurnIn") then
-            local numActiveQuests = GetNumActiveQuests()
-            for i = 1, numActiveQuests do
-                local title, isComplete = GetActiveTitle(i)
-                if isComplete then
-                    SelectActiveQuest(i)
-                    return
-                end
-            end
-        end
-        
-        -- Check for quests to accept
-        if addon.GetDBBool("AutoQuest_Accept") then
-            local numAvailableQuests = GetNumAvailableQuests()
-            if numAvailableQuests > 0 then
-                SelectAvailableQuest(1)
+    -- Priority 1: Turn in completed quests
+    if cachedTurnIn then
+        local numActiveQuests = GetNumActiveQuests()
+        for i = 1, numActiveQuests do
+            local _, isComplete = GetActiveTitle(i)
+            if isComplete then
+                SelectActiveQuest(i)
                 return
             end
         end
-    end)
+    end
+    
+    -- Priority 2: Accept available quests
+    if cachedAccept then
+        local numAvailableQuests = GetNumAvailableQuests()
+        if numAvailableQuests > 0 then
+            SelectAvailableQuest(1)
+        end
+    end
 end
 
 ----------------------------------------------
@@ -331,6 +307,7 @@ end)
 ----------------------------------------------
 function Module:Enable()
     isEnabled = true
+    UpdateCachedSettings()
     eventFrame:RegisterEvent("QUEST_DETAIL")
     eventFrame:RegisterEvent("QUEST_PROGRESS")
     eventFrame:RegisterEvent("QUEST_COMPLETE")
@@ -340,31 +317,29 @@ end
 
 function Module:Disable()
     isEnabled = false
-    eventFrame:UnregisterEvent("QUEST_DETAIL")
-    eventFrame:UnregisterEvent("QUEST_PROGRESS")
-    eventFrame:UnregisterEvent("QUEST_COMPLETE")
-    eventFrame:UnregisterEvent("GOSSIP_SHOW")
-    eventFrame:UnregisterEvent("QUEST_GREETING")
+    eventFrame:UnregisterAllEvents()
 end
 
 ----------------------------------------------
 -- Initialization
 ----------------------------------------------
 function Module:OnInitialize()
-    -- Initial state
+    UpdateCachedSettings()
+    
     if addon.GetDBBool("AutoQuest") then
         self:Enable()
     end
     
     -- Listen for setting changes
     addon.CallbackRegistry:Register("SettingChanged.AutoQuest", function(value)
-        if value then
-            Module:Enable()
-        else
-            Module:Disable()
-        end
+        if value then Module:Enable() else Module:Disable() end
     end)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_ModifierKey", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_Accept", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_TurnIn", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_SkipGossip", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_SingleOption", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_ContinueDialogue", UpdateCachedSettings)
 end
 
--- Register the module
 addon.RegisterModule("AutoQuest", Module)
