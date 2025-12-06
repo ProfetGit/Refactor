@@ -71,10 +71,9 @@ local function OnPlayMovie(movieID)
     if IsMovieSeen(movieID) then
         -- Stop the movie
         C_Timer.After(0.1, function()
-            if MovieFrame then
-                MovieFrame:Hide()
+            if MovieFrame and MovieFrame:IsShown() then
+                MovieFrame:StopMovie()
             end
-            GameMovieFinished()
         end)
     else
         -- First time watching, mark as seen for next time
