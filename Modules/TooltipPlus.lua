@@ -282,22 +282,68 @@ end
 ----------------------------------------------
 -- Overlay System
 ----------------------------------------------
+
+-- Size configuration
+local ICON_SIZE = 16
+local SHADOW_OFFSET = 1.5 -- Offset for each shadow layer
+
+-- Shadow offsets for 8 directions (creates thick outline effect)
+local SHADOW_OFFSETS = {
+    {-SHADOW_OFFSET, 0},                    -- Left
+    {SHADOW_OFFSET, 0},                     -- Right
+    {0, -SHADOW_OFFSET},                    -- Down
+    {0, SHADOW_OFFSET},                     -- Up
+    {-SHADOW_OFFSET, -SHADOW_OFFSET},       -- Bottom-Left
+    {SHADOW_OFFSET, -SHADOW_OFFSET},        -- Bottom-Right
+    {-SHADOW_OFFSET, SHADOW_OFFSET},        -- Top-Left
+    {SHADOW_OFFSET, SHADOW_OFFSET},         -- Top-Right
+}
+
 local function GetOverlayFrame(parent)
     local overlay = tremove(overlayPool)
+    
     if not overlay then
         overlay = CreateFrame("Frame", nil, parent)
-        overlay:SetSize(16, 16)
-        overlay.icon = overlay:CreateTexture(nil, "OVERLAY")
-        overlay.icon:SetAllPoints()
+        overlay:SetFrameStrata("TOOLTIP")
+        overlay:SetFrameLevel(100)
+        overlay:SetSize(ICON_SIZE + SHADOW_OFFSET * 2, ICON_SIZE + SHADOW_OFFSET * 2)
+        
+        -- Create 8 shadow textures (one for each direction)
+        overlay.shadows = {}
+        for i, offset in ipairs(SHADOW_OFFSETS) do
+            local shadow = overlay:CreateTexture(nil, "ARTWORK", nil, 1)
+            shadow:SetSize(ICON_SIZE, ICON_SIZE)
+            shadow:SetPoint("CENTER", overlay, "CENTER", offset[1], offset[2])
+            shadow:SetVertexColor(0, 0, 0, 1) -- Pure black
+            overlay.shadows[i] = shadow
+        end
+        
+        -- Create main icon on top of shadows
+        overlay.icon = overlay:CreateTexture(nil, "ARTWORK", nil, 7)
+        overlay.icon:SetSize(ICON_SIZE, ICON_SIZE)
+        overlay.icon:SetPoint("CENTER", overlay, "CENTER", 0, 0)
     end
+    
+    -- Apply parent and show
     overlay:SetParent(parent)
+    overlay:SetFrameStrata("TOOLTIP")
+    overlay:SetFrameLevel(100)
     overlay:Show()
+    
     return overlay
 end
 
 local function ReleaseOverlay(overlay)
     overlay:Hide()
     overlay:ClearAllPoints()
+    if overlay.shadows then
+        for _, shadow in ipairs(overlay.shadows) do
+            shadow:Hide()
+        end
+    end
+    if overlay.icon then
+        overlay.icon:Hide()
+    end
     tinsert(overlayPool, overlay)
 end
 
@@ -318,7 +364,7 @@ local function UpdateButtonOverlay(button, itemLink)
         activeOverlays[key] = nil
     end
     
-    if not addon.GetDBBool("TooltipPlus_TransmogOverlay") or not itemLink then return end
+    if not cachedTransmogOverlay or not itemLink then return end
     if not CanItemBeTransmogged(itemLink) then return end
     
     local isCollected = IsTransmogCollected(itemLink)
@@ -327,18 +373,46 @@ local function UpdateButtonOverlay(button, itemLink)
     local overlay = GetOverlayFrame(button)
     activeOverlays[key] = overlay
     
-    local corner = addon.GetDBValue("TooltipPlus_TransmogCorner") or "TOPRIGHT"
+    local corner = cachedTransmogCorner
     local offsets = CORNER_OFFSETS[corner] or CORNER_OFFSETS.BOTTOMRIGHT
     overlay:ClearAllPoints()
     overlay:SetPoint(offsets[1], button, offsets[1], offsets[2], offsets[3])
-    overlay:SetFrameLevel(button:GetFrameLevel() + 10)
     
     if isCollected then
-        overlay.icon:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
-        overlay.icon:SetVertexColor(0, 0.8, 1)
+        -- Setup all 8 shadow textures with the same checkmark but black
+        for _, shadow in ipairs(overlay.shadows) do
+            shadow:SetTexture("Interface/Common/CommonIcons")
+            shadow:SetTexCoord(0.126465, 0.251465, 0.000976562, 0.250977)
+            shadow:SetDesaturated(true)
+            shadow:SetBlendMode("BLEND") -- Reset blend mode
+            shadow:SetVertexColor(0, 0, 0, 1) -- Pure black shadow
+            shadow:Show()
+        end
+        -- Main icon (blue checkmark)
+        overlay.icon:SetTexture("Interface/Common/CommonIcons")
+        overlay.icon:SetTexCoord(0.126465, 0.251465, 0.000976562, 0.250977)
+        overlay.icon:SetDesaturated(true)
+        overlay.icon:SetBlendMode("BLEND") -- Normal blend
+        overlay.icon:SetVertexColor(0.3, 0.7, 1) -- Saturated blue
+        overlay.icon:Show()
     else
-        overlay.icon:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
-        overlay.icon:SetVertexColor(1, 1, 1)
+        -- Red X icon (using original color)
+        for _, shadow in ipairs(overlay.shadows) do
+            shadow:SetTexture("Interface/Common/CommonIcons")
+            shadow:SetTexCoord(0.252441, 0.377441, 0.25293, 0.50293) -- Red X
+            shadow:SetDesaturated(false)
+            shadow:SetBlendMode("BLEND")
+            shadow:SetVertexColor(0, 0, 0, 1) -- Pure black shadow
+            shadow:Show()
+        end
+        
+        -- Main icon (red X)
+        overlay.icon:SetTexture("Interface/Common/CommonIcons")
+        overlay.icon:SetTexCoord(0.252441, 0.377441, 0.25293, 0.50293) -- Red X
+        overlay.icon:SetDesaturated(false)
+        overlay.icon:SetBlendMode("BLEND")
+        overlay.icon:SetVertexColor(1, 1, 1) -- Original red color
+        overlay.icon:Show()
     end
 end
 
@@ -346,7 +420,7 @@ end
 -- Container/Merchant/Loot Button Updates
 ----------------------------------------------
 local function UpdateAllContainerButtons()
-    if not addon.GetDBBool("TooltipPlus_TransmogOverlay") then
+    if not cachedTransmogOverlay then
         ClearAllOverlays()
         return
     end
@@ -400,7 +474,7 @@ end
 
 local function UpdateMerchantButtons()
     if not MerchantFrame or not MerchantFrame:IsShown() then return end
-    if not addon.GetDBBool("TooltipPlus_TransmogOverlay") then return end
+    if not cachedTransmogOverlay then return end
     
     local numItems, perPage = GetMerchantNumItems(), MERCHANT_ITEMS_PER_PAGE or 10
     for i = 1, perPage do
@@ -416,7 +490,7 @@ end
 
 local function UpdateLootButtons()
     if not LootFrame or not LootFrame:IsShown() then return end
-    if not addon.GetDBBool("TooltipPlus_TransmogOverlay") then return end
+    if not cachedTransmogOverlay then return end
     
     for i = 1, GetNumLootItems() do
         local button = _G["LootButton" .. i]
@@ -513,8 +587,17 @@ local function RegisterBaganatorWidget()
             local collected = IsTransmogCollected(details.itemLink)
             if collected == nil then return false end
             
-            widget:SetTexture(collected and "Interface\\RaidFrame\\ReadyCheck-Ready" or "Interface\\RaidFrame\\ReadyCheck-NotReady")
-            widget:SetVertexColor(collected and 0 or 1, collected and 0.8 or 1, collected and 1 or 1)
+            if collected then
+                widget:SetTexture("Interface/Common/CommonIcons")
+                widget:SetTexCoord(0.126465, 0.251465, 0.000976562, 0.250977)
+                widget:SetDesaturated(true)
+                widget:SetVertexColor(0.3, 0.7, 1)
+            else
+                widget:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+                widget:SetTexCoord(0, 1, 0, 1)
+                widget:SetDesaturated(false)
+                widget:SetVertexColor(1, 1, 1)
+            end
             return true
         end,
         function(itemButton)
@@ -540,6 +623,34 @@ else
 end
 
 ----------------------------------------------
+-- Tooltip Transmog Icon & Text
+----------------------------------------------
+local tooltipTransmogIcon
+local tooltipTransmogText
+
+local function GetTooltipTransmogElements()
+    if not tooltipTransmogIcon then
+        tooltipTransmogIcon = GameTooltip:CreateTexture(nil, "ARTWORK")
+        tooltipTransmogIcon:SetSize(24, 24)
+    end
+    if not tooltipTransmogText then
+        tooltipTransmogText = GameTooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    end
+    return tooltipTransmogIcon, tooltipTransmogText
+end
+
+local function HideTooltipTransmogIcon()
+    if tooltipTransmogIcon then
+        tooltipTransmogIcon:Hide()
+        tooltipTransmogIcon:ClearAllPoints()
+    end
+    if tooltipTransmogText then
+        tooltipTransmogText:Hide()
+        tooltipTransmogText:ClearAllPoints()
+    end
+end
+
+----------------------------------------------
 -- Tooltip Handlers
 ----------------------------------------------
 local function OnTooltipSetUnit(tooltip)
@@ -557,7 +668,10 @@ local function OnTooltipSetItem(tooltip)
     if not isEnabled or not tooltip.GetItem then return end
     
     local _, link = tooltip:GetItem()
-    if not link then return end
+    if not link then 
+        HideTooltipTransmogIcon()
+        return 
+    end
     
     -- Rarity border (use cached setting)
     if cachedRarityBorder then
@@ -570,17 +684,68 @@ local function OnTooltipSetItem(tooltip)
         end
     end
     
-    -- Transmog status (use cached setting)
+    -- Remove Blizzard's default "You've collected this appearance" text
+    if cachedShowTransmog then
+        local tooltipName = tooltip:GetName()
+        for i = 1, tooltip:NumLines() do
+            local leftLine = _G[tooltipName .. "TextLeft" .. i]
+            if leftLine then
+                local text = leftLine:GetText()
+                if text then
+                    -- Match Blizzard's transmog text (may have icon prefix or various formats)
+                    -- Use plain find (no pattern) for apostrophe handling
+                    local plainText = text:gsub("|T.-|t", ""):gsub("|A.-|a", "") -- Strip inline textures/atlases
+                    if plainText:find("collected this appearance", 1, true) or
+                       plainText:find("You've collected", 1, true) or
+                       plainText:find("You have collected", 1, true) or
+                       (TRANSMOGRIFY_TOOLTIP_APPEARANCE_KNOWN and plainText:find(TRANSMOGRIFY_TOOLTIP_APPEARANCE_KNOWN:gsub("|T.-|t", ""):gsub("|A.-|a", ""), 1, true)) then
+                        leftLine:SetText(nil)
+                        leftLine:Hide()
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Transmog status (use cached setting) - displayed in bottom-right corner
     if cachedShowTransmog and CanItemBeTransmogged(link) then
         local isCollected = IsTransmogCollected(link)
         if isCollected ~= nil then
+            local icon, text = GetTooltipTransmogElements()
+            
+            -- Position text in bottom-right corner
+            text:ClearAllPoints()
+            text:SetPoint("BOTTOMRIGHT", tooltip, "BOTTOMRIGHT", -8, 12)
+            
+            -- Position icon to the left of text
+            icon:ClearAllPoints()
+            icon:SetPoint("RIGHT", text, "LEFT", -2, 0)
+            
             if isCollected then
-                tooltip:AddDoubleLine("Appearance:", "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14:0:0|t Collected", 1, 0.82, 0, 0.3, 0.7, 1)
+                -- Blue checkmark (desaturated + tinted)
+                icon:SetTexture("Interface/Common/CommonIcons")
+                icon:SetTexCoord(0.126465, 0.251465, 0.000976562, 0.250977)
+                icon:SetDesaturated(true)
+                icon:SetVertexColor(0.3, 0.7, 1)
+                text:SetText("Collected")
+                text:SetTextColor(0.3, 0.7, 1)
             else
-                tooltip:AddDoubleLine("Appearance:", "|TInterface\\RaidFrame\\ReadyCheck-NotReady:14:14:0:0|t Not Collected", 1, 0.82, 0, 1, 0.5, 0)
+                -- Red X
+                icon:SetTexture("Interface/Common/CommonIcons")
+                icon:SetTexCoord(0.252441, 0.377441, 0.25293, 0.50293)
+                icon:SetDesaturated(false)
+                icon:SetVertexColor(1, 1, 1)
+                text:SetText("Not Collected")
+                text:SetTextColor(1, 0.4, 0.4)
             end
-            tooltip:Show()
+            
+            icon:Show()
+            text:Show()
+        else
+            HideTooltipTransmogIcon()
         end
+    else
+        HideTooltipTransmogIcon()
     end
     
     -- Item ID (use cached setting)
@@ -616,32 +781,26 @@ local function HookHealthbar()
 end
 
 local function ApplyScale()
-    local scale = addon.GetDBValue("TooltipPlus_Scale") or 100
-    GameTooltip:SetScale(scale / 100)
+    GameTooltip:SetScale(cachedScale / 100)
 end
 
 local function SetupMousePositioning()
     hooksecurefunc("GameTooltip_SetDefaultAnchor", function(tooltip, parent)
         if not isEnabled or tooltip ~= GameTooltip then return end
-        
-        local anchor = addon.GetDBValue("TooltipPlus_Anchor") or "DEFAULT"
-        if anchor == "DEFAULT" then return end
-        
-        local side = addon.GetDBValue("TooltipPlus_MouseSide") or "RIGHT"
-        local offset = addon.GetDBValue("TooltipPlus_MouseOffset") or 20
+        if cachedAnchor == "DEFAULT" then return end
         
         tooltip:ClearAllPoints()
         
-        if anchor == "MOUSE" then
-            if side == "RIGHT" then
-                tooltip:SetOwner(parent, "ANCHOR_CURSOR_RIGHT", offset, 0)
-            elseif side == "LEFT" then
-                tooltip:SetOwner(parent, "ANCHOR_CURSOR_LEFT", -offset, 0)
-            elseif side == "TOP" then
-                tooltip:SetOwner(parent, "ANCHOR_CURSOR", 0, offset)
+        if cachedAnchor == "MOUSE" then
+            if cachedMouseSide == "RIGHT" then
+                tooltip:SetOwner(parent, "ANCHOR_CURSOR_RIGHT", cachedMouseOffset, 0)
+            elseif cachedMouseSide == "LEFT" then
+                tooltip:SetOwner(parent, "ANCHOR_CURSOR_LEFT", -cachedMouseOffset, 0)
+            elseif cachedMouseSide == "TOP" then
+                tooltip:SetOwner(parent, "ANCHOR_CURSOR", 0, cachedMouseOffset)
             end
         else
-            local pos = ANCHOR_POSITIONS[anchor]
+            local pos = ANCHOR_POSITIONS[cachedAnchor]
             if pos then
                 tooltip:SetOwner(parent, "ANCHOR_NONE")
                 tooltip:SetPoint(pos[1], pos[2], pos[3], pos[4], pos[5])
@@ -663,6 +822,7 @@ local function InitializeHooks()
     GameTooltip:HookScript("OnHide", function(self)
         if isEnabled then
             ResetTooltipBorderColor(self)
+            HideTooltipTransmogIcon()
         end
     end)
     
@@ -716,6 +876,9 @@ function Module:OnInitialize()
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_HideHealthbar", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_ShowItemID", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_ShowSpellID", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_Anchor", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_MouseSide", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_MouseOffset", UpdateCachedSettings)
 end
 
 addon.RegisterModule("TooltipPlus", Module)
