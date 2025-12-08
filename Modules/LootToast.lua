@@ -2,7 +2,7 @@
 -- Displays looted items in elegant stacking toasts on the bottom-left
 
 local addonName, addon = ...
-local L = addon.L
+
 
 local Module = {}
 
@@ -25,11 +25,15 @@ local isEnabled = false
 local activeToasts = {}
 local toastPool = {}
 local previewToasts = {}  -- Separate pool for edit mode previews
+local previewPool = {}
 local containerFrame = nil
+
+-- Forward declarations
+local ShowPreviewToasts, HidePreviewToasts
 
 -- Sample items for edit mode preview
 local PREVIEW_ITEMS = {
-    {"Interface\\Icons\\INV_Sword_39", "Thunderfury, Blessed Blade", 1, 5},
+    {"Interface\\Icons\\INV_Sword_39", "Thunderfury, Blessed Blade of the Windseeker", 1, 5},
     {"Interface\\Icons\\INV_Misc_Gem_Diamond_02", "Large Prismatic Shard", 3, 3},
     {"Interface\\Icons\\INV_Potion_51", "Major Healing Potion", 5, 2},
     {"Interface\\Icons\\INV_Fabric_Linen_01", "Linen Cloth", 20, 1},
@@ -54,18 +58,20 @@ local QUALITY_COLORS = {
     [8] = { 0.00, 0.80, 1.00 }, -- WoW Token
 }
 
--- Pre-create gradient color objects (avoids allocation per-use)
-local GRADIENT_NORMAL_START = CreateColor(0.2, 0.2, 0.2, 0.8)
-local GRADIENT_NORMAL_END = CreateColor(0.2, 0.2, 0.2, 0)
-local GRADIENT_HOVER_START = CreateColor(0.3, 0.3, 0.3, 0.9)
-local GRADIENT_HOVER_END = CreateColor(0.3, 0.3, 0.3, 0)
-local GRADIENT_CURRENCY_START = CreateColor(0.3, 0.3, 0.3, 0.8)
-local GRADIENT_CURRENCY_END = CreateColor(0.3, 0.3, 0.3, 0)
+-- Loot Frame Atlas Texture Definitions
+-- Format: {left, right, top, bottom}
+local LOOT_ATLAS = "Interface/LootFrame/LootFrame"
+local CYPHER_TEXTURE = "Interface\\Reforging\\CypherSetItemUpgrade"
+local CYPHER_COORDS = {0.00195312, 0.162109, 0.572266, 0.757812}
+local LOOT_HIGHLIGHT_COORDS = {0.00195312, 0.583984, 0.522461, 0.59668}     -- Looting_ItemCard_HighlightState
+local LOOT_BG_COORDS = {0.00195312, 0.583984, 0.446289, 0.520508}            -- Looting_ItemCard_BG
+local LOOT_STROKE_NORMAL_COORDS = {0.00195312, 0.583984, 0.674805, 0.749023} -- Looting_ItemCard_Stroke_Normal
+local LOOT_STROKE_CLICK_COORDS = {0.00195312, 0.583984, 0.598633, 0.672852}  -- Looting_ItemCard_Stroke_ClickState
 
--- Constants
-local TOAST_HEIGHT = 40
-local TOAST_WIDTH = 280
-local TOAST_SPACING = 4
+-- Constants (layout spacing - these control toast slot positions)
+local TOAST_HEIGHT = 40  -- Slot height
+local TOAST_WIDTH = 170  -- Slot width
+local TOAST_SPACING = 8  -- Gap between toasts
 local TOAST_SLIDE_DURATION = 0.2
 local TOAST_FADE_DURATION = 0.3
 
@@ -123,28 +129,58 @@ local function CreateToastFrame()
     local toast = CreateFrame("Frame", nil, containerFrame)
     toast:SetSize(TOAST_WIDTH, TOAST_HEIGHT)
     
-    -- Background Gradient (use pre-cached colors)
-    toast.bg = toast:CreateTexture(nil, "BACKGROUND")
-    toast.bg:SetAllPoints()
-    toast.bg:SetColorTexture(1, 1, 1, 1)
-    toast.bg:SetGradient("HORIZONTAL", GRADIENT_NORMAL_START, GRADIENT_NORMAL_END)
-
+    -- Highlight Layer (Looting_ItemCard_HighlightState) - shown on hover
+    toast.highlight = toast:CreateTexture(nil, "BACKGROUND", nil, 1)
+    toast.highlight:SetAllPoints()
+    toast.highlight:SetTexture(LOOT_ATLAS)
+    toast.highlight:SetTexCoord(LOOT_HIGHLIGHT_COORDS[1], LOOT_HIGHLIGHT_COORDS[2], LOOT_HIGHLIGHT_COORDS[3], LOOT_HIGHLIGHT_COORDS[4])
+    toast.highlight:SetAlpha(0)
+    
     -- Icon
     toast.icon = toast:CreateTexture(nil, "ARTWORK")
-    toast.icon:SetSize(32, 32)
+    toast.icon:SetSize(36, 36)
     toast.icon:SetPoint("LEFT", 4, 0)
-    toast.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    toast.icon:SetTexCoord(0.12, 0.88, 0.12, 0.88)
     
-    -- Text: Name
+    -- Icon Mask (round corners to fit within Cypher frame cutouts)
+    toast.iconMask = toast:CreateMaskTexture()
+    toast.iconMask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+    toast.iconMask:SetAllPoints(toast.icon)
+    toast.icon:AddMaskTexture(toast.iconMask)
+
+    -- Icon Border (Cypher Atlas)
+    toast.iconBorder = toast:CreateTexture(nil, "OVERLAY")
+    toast.iconBorder:SetSize(45, 54)
+    toast.iconBorder:SetPoint("CENTER", toast.icon, "CENTER", 0, 0)
+    toast.iconBorder:SetTexture(CYPHER_TEXTURE)
+    toast.iconBorder:SetTexCoord(CYPHER_COORDS[1], CYPHER_COORDS[2], CYPHER_COORDS[3], CYPHER_COORDS[4])
+    
+    -- Text Background (Rarity Gradient)
+    toast.textBg = toast:CreateTexture(nil, "BACKGROUND")
+    toast.textBg:SetHeight(36)
+    toast.textBg:SetPoint("LEFT", toast.icon, "RIGHT", -2, 0)
+    toast.textBg:SetPoint("RIGHT", 0, 0)
+    toast.textBg:SetTexture(LOOT_ATLAS)
+    toast.textBg:SetTexCoord(LOOT_BG_COORDS[1], LOOT_BG_COORDS[2], LOOT_BG_COORDS[3], LOOT_BG_COORDS[4])
+    
+    -- Border (Faint Mask)
+    toast.border = toast:CreateTexture(nil, "BORDER")
+    toast.border:SetAllPoints(toast.textBg)
+    toast.border:SetTexture(LOOT_ATLAS)
+    toast.border:SetTexCoord(LOOT_STROKE_NORMAL_COORDS[1], LOOT_STROKE_NORMAL_COORDS[2], LOOT_STROKE_NORMAL_COORDS[3], LOOT_STROKE_NORMAL_COORDS[4])
+    toast.border:SetAlpha(0.2)
+    
     toast.name = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    toast.name:SetPoint("LEFT", toast.icon, "RIGHT", 10, 0)
-    toast.name:SetPoint("RIGHT", -10, 0)
+    toast.name:SetPoint("LEFT", toast.icon, "RIGHT", 6, 0)
+    toast.name:SetWidth(104)  -- Reduced 20% from 130
     toast.name:SetJustifyH("LEFT")
-    toast.name:SetWordWrap(false)
+    toast.name:SetWordWrap(true)
+    toast.name:SetSpacing(2)
+    toast.name:SetMaxLines(3)
     toast.name:SetShadowOffset(1, -1)
     
     -- Text: Quantity
-    toast.quantity = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightOutline")
+    toast.quantity = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     toast.quantity:SetPoint("BOTTOMRIGHT", toast.icon, "BOTTOMRIGHT", 2, -2)
     toast.quantity:SetJustifyH("RIGHT")
     toast.quantity:SetTextColor(1, 1, 1)
@@ -195,7 +231,8 @@ local function CreateToastFrame()
     
     toast:SetScript("OnEnter", function(self)
         if self.fadeTimer then self.fadeTimer:Cancel() end
-        self.bg:SetGradient("HORIZONTAL", GRADIENT_HOVER_START, GRADIENT_HOVER_END)
+        -- Show highlight on hover
+        self.highlight:SetAlpha(1)
         
         if self.link then
             GameTooltip:SetOwner(self, "ANCHOR_LEFT", 0, 0)
@@ -205,7 +242,8 @@ local function CreateToastFrame()
     end)
     
     toast:SetScript("OnLeave", function(self)
-        self.bg:SetGradient("HORIZONTAL", GRADIENT_NORMAL_START, GRADIENT_NORMAL_END)
+        -- Hide highlight
+        self.highlight:SetAlpha(0)
         GameTooltip:Hide()
         
         self.fadeTimer = C_Timer.NewTimer(cachedDuration * 0.5, function() self.fadeAnim:Play() end)
@@ -265,6 +303,21 @@ local function ShowToast(icon, name, quantity, quality, isCurrency, link)
     toast.name:SetText(name or "Unknown")
     toast.name:SetTextColor(color[1], color[2], color[3])
     
+    -- Color border by rarity if desired? 
+    -- For now stick to atlas default
+    toast.iconBorder:SetVertexColor(color[1], color[2], color[3])
+    
+    -- Update Background Gradient (Fade from bottom to top depending on rarity)
+    -- Bottom: More Visible, Top: Faint
+    local cR, cG, cB = color[1], color[2], color[3]
+    local minColor = CreateColor(cR, cG, cB, 0.7)
+    local maxColor = CreateColor(cR, cG, cB, 0.15)
+    toast.textBg:SetGradient("VERTICAL", minColor, maxColor)
+    
+    -- Update Border Mask (Very faint color mask)
+    toast.border:SetVertexColor(cR, cG, cB)
+    toast.border:SetAlpha(0.15)
+    
     -- Use cached setting
     if cachedShowQuantity and quantity and quantity > 1 then
         toast.quantity:SetText("x" .. quantity)
@@ -273,12 +326,8 @@ local function ShowToast(icon, name, quantity, quality, isCurrency, link)
         toast.quantity:Hide()
     end
     
-    -- Styling (use pre-cached gradient colors)
-    if isCurrency then
-       toast.bg:SetGradient("HORIZONTAL", GRADIENT_CURRENCY_START, GRADIENT_CURRENCY_END)
-    else
-       toast.bg:SetGradient("HORIZONTAL", GRADIENT_NORMAL_START, GRADIENT_NORMAL_END)
-    end
+    -- Reset highlight state
+    toast.highlight:SetAlpha(0)
     
     -- Position & Animation
     table_insert(activeToasts, toast)
@@ -346,251 +395,28 @@ local function OnCurrencyReceived(msg)
 end
 
 ----------------------------------------------
--- Container & Edit Mode
+-- Container Creation (using EditMode framework)
 ----------------------------------------------
-local function CreateEditModeHighlight(parent)
-    local h = CreateFrame("Frame", nil, parent)
-    h:SetAllPoints()
-    h:SetFrameLevel(parent:GetFrameLevel() + 10)
-    
-    -- Nine-slice atlas configuration
-    -- Atlas format: {width, height, left, right, top, bottom, horizTile, vertTile, scale}
-    local CORNER_SIZE = 16
-    local EDGE_SIZE = 16
-    
-    -- Atlas paths
-    local ATLAS_MAIN = "Interface/Editmode/EditModeUI"
-    local ATLAS_VERT = "Interface/Editmode/EditModeUIVertical"
-    local ATLAS_HIGHLIGHT_BG = "Interface/Editmode/EditModeUIHighlightBackground"
-    local ATLAS_SELECTED_BG = "Interface/Editmode/EditModeUISelectedBackground"
-    
-    -- Helper to create texture with atlas coords
-    local function SetupAtlasTexture(tex, atlas, left, right, top, bottom, horizTile, vertTile)
-        tex:SetTexture(atlas)
-        tex:SetTexCoord(left, right, top, bottom)
-        tex:SetHorizTile(horizTile)
-        tex:SetVertTile(vertTile)
-    end
-    
-    -- Create highlight nine-slice (shown when in edit mode)
-    h.highlight = {}
-    h.selected = {}
-    
-    -- Function to create nine-slice textures for a state
-    local function CreateNineSlice(container, prefix, bgAtlas)
-        local ns = {}
-        
-        -- Center (background) - fills the entire frame
-        ns.center = h:CreateTexture(nil, "BACKGROUND")
-        ns.center:SetAllPoints()
-        SetupAtlasTexture(ns.center, bgAtlas, 0, 1, 0, 1, true, true)
-        
-        -- Corners (from main atlas) - offset outward to align visible border with frame edge
-        local cornerCoords = prefix == "highlight" 
-            and {0.03125, 0.53125, 0.285156, 0.347656}
-            or {0.03125, 0.53125, 0.355469, 0.417969}
-        
-        local CORNER_OFFSET = 8  -- Offset to align the visible border with the frame edge
-        
-        ns.topleft = h:CreateTexture(nil, "BORDER")
-        ns.topleft:SetSize(CORNER_SIZE, CORNER_SIZE)
-        ns.topleft:SetPoint("TOPLEFT", -CORNER_OFFSET, CORNER_OFFSET)
-        SetupAtlasTexture(ns.topleft, ATLAS_MAIN, cornerCoords[1], cornerCoords[2], cornerCoords[3], cornerCoords[4], false, false)
-        
-        ns.topright = h:CreateTexture(nil, "BORDER")
-        ns.topright:SetSize(CORNER_SIZE, CORNER_SIZE)
-        ns.topright:SetPoint("TOPRIGHT", CORNER_OFFSET, CORNER_OFFSET)
-        SetupAtlasTexture(ns.topright, ATLAS_MAIN, cornerCoords[2], cornerCoords[1], cornerCoords[3], cornerCoords[4], false, false)
-        
-        ns.bottomleft = h:CreateTexture(nil, "BORDER")
-        ns.bottomleft:SetSize(CORNER_SIZE, CORNER_SIZE)
-        ns.bottomleft:SetPoint("BOTTOMLEFT", -CORNER_OFFSET, -CORNER_OFFSET)
-        SetupAtlasTexture(ns.bottomleft, ATLAS_MAIN, cornerCoords[1], cornerCoords[2], cornerCoords[4], cornerCoords[3], false, false)
-        
-        ns.bottomright = h:CreateTexture(nil, "BORDER")
-        ns.bottomright:SetSize(CORNER_SIZE, CORNER_SIZE)
-        ns.bottomright:SetPoint("BOTTOMRIGHT", CORNER_OFFSET, -CORNER_OFFSET)
-        SetupAtlasTexture(ns.bottomright, ATLAS_MAIN, cornerCoords[2], cornerCoords[1], cornerCoords[4], cornerCoords[3], false, false)
-        
-        -- Horizontal edges (top and bottom from main atlas, tiled horizontally)
-        local topEdgeCoords = prefix == "highlight"
-            and {0, 0.5, 0.0742188, 0.136719}
-            or {0, 0.5, 0.214844, 0.277344}
-        local bottomEdgeCoords = prefix == "highlight"
-            and {0, 0.5, 0.00390625, 0.0664062}
-            or {0, 0.5, 0.144531, 0.207031}
-        
-        ns.top = h:CreateTexture(nil, "BORDER")
-        ns.top:SetHeight(EDGE_SIZE)
-        ns.top:SetPoint("TOPLEFT", CORNER_SIZE - CORNER_OFFSET, CORNER_OFFSET)
-        ns.top:SetPoint("TOPRIGHT", -(CORNER_SIZE - CORNER_OFFSET), CORNER_OFFSET)
-        SetupAtlasTexture(ns.top, ATLAS_MAIN, topEdgeCoords[1], topEdgeCoords[2], topEdgeCoords[3], topEdgeCoords[4], true, false)
-        
-        ns.bottom = h:CreateTexture(nil, "BORDER")
-        ns.bottom:SetHeight(EDGE_SIZE)
-        ns.bottom:SetPoint("BOTTOMLEFT", CORNER_SIZE - CORNER_OFFSET, -CORNER_OFFSET)
-        ns.bottom:SetPoint("BOTTOMRIGHT", -(CORNER_SIZE - CORNER_OFFSET), -CORNER_OFFSET)
-        SetupAtlasTexture(ns.bottom, ATLAS_MAIN, bottomEdgeCoords[1], bottomEdgeCoords[2], bottomEdgeCoords[3], bottomEdgeCoords[4], true, false)
-        
-        -- Vertical edges (left and right from vertical atlas, tiled vertically)
-        local leftEdgeCoords = prefix == "highlight"
-            and {0.0078125, 0.132812, 0, 1}
-            or {0.289062, 0.414062, 0, 1}
-        local rightEdgeCoords = prefix == "highlight"
-            and {0.148438, 0.273438, 0, 1}
-            or {0.429688, 0.554688, 0, 1}
-        
-        ns.left = h:CreateTexture(nil, "BORDER")
-        ns.left:SetWidth(EDGE_SIZE)
-        ns.left:SetPoint("TOPLEFT", -CORNER_OFFSET, -(CORNER_SIZE - CORNER_OFFSET))
-        ns.left:SetPoint("BOTTOMLEFT", -CORNER_OFFSET, CORNER_SIZE - CORNER_OFFSET)
-        SetupAtlasTexture(ns.left, ATLAS_VERT, leftEdgeCoords[1], leftEdgeCoords[2], leftEdgeCoords[3], leftEdgeCoords[4], false, true)
-        
-        ns.right = h:CreateTexture(nil, "BORDER")
-        ns.right:SetWidth(EDGE_SIZE)
-        ns.right:SetPoint("TOPRIGHT", CORNER_OFFSET, -(CORNER_SIZE - CORNER_OFFSET))
-        ns.right:SetPoint("BOTTOMRIGHT", CORNER_OFFSET, CORNER_SIZE - CORNER_OFFSET)
-        SetupAtlasTexture(ns.right, ATLAS_VERT, rightEdgeCoords[1], rightEdgeCoords[2], rightEdgeCoords[3], rightEdgeCoords[4], false, true)
-        
-        container.parts = ns
-        return ns
-    end
-    
-    -- Create both states
-    local highlightParts = CreateNineSlice(h.highlight, "highlight", ATLAS_HIGHLIGHT_BG)
-    local selectedParts = CreateNineSlice(h.selected, "selected", ATLAS_SELECTED_BG)
-    
-    -- Initially show highlight, hide selected
-    local function ShowParts(parts, show)
-        for _, tex in pairs(parts) do
-            if show then tex:Show() else tex:Hide() end
-        end
-    end
-    
-    ShowParts(selectedParts, false)
-    
-    -- Label (using larger font to match other edit mode components)
-    h.label = h:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    h.label:SetPoint("CENTER")
-    h.label:SetText("Loot Toasts")
-    h.label:SetTextColor(1, 1, 1)
-    
-    -- State tracking
-    h.isDragging = false
-    h.isHovered = false
-    
-    -- Helper to set alpha on all parts
-    local function SetPartsAlpha(parts, alpha)
-        for _, tex in pairs(parts) do
-            tex:SetAlpha(alpha)
-        end
-    end
-    
-    -- Update visual state based on current flags
-    local function UpdateState(self)
-        if self.isDragging then
-            -- Pressed/Dragging: Show yellow selected state
-            ShowParts(highlightParts, false)
-            ShowParts(selectedParts, true)
-        elseif self.isHovered then
-            -- Hover: Brighter blue (highlight with increased alpha)
-            ShowParts(selectedParts, false)
-            ShowParts(highlightParts, true)
-            SetPartsAlpha(highlightParts, 1.0)
-        else
-            -- Normal: Default blue
-            ShowParts(selectedParts, false)
-            ShowParts(highlightParts, true)
-            SetPartsAlpha(highlightParts, 0.7)
-        end
-    end
-    
-    -- Drag state (called from container)
-    h.SetDragging = function(self, dragging)
-        self.isDragging = dragging
-        UpdateState(self)
-    end
-    
-    -- Enable mouse for hover detection, but forward drag to parent
-    h:EnableMouse(true)
-    h:RegisterForDrag("LeftButton")
-    
-    h:SetScript("OnEnter", function(self)
-        self.isHovered = true
-        UpdateState(self)
-    end)
-    h:SetScript("OnLeave", function(self)
-        self.isHovered = false
-        UpdateState(self)
-    end)
-    h:SetScript("OnDragStart", function(self)
-        -- Forward drag to parent container
-        local container = self:GetParent()
-        if container and container.StartMoving then
-            container:StartMoving()
-            self:SetDragging(true)
-        end
-    end)
-    h:SetScript("OnDragStop", function(self)
-        -- Forward drag stop to parent container
-        local container = self:GetParent()
-        if container and container.StopMovingOrSizing then
-            container:StopMovingOrSizing()
-            self:SetDragging(false)
-            -- Trigger save position
-            local p, _, rp, x, y = container:GetPoint()
-            addon.SetDBValue("LootToast_PosPoint", p)
-            addon.SetDBValue("LootToast_PosRelPoint", rp)
-            addon.SetDBValue("LootToast_PosX", x)
-            addon.SetDBValue("LootToast_PosY", y)
-        end
-    end)
-    
-    h:Hide()
-    return h
-end
-
 local function CreateContainerFrame()
     if containerFrame then return containerFrame end
     
-    containerFrame = CreateFrame("Frame", "RefactorLootToastContainer", UIParent)
-    containerFrame:SetSize(TOAST_WIDTH, 220)
-    containerFrame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 20, 200)
-    containerFrame:SetFrameStrata("HIGH")
-    containerFrame:SetClampedToScreen(true)
-    containerFrame:SetMovable(true)
-    containerFrame:RegisterForDrag("LeftButton")
-    containerFrame:EnableMouse(false)
-    
-    containerFrame.editHighlight = CreateEditModeHighlight(containerFrame)
-    
-    local function SavePosition()
-        local p, _, rp, x, y = containerFrame:GetPoint()
-        addon.SetDBValue("LootToast_PosPoint", p)
-        addon.SetDBValue("LootToast_PosRelPoint", rp)
-        addon.SetDBValue("LootToast_PosX", x)
-        addon.SetDBValue("LootToast_PosY", y)
-    end
-    
-    containerFrame:SetScript("OnDragStart", function(self)
-        if Module:IsInEditMode() then 
-            self:StartMoving()
-            self.editHighlight:SetDragging(true)
+    containerFrame = addon.EditMode.CreateContainer({
+        name = "LootToast",
+        label = "Loot Toasts",
+        defaultPos = {"RIGHT", -350, -80},  -- Right side, more left and slightly below center
+        size = {TOAST_WIDTH, 220},
+        dbPrefix = "LootToast",
+        strata = "HIGH",
+        settings = {
+            {type = "scale", min = 50, max = 150, default = 100, label = "Frame Size"}
+        },
+        onEnterEditMode = function(container)
+            ShowPreviewToasts()
+        end,
+        onExitEditMode = function(container)
+            HidePreviewToasts()
         end
-    end)
-    containerFrame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        self.editHighlight:SetDragging(false)
-        SavePosition()
-    end)
-    
-    -- Load saved pos
-    local p = addon.GetDBValue("LootToast_PosPoint")
-    local x = addon.GetDBValue("LootToast_PosX")
-    if p and x then
-        containerFrame:ClearAllPoints()
-        containerFrame:SetPoint(p, UIParent, addon.GetDBValue("LootToast_PosRelPoint") or p, x, addon.GetDBValue("LootToast_PosY"))
-    end
+    })
     
     return containerFrame
 end
@@ -611,55 +437,104 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
+
 ----------------------------------------------
 -- Edit Mode Preview Toasts
 ----------------------------------------------
 local function CreatePreviewToast(index, icon, name, quantity, quality)
-    local toast = CreateFrame("Frame", nil, containerFrame)
-    toast:SetSize(TOAST_WIDTH, TOAST_HEIGHT)
-    
-    -- Background Gradient
-    toast.bg = toast:CreateTexture(nil, "BACKGROUND")
-    toast.bg:SetAllPoints()
-    toast.bg:SetColorTexture(1, 1, 1, 1)
-    toast.bg:SetGradient("HORIZONTAL", GRADIENT_NORMAL_START, GRADIENT_NORMAL_END)
-    
-    -- Icon
-    toast.icon = toast:CreateTexture(nil, "ARTWORK")
-    toast.icon:SetSize(32, 32)
-    toast.icon:SetPoint("LEFT", 4, 0)
-    toast.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local toast = table_remove(previewPool)
+    if not toast then
+        toast = CreateFrame("Frame", nil, containerFrame)
+        toast:SetSize(TOAST_WIDTH, TOAST_HEIGHT)
+        
+        -- Icon (matches CreateToastFrame)
+        toast.icon = toast:CreateTexture(nil, "ARTWORK")
+        toast.icon:SetSize(36, 36)
+        toast.icon:SetPoint("LEFT", 4, 0)
+        toast.icon:SetTexCoord(0.12, 0.88, 0.12, 0.88)
+        
+        -- Icon Mask (round corners to fit within Cypher frame cutouts)
+        toast.iconMask = toast:CreateMaskTexture()
+        toast.iconMask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+        toast.iconMask:SetAllPoints(toast.icon)
+        toast.icon:AddMaskTexture(toast.iconMask)
+
+        -- Icon Border (Cypher Atlas)
+        toast.iconBorder = toast:CreateTexture(nil, "OVERLAY")
+        toast.iconBorder:SetSize(45, 54)
+        toast.iconBorder:SetPoint("CENTER", toast.icon, "CENTER", 0, 0)
+        toast.iconBorder:SetTexture(CYPHER_TEXTURE)
+        toast.iconBorder:SetTexCoord(CYPHER_COORDS[1], CYPHER_COORDS[2], CYPHER_COORDS[3], CYPHER_COORDS[4])
+        
+        -- Text Background (Rarity Gradient)
+        toast.textBg = toast:CreateTexture(nil, "BACKGROUND")
+        toast.textBg:SetHeight(36)
+        toast.textBg:SetPoint("LEFT", toast.icon, "RIGHT", -2, 0)
+        toast.textBg:SetPoint("RIGHT", 0, 0)
+        toast.textBg:SetTexture(LOOT_ATLAS)
+        toast.textBg:SetTexCoord(LOOT_BG_COORDS[1], LOOT_BG_COORDS[2], LOOT_BG_COORDS[3], LOOT_BG_COORDS[4])
+        
+        -- Border (Faint Mask)
+        toast.border = toast:CreateTexture(nil, "BORDER")
+        toast.border:SetAllPoints(toast.textBg)
+        toast.border:SetTexture(LOOT_ATLAS)
+        toast.border:SetTexCoord(LOOT_STROKE_NORMAL_COORDS[1], LOOT_STROKE_NORMAL_COORDS[2], LOOT_STROKE_NORMAL_COORDS[3], LOOT_STROKE_NORMAL_COORDS[4])
+        toast.border:SetAlpha(0.2)
+        
+        -- Text: Name (matches CreateToastFrame)
+        toast.name = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        toast.name:SetPoint("LEFT", toast.icon, "RIGHT", 6, 0)
+        toast.name:SetWidth(104)
+        toast.name:SetJustifyH("LEFT")
+        toast.name:SetWordWrap(true)
+        toast.name:SetSpacing(2)
+        toast.name:SetMaxLines(3)
+        toast.name:SetShadowOffset(1, -1)
+        
+        -- Text: Quantity (Create once, hide/show as needed)
+        toast.quantity = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        toast.quantity:SetPoint("BOTTOMRIGHT", toast.icon, "BOTTOMRIGHT", 2, -2)
+        toast.quantity:SetJustifyH("RIGHT")
+        toast.quantity:SetTextColor(1, 1, 1)
+    end
+
+    toast:SetParent(containerFrame)
     toast.icon:SetTexture(icon)
     
-    -- Text: Name
-    toast.name = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    toast.name:SetPoint("LEFT", toast.icon, "RIGHT", 10, 0)
-    toast.name:SetPoint("RIGHT", -10, 0)
-    toast.name:SetJustifyH("LEFT")
-    toast.name:SetWordWrap(false)
-    toast.name:SetShadowOffset(1, -1)
-    toast.name:SetText(name)
-    
+    -- Color preview border by quality
     local color = QUALITY_COLORS[quality] or QUALITY_COLORS[1]
+    toast.iconBorder:SetVertexColor(color[1], color[2], color[3])
+    
+    -- Update Background Gradient for Preview
+    local cR, cG, cB = color[1], color[2], color[3]
+    local minColor = CreateColor(cR, cG, cB, 0.7)
+    local maxColor = CreateColor(cR, cG, cB, 0.15)
+    toast.textBg:SetGradient("VERTICAL", minColor, maxColor)
+    
+    -- Update Border Mask for Preview
+    toast.border:SetVertexColor(cR, cG, cB)
+    toast.border:SetAlpha(0.15)
+    
+    toast.name:SetText(name)
     toast.name:SetTextColor(color[1], color[2], color[3])
     
     -- Text: Quantity
     if cachedShowQuantity and quantity and quantity > 1 then
-        toast.quantity = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightOutline")
-        toast.quantity:SetPoint("BOTTOMRIGHT", toast.icon, "BOTTOMRIGHT", 2, -2)
-        toast.quantity:SetJustifyH("RIGHT")
-        toast.quantity:SetTextColor(1, 1, 1)
         toast.quantity:SetText("x" .. quantity)
+        toast.quantity:Show()
+    else
+        toast.quantity:Hide()
     end
     
     -- Position
     local targetY = (index - 1) * (TOAST_HEIGHT + TOAST_SPACING)
+    toast:ClearAllPoints()
     toast:SetPoint("BOTTOMLEFT", containerFrame, "BOTTOMLEFT", 0, targetY)
     
     return toast
 end
 
-local function ShowPreviewToasts()
+ShowPreviewToasts = function()
     if not containerFrame then return end
     
     -- Clear any existing previews
@@ -685,10 +560,11 @@ local function ShowPreviewToasts()
     containerFrame:SetHeight(totalHeight)
 end
 
-local function HidePreviewToasts()
+HidePreviewToasts = function()
     for _, toast in ipairs(previewToasts) do
         toast:Hide()
-        toast:SetParent(nil)
+        toast:ClearAllPoints()
+        table_insert(previewPool, toast)
     end
     wipe(previewToasts)
     
@@ -707,27 +583,7 @@ function Module:Enable()
     CreateContainerFrame()
     containerFrame:Show()
     
-    if EventRegistry then
-        EventRegistry:RegisterCallback("EditMode.Enter", function() 
-            Module.inEditMode = true 
-            containerFrame:EnableMouse(true)
-            containerFrame.editHighlight:Show()
-            ShowPreviewToasts()
-        end)
-        EventRegistry:RegisterCallback("EditMode.Exit", function() 
-            Module.inEditMode = false
-            containerFrame:EnableMouse(false)
-            containerFrame.editHighlight:Hide()
-            HidePreviewToasts()
-        end)
-    end
-    
-    if EditModeManagerFrame and EditModeManagerFrame:IsShown() then
-        Module.inEditMode = true 
-        containerFrame:EnableMouse(true)
-        containerFrame.editHighlight:Show()
-        ShowPreviewToasts()
-    end
+    -- Edit mode is handled by the EditMode framework via callbacks
     
     eventFrame:RegisterEvent("CHAT_MSG_LOOT")
     eventFrame:RegisterEvent("CHAT_MSG_CURRENCY")
@@ -744,7 +600,9 @@ function Module:Disable()
     if containerFrame then containerFrame:Hide() end
 end
 
-function Module:IsInEditMode() return Module.inEditMode end
+function Module:IsInEditMode() 
+    return containerFrame and containerFrame:IsInEditMode() or false 
+end
 
 function Module:ResetPosition()
     if containerFrame then

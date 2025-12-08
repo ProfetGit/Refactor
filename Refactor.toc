@@ -16,6 +16,7 @@ Locales.lua
 Core\Init.lua
 Core\Config.lua
 Core\Constants.lua
+Core\EditMode.lua
 Core\SlashCmd.lua
 Core\MinimapButton.lua
 
