@@ -246,9 +246,9 @@ local DefaultValues = {
     ----------------------------------------------
     CombatFade = false,
     CombatFade_ActionBars = true,   -- ON: If enabled, this is what they want
-    CombatFade_ActionBars_Opacity = 0,
+    CombatFade_ActionBars_Opacity = 30,
     CombatFade_PlayerFrame = false, -- OFF: More aggressive, separate opt-in
-    CombatFade_PlayerFrame_Opacity = 0,
+    CombatFade_PlayerFrame_Opacity = 30,
 
     ----------------------------------------------
     -- MINIMAP BUTTON

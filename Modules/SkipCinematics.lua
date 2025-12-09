@@ -16,13 +16,13 @@ local isEnabled = false
 ----------------------------------------------
 local function ShouldSkip()
     if not isEnabled then return false end
-    
+
     -- Check if modifier key is held to watch instead
     local modKey = addon.GetDBValue("SkipCinematics_ModifierKey")
     if modKey and modKey ~= "NONE" and addon.IsModifierKeyDown(modKey) then
         return false
     end
-    
+
     return true
 end
 
@@ -30,7 +30,7 @@ local function IsMovieSeen(movieID)
     if addon.GetDBBool("SkipCinematics_AlwaysSkip") then
         return true
     end
-    
+
     local seen = addon.GetCharDBValue("SeenMovies")
     return seen and seen[movieID]
 end
@@ -46,7 +46,7 @@ end
 ----------------------------------------------
 local function OnCinematicStart()
     if not ShouldSkip() then return end
-    
+
     if addon.GetDBBool("SkipCinematics_AlwaysSkip") then
         -- Stop the cinematic
         C_Timer.After(0.1, function()
@@ -63,11 +63,11 @@ end
 -- Movie Playback (PLAY_MOVIE)
 ----------------------------------------------
 local function OnPlayMovie(movieID)
-    if not ShouldSkip() then 
+    if not ShouldSkip() then
         MarkMovieSeen(movieID)
-        return 
+        return
     end
-    
+
     if IsMovieSeen(movieID) then
         -- Stop the movie
         C_Timer.After(0.1, function()
@@ -102,7 +102,6 @@ function Module:Enable()
     isEnabled = true
     eventFrame:RegisterEvent("CINEMATIC_START")
     eventFrame:RegisterEvent("PLAY_MOVIE")
-    addon.Print("Skip Cinematics enabled")
 end
 
 function Module:Disable()
@@ -119,7 +118,7 @@ function Module:OnInitialize()
     if addon.GetDBBool("SkipCinematics") then
         self:Enable()
     end
-    
+
     -- Listen for setting changes
     addon.CallbackRegistry:Register("SettingChanged.SkipCinematics", function(value)
         if value then

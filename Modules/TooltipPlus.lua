@@ -860,7 +860,6 @@ function Module:Enable()
     isEnabled = true
     InitializeHooks()
     ApplyScale()
-    addon.Print("Tooltip Plus enabled")
 end
 
 function Module:Disable()

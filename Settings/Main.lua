@@ -903,7 +903,6 @@ local function ResetToDefaults()
                 panel.layout:RefreshAll()
             end
         end
-        print("|cff00ff00Refactor:|r All settings reset to defaults.")
     end
 end
 

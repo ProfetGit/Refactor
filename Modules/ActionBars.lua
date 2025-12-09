@@ -22,10 +22,6 @@ local actionBarFrameNames = {
     "StatusTrackingBarManager",
 }
 
-for i = 1, 12 do
-    table.insert(actionBarFrameNames, "ActionButton" .. i)
-end
-
 -- Player Frame names
 local playerFrameNames = {
     "PlayerFrame",
@@ -43,7 +39,7 @@ local FADE_OUT_TIME = 0.5
 -- Current alpha states
 local actionBarAlpha = 1
 local playerFrameAlpha = 1
-local actionBarGryphonsHidden = false
+
 
 ----------------------------------------------
 -- PERFORMANCE OPTIMIZATION: Cached settings
@@ -86,7 +82,7 @@ local function AddToList(list, obj)
     if not obj then return end
     if type(obj) ~= "table" then return end
     if not (obj.SetAlpha and obj.GetAlpha) then return end
-    
+
     for _, o in ipairs(list) do
         if o == obj then return end
     end
@@ -97,7 +93,7 @@ local function AddGryphon(obj)
     if not obj then return end
     if type(obj) ~= "table" then return end
     if not (obj.Hide and obj.Show) then return end
-    
+
     for _, o in ipairs(actionBarGryphons) do
         if o == obj then return end
     end
@@ -117,7 +113,7 @@ local function SearchForArt(frame, depth)
     if depth > 5 then return end
     if not frame then return end
     if type(frame) ~= "table" then return end
-    
+
     local name = SafeGetName(frame)
     if name then
         local lowerName = name:lower()
@@ -126,13 +122,17 @@ local function SearchForArt(frame, depth)
             AddToList(actionBarObjects, frame)
         end
     end
-    
+
     if frame.EndCaps then AddGryphon(frame.EndCaps) end
     if frame.LeftEndCap then AddGryphon(frame.LeftEndCap) end
     if frame.RightEndCap then AddGryphon(frame.RightEndCap) end
-    if frame.BorderArt then AddGryphon(frame.BorderArt); AddToList(actionBarObjects, frame.BorderArt) end
-    if frame.ArtFrame then AddGryphon(frame.ArtFrame); AddToList(actionBarObjects, frame.ArtFrame) end
-    
+    if frame.BorderArt then
+        AddGryphon(frame.BorderArt); AddToList(actionBarObjects, frame.BorderArt)
+    end
+    if frame.ArtFrame then
+        AddGryphon(frame.ArtFrame); AddToList(actionBarObjects, frame.ArtFrame)
+    end
+
     if frame.GetChildren then
         local success, children = pcall(function() return { frame:GetChildren() } end)
         if success and children then
@@ -145,31 +145,31 @@ end
 
 local function InitFrames()
     if initialized then return end
-    
+
     actionBarObjects = {}
     actionBarGryphons = {}
     playerFrameObjects = {}
-    
+
     -- Action bars
     for _, name in ipairs(actionBarFrameNames) do
         local frame = _G[name]
-        if frame then 
+        if frame then
             AddToList(actionBarObjects, frame)
             SearchForArt(frame, 0)
         end
     end
-    
+
     if MainActionBar then
         AddToList(actionBarObjects, MainActionBar)
         SearchForArt(MainActionBar, 0)
-        
+
         if MainActionBar.EndCaps then
             AddGryphon(MainActionBar.EndCaps)
             if MainActionBar.EndCaps.LeftEndCap then AddGryphon(MainActionBar.EndCaps.LeftEndCap) end
             if MainActionBar.EndCaps.RightEndCap then AddGryphon(MainActionBar.EndCaps.RightEndCap) end
         end
     end
-    
+
     -- Player frame
     for _, name in ipairs(playerFrameNames) do
         local frame = _G[name]
@@ -177,13 +177,13 @@ local function InitFrames()
             AddToList(playerFrameObjects, frame)
         end
     end
-    
+
     initialized = true
 end
 
 function CombatFade:UpdateState()
     UpdateCachedSettings()
-    
+
     if cachedSettings.moduleEnabled and (cachedSettings.actionBarsEnabled or cachedSettings.playerFrameEnabled) then
         if not initialized then InitFrames() end
         f:SetScript("OnUpdate", self.OnUpdate)
@@ -195,22 +195,18 @@ end
 
 function CombatFade:ForceShow()
     if not initialized then InitFrames() end
-    
+
     for _, obj in ipairs(actionBarObjects) do
         if obj.SetAlpha then obj:SetAlpha(1) end
     end
-    
-    for _, obj in ipairs(actionBarGryphons) do
-        if obj.Show then obj:Show() end
-    end
-    
+
+
     for _, obj in ipairs(playerFrameObjects) do
         if obj.SetAlpha then obj:SetAlpha(1) end
     end
-    
+
     actionBarAlpha = 1
     playerFrameAlpha = 1
-    actionBarGryphonsHidden = false
 end
 
 -- OPTIMIZED: Only check mouse over when needed
@@ -231,30 +227,30 @@ function CombatFade.OnUpdate(self, elapsed)
     end
     local actualElapsed = timeSinceLastUpdate
     timeSinceLastUpdate = 0
-    
+
     if not initialized then InitFrames() end
-    
+
     -- Use cached settings (updated only on setting change)
     local settings = cachedSettings
-    
+
     -- Check combat state (cheap)
     local inCombat = InCombatLockdown()
-    
+
     -- Only check mouse over if we're not in combat (expensive)
     local mouseOverBars = false
     local mouseOverPlayer = false
-    
+
     if not inCombat then
         if settings.actionBarsEnabled then
-            mouseOverBars = IsMouseOverList(actionBarObjects) or 
-                           IsMouseOverList(actionBarGryphons) or
-                           (SpellFlyout and SpellFlyout:IsShown() and SpellFlyout:IsMouseOver())
+            mouseOverBars = IsMouseOverList(actionBarObjects) or
+                IsMouseOverList(actionBarGryphons) or
+                (SpellFlyout and SpellFlyout:IsShown() and SpellFlyout:IsMouseOver())
         end
         if settings.playerFrameEnabled then
             mouseOverPlayer = IsMouseOverList(playerFrameObjects)
         end
     end
-    
+
     -- Calculate target alpha for action bars
     local actionBarTarget = settings.actionBarMinAlpha
     if not settings.actionBarsEnabled then
@@ -262,7 +258,7 @@ function CombatFade.OnUpdate(self, elapsed)
     elseif inCombat or mouseOverBars then
         actionBarTarget = 1
     end
-    
+
     -- Calculate target alpha for player frame
     local playerFrameTarget = settings.playerFrameMinAlpha
     if not settings.playerFrameEnabled then
@@ -270,15 +266,15 @@ function CombatFade.OnUpdate(self, elapsed)
     elseif inCombat or mouseOverPlayer then
         playerFrameTarget = 1
     end
-    
+
     -- OPTIMIZATION: Skip alpha updates if already at target
     local actionBarNeedsUpdate = math.abs(actionBarAlpha - actionBarTarget) > 0.001
     local playerFrameNeedsUpdate = math.abs(playerFrameAlpha - playerFrameTarget) > 0.001
-    
+
     if not actionBarNeedsUpdate and not playerFrameNeedsUpdate then
         return -- Nothing to do, skip expensive iterations
     end
-    
+
     -- Smooth transition for action bars
     if actionBarNeedsUpdate then
         local change = actualElapsed / (actionBarTarget > actionBarAlpha and FADE_IN_TIME or FADE_OUT_TIME)
@@ -287,29 +283,15 @@ function CombatFade.OnUpdate(self, elapsed)
         else
             actionBarAlpha = math.max(actionBarTarget, actionBarAlpha - change)
         end
-        
+
         -- Apply action bar alpha
         for _, obj in ipairs(actionBarObjects) do
             if obj.SetAlpha then
                 obj:SetAlpha(actionBarAlpha)
             end
         end
-        
-        -- Handle gryphons (Hide/Show at threshold)
-        local gryphonThreshold = settings.actionBarMinAlpha + 0.05
-        if actionBarAlpha <= gryphonThreshold and not actionBarGryphonsHidden then
-            for _, obj in ipairs(actionBarGryphons) do
-                if obj.Hide then obj:Hide() end
-            end
-            actionBarGryphonsHidden = true
-        elseif actionBarAlpha > gryphonThreshold + 0.4 and actionBarGryphonsHidden then
-            for _, obj in ipairs(actionBarGryphons) do
-                if obj.Show then obj:Show() end
-            end
-            actionBarGryphonsHidden = false
-        end
     end
-    
+
     -- Smooth transition for player frame
     if playerFrameNeedsUpdate then
         local change = actualElapsed / (playerFrameTarget > playerFrameAlpha and FADE_IN_TIME or FADE_OUT_TIME)
@@ -318,7 +300,7 @@ function CombatFade.OnUpdate(self, elapsed)
         else
             playerFrameAlpha = math.max(playerFrameTarget, playerFrameAlpha - change)
         end
-        
+
         -- Apply player frame alpha
         for _, obj in ipairs(playerFrameObjects) do
             if obj.SetAlpha then

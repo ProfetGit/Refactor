@@ -17,17 +17,17 @@ local isEnabled = false
 function Module:Repair()
     if not MerchantFrame or not MerchantFrame:IsShown() then return end
     if not CanMerchantRepair() then return end
-    
+
     local repairCost, canRepair = GetRepairAllCost()
-    
+
     if not canRepair or repairCost == 0 then
         return -- Nothing to repair
     end
-    
+
     local useGuildFunds = addon.GetDBBool("AutoRepair_UseGuild")
     local repaired = false
     local usedGuild = false
-    
+
     -- Try guild funds first if enabled
     if useGuildFunds and IsInGuild() then
         local canUseGuildRepair = CanGuildBankRepair()
@@ -41,7 +41,7 @@ function Module:Repair()
             end
         end
     end
-    
+
     -- Fall back to personal funds
     if not repaired then
         local playerMoney = GetMoney()
@@ -54,7 +54,7 @@ function Module:Repair()
             return
         end
     end
-    
+
     -- Show notification
     if repaired then
         if usedGuild then
@@ -74,7 +74,7 @@ local eventFrame = CreateFrame("Frame")
 
 local function OnMerchantShow()
     if not isEnabled then return end
-    
+
     -- Small delay to ensure merchant frame is ready and after junk selling
     C_Timer.After(0.3, function()
         Module:Repair()
@@ -93,7 +93,6 @@ end)
 function Module:Enable()
     isEnabled = true
     eventFrame:RegisterEvent("MERCHANT_SHOW")
-    addon.Print("Auto-Repair enabled")
 end
 
 function Module:Disable()
@@ -109,7 +108,7 @@ function Module:OnInitialize()
     if addon.GetDBBool("AutoRepair") then
         self:Enable()
     end
-    
+
     -- Listen for setting changes
     addon.CallbackRegistry:Register("SettingChanged.AutoRepair", function(value)
         if value then

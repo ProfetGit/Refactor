@@ -16,17 +16,17 @@ local isEnabled = false
 ----------------------------------------------
 local function OnLootReady(autoLoot)
     if not isEnabled then return end
-    
+
     -- Get number of loot slots
     local numLootItems = GetNumLootItems()
-    
+
     if numLootItems > 0 then
         -- Loot all items as fast as possible
         for i = numLootItems, 1, -1 do
             LootSlot(i)
         end
     end
-    
+
     -- Close the loot window immediately if it's open
     if LootFrame and LootFrame:IsShown() then
         CloseLoot()
@@ -62,11 +62,9 @@ function Module:Enable()
     isEnabled = true
     eventFrame:RegisterEvent("LOOT_READY")
     eventFrame:RegisterEvent("LOOT_OPENED")
-    
+
     -- Also enable the built-in auto-loot for best results
     SetCVar("autoLootDefault", 1)
-    
-    addon.Print("Fast Loot enabled")
 end
 
 function Module:Disable()
@@ -83,7 +81,7 @@ function Module:OnInitialize()
     if addon.GetDBBool("FastLoot") then
         self:Enable()
     end
-    
+
     -- Listen for setting changes
     addon.CallbackRegistry:Register("SettingChanged.FastLoot", function(value)
         if value then
