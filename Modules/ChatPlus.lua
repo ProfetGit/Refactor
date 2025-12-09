@@ -22,10 +22,9 @@ local C_CurrencyInfo_GetCurrencyInfo = C_CurrencyInfo.GetCurrencyInfo
 ----------------------------------------------
 -- Constants
 ----------------------------------------------
-local URL_PATTERNS = {
-    "https?://[%w_%-%.%/%?%%=&#:~]+",
-    "www%.[%w_%-%.%/%?%%=&#:~]+",
-}
+-- Single combined pattern: matches http(s):// URLs OR standalone www. URLs
+-- The pattern prioritizes the longer https?:// match first, avoiding double-match on www.
+local URL_PATTERN = "https?://[%w_%-%.%/%?%%=&#:~@!$'()*+,;]+" -- Full URL pattern
 
 local WOWHEAD_BASE = "https://www.wowhead.com/"
 
@@ -53,7 +52,7 @@ local function StyleButtonWithAtlas(button)
     if button.Left then button.Left:Hide() end
     if button.Middle then button.Middle:Hide() end
     if button.Right then button.Right:Hide() end
-    
+
     -- Create texture sets for each state
     -- Atlas dimensions: Left=114x128, Center=64x128 (tiling), Right=292x128
     local function CreateButtonTextures(suffix, layer)
@@ -61,61 +60,61 @@ local function StyleButtonWithAtlas(button)
         -- Calculate scaled widths based on aspect ratio (original height is 128)
         local leftWidth = math.floor(114 * (btnHeight / 128) + 0.5)
         local rightWidth = math.floor(292 * (btnHeight / 128) + 0.5)
-        
+
         local left = button:CreateTexture(nil, layer)
         left:SetAtlas("128-RedButton-Left" .. suffix, false)
         left:SetPoint("TOPLEFT", 0, 0)
         left:SetPoint("BOTTOMLEFT", 0, 0)
         left:SetWidth(leftWidth)
-        
+
         local right = button:CreateTexture(nil, layer)
         right:SetAtlas("128-RedButton-Right" .. suffix, false)
         right:SetPoint("TOPRIGHT", 0, 0)
         right:SetPoint("BOTTOMRIGHT", 0, 0)
         right:SetWidth(rightWidth)
-        
+
         local center = button:CreateTexture(nil, layer, nil, -1)
         center:SetAtlas("_128-RedButton-Center" .. suffix, false)
         center:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
         center:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
-        
+
         return { left = left, center = center, right = right }
     end
-    
+
     -- Normal state
     button.normalTex = CreateButtonTextures("", "BACKGROUND")
-    
+
     -- Pressed state (hidden by default)
     button.pushedTex = CreateButtonTextures("-Pressed", "BACKGROUND")
     button.pushedTex.left:Hide()
     button.pushedTex.center:Hide()
     button.pushedTex.right:Hide()
-    
+
     -- Disabled state (hidden by default)
     button.disabledTex = CreateButtonTextures("-Disabled", "BACKGROUND")
     button.disabledTex.left:Hide()
     button.disabledTex.center:Hide()
     button.disabledTex.right:Hide()
-    
+
     -- Highlight overlay
     local highlight = button:CreateTexture(nil, "HIGHLIGHT")
     highlight:SetAtlas("128-RedButton-Highlight", false)
     highlight:SetAllPoints()
     highlight:SetBlendMode("ADD")
-    
+
     -- Helper functions to show/hide texture sets
     local function ShowTexSet(set)
         set.left:Show()
         set.center:Show()
         set.right:Show()
     end
-    
+
     local function HideTexSet(set)
         set.left:Hide()
         set.center:Hide()
         set.right:Hide()
     end
-    
+
     -- Handle button states via scripts
     button:HookScript("OnMouseDown", function(self)
         if self:IsEnabled() then
@@ -123,14 +122,14 @@ local function StyleButtonWithAtlas(button)
             ShowTexSet(self.pushedTex)
         end
     end)
-    
+
     button:HookScript("OnMouseUp", function(self)
         if self:IsEnabled() then
             HideTexSet(self.pushedTex)
             ShowTexSet(self.normalTex)
         end
     end)
-    
+
     -- Reset state when leaving button while pressed
     button:HookScript("OnLeave", function(self)
         if self:IsEnabled() then
@@ -138,20 +137,20 @@ local function StyleButtonWithAtlas(button)
             ShowTexSet(self.normalTex)
         end
     end)
-    
+
     -- Handle disabled state
     button:HookScript("OnDisable", function(self)
         HideTexSet(self.normalTex)
         HideTexSet(self.pushedTex)
         ShowTexSet(self.disabledTex)
     end)
-    
+
     button:HookScript("OnEnable", function(self)
         HideTexSet(self.disabledTex)
         HideTexSet(self.pushedTex)
         ShowTexSet(self.normalTex)
     end)
-    
+
     -- Update text appearance for red button
     button:SetNormalFontObject(GameFontNormal)
     button:SetHighlightFontObject(GameFontHighlight)
@@ -166,7 +165,7 @@ local CopyFrame = nil
 
 local function CreateCopyFrame()
     if CopyFrame then return CopyFrame end
-    
+
     local frame = CreateFrame("Frame", "RefactorChatCopyFrame", UIParent, "BackdropTemplate")
     frame:SetSize(500, 180)
     frame:SetPoint("CENTER")
@@ -177,7 +176,7 @@ local function CreateCopyFrame()
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-    
+
     frame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -188,21 +187,21 @@ local function CreateCopyFrame()
     })
     frame:SetBackdropColor(0.05, 0.05, 0.08, 0.95)
     frame:SetBackdropBorderColor(0.3, 0.5, 0.8)
-    
+
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOP", 0, -12)
     title:SetTextColor(0.6, 0.8, 1)
     frame.title = title
-    
+
     local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     subtitle:SetPoint("TOP", title, "BOTTOM", 0, -4)
     frame.subtitle = subtitle
-    
+
     local hint = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("TOP", subtitle, "BOTTOM", 0, -8)
     hint:SetText(L.CHAT_COPY_HINT or "Press Ctrl+C to copy, then Escape to close")
     hint:SetTextColor(0.6, 0.6, 0.6)
-    
+
     local editBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
     editBox:SetSize(460, 25)
     editBox:SetPoint("TOP", hint, "BOTTOM", 0, -10)
@@ -212,16 +211,16 @@ local function CreateCopyFrame()
     editBox:SetScript("OnEscapePressed", function() frame:Hide() end)
     editBox:SetScript("OnEnterPressed", function() frame:Hide() end)
     frame.editBox = editBox
-    
+
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     closeBtn:SetSize(80, 24)
     closeBtn:SetPoint("BOTTOM", 0, 12)
     closeBtn:SetText(CLOSE or "Close")
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
     StyleButtonWithAtlas(closeBtn)
-    
+
     table_insert(UISpecialFrames, "RefactorChatCopyFrame")
-    
+
     frame:Hide()
     CopyFrame = frame
     return frame
@@ -258,14 +257,14 @@ local function HookedSetItemRef(link, text, button, chatFrame)
     if not cachedEnabled or not cachedWowheadLookup then
         return originalSetItemRef(link, text, button, chatFrame)
     end
-    
+
     -- Shift+Click = Wowhead lookup
     if IsShiftKeyDown() and not IsControlKeyDown() and not IsAltKeyDown() then
         local linkType, linkID = string_match(link, "^(%w+):(-?%d+)")
         if not linkType or not linkID then
             return originalSetItemRef(link, text, button, chatFrame)
         end
-        
+
         local numericID = tonumber(linkID)
         if linkType == "item" then
             local itemName = C_Item_GetItemNameByID(numericID)
@@ -289,7 +288,7 @@ local function HookedSetItemRef(link, text, button, chatFrame)
             return
         end
     end
-    
+
     return originalSetItemRef(link, text, button, chatFrame)
 end
 
@@ -302,7 +301,7 @@ local function ContainsURL(text)
     if not text then return false end
     local len = #text
     if len < 10 then return false end -- URLs are at least 10 chars
-    
+
     -- Fast substring checks
     if string.find(text, "http", 1, true) then return true end
     if string.find(text, "www.", 1, true) then return true end
@@ -311,17 +310,29 @@ end
 
 local function MakeURLsClickable(text)
     if not ContainsURL(text) then return text end
-    
-    for _, pattern in ipairs(URL_PATTERNS) do
-        text = string_gsub(text, "(" .. pattern .. ")", function(url)
-            local cleanUrl = url
-            if string_sub(cleanUrl, 1, 4) == "www." then
-                cleanUrl = "https://" .. cleanUrl
-            end
-            return "|cff00ccff|Hrefactor_url:" .. cleanUrl .. "|h[" .. url .. "]|h|r"
-        end)
-    end
-    
+
+    -- Pass 1: Match full http(s):// URLs first
+    text = string_gsub(text, "(https?://[%w_%-%.%/%?%%=&#:~@!$'()*+,;]+)", function(url)
+        -- Skip if already wrapped (shouldn't happen, but safety check)
+        if string_match(url, "|H") then return url end
+        return "|cff00ccff|Hrefactor_url:" .. url .. "|h[" .. url .. "]|h|r"
+    end)
+
+    -- Pass 2: Match standalone www. URLs that weren't already captured
+    -- We need to ensure we don't match www. that's already inside a hyperlink
+    text = string_gsub(text, "([^/|])(www%.[%w_%-%.%/%?%%=&#:~@!$'()*+,;]+)", function(prefix, url)
+        -- Skip if this www. was part of a https://www. that was already matched
+        if prefix == ":" or prefix == "/" then return prefix .. url end
+        local fullUrl = "https://" .. url
+        return prefix .. "|cff00ccff|Hrefactor_url:" .. fullUrl .. "|h[" .. url .. "]|h|r"
+    end)
+
+    -- Handle www. at the very start of the message
+    text = string_gsub(text, "^(www%.[%w_%-%.%/%?%%=&#:~@!$'()*+,;]+)", function(url)
+        local fullUrl = "https://" .. url
+        return "|cff00ccff|Hrefactor_url:" .. fullUrl .. "|h[" .. url .. "]|h|r"
+    end)
+
     return text
 end
 
@@ -330,17 +341,17 @@ local function ChatMessageFilter(self, event, msg, ...)
     if not cachedEnabled or not cachedClickableURLs then
         return false, msg, ...
     end
-    
+
     -- Fast rejection: no URL found
     if not ContainsURL(msg) then
         return false, msg, ...
     end
-    
+
     local modified = MakeURLsClickable(msg)
     if modified ~= msg then
         return false, modified, ...
     end
-    
+
     return false, msg, ...
 end
 
@@ -350,9 +361,9 @@ end
 local function HookChatFrame(chatFrame)
     if chatFrame.RefactorHooked then return end
     chatFrame.RefactorHooked = true
-    
+
     if not chatFrame:GetScript("OnHyperlinkClick") then return end
-    
+
     local originalHandler = chatFrame:GetScript("OnHyperlinkClick")
     chatFrame:SetScript("OnHyperlinkClick", function(self, link, text, button)
         if cachedEnabled and string_match(link, "^refactor_url:") then
@@ -360,7 +371,7 @@ local function HookChatFrame(chatFrame)
             ShowCopyFrame(url, "Copy URL", nil)
             return
         end
-        
+
         if originalHandler then
             return originalHandler(self, link, text, button)
         end
@@ -372,24 +383,60 @@ end
 ----------------------------------------------
 local function CreateChatCopyButton(chatFrame)
     if chatFrame.RefactorCopyButton then return end
-    
-    local btn = CreateFrame("Button", nil, chatFrame, "UIPanelButtonTemplate")
-    btn:SetSize(22, 22)
-    btn:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", -24, -4)
-    btn:SetText("C")
-    StyleButtonWithAtlas(btn)
-    btn:SetNormalFontObject(GameFontHighlightSmall)
+
+    -- Use a simple frame with icon instead of UIPanelButtonTemplate
+    -- The 3-part button atlas doesn't scale well to small sizes
+    local btn = CreateFrame("Button", nil, chatFrame)
+    btn:SetSize(20, 20)
+    btn:SetPoint("TOPRIGHT", chatFrame, "TOPRIGHT", -26, -6)
+    btn:SetFrameLevel(chatFrame:GetFrameLevel() + 5)
+
+    -- Background - subtle rounded square
+    local bg = btn:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetAtlas("common-button-square-gray-down", true)
+    bg:SetAlpha(0.8)
+    btn.bg = bg
+
+    -- Icon - use a copy/document icon
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(14, 14)
+    icon:SetPoint("CENTER")
+    icon:SetAtlas("communities-icon-searchmagnifyingglass")
+    icon:SetDesaturated(true)
+    icon:SetVertexColor(0.9, 0.9, 0.9)
+    btn.icon = icon
+
+    -- Highlight texture
+    local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetAllPoints()
+    highlight:SetAtlas("common-button-square-gray-down", true)
+    highlight:SetBlendMode("ADD")
+    highlight:SetAlpha(0.3)
+
     btn:SetScript("OnEnter", function(self)
+        self.bg:SetAlpha(1)
+        self.icon:SetVertexColor(1, 1, 1)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Copy Chat", 1, 1, 1)
         GameTooltip:AddLine("Click to copy recent messages", 0.8, 0.8, 0.8)
         GameTooltip:Show()
     end)
-    btn:SetScript("OnLeave", GameTooltip_Hide)
+    btn:SetScript("OnLeave", function(self)
+        self.bg:SetAlpha(0.8)
+        self.icon:SetVertexColor(0.9, 0.9, 0.9)
+        GameTooltip_Hide()
+    end)
+    btn:SetScript("OnMouseDown", function(self)
+        self.icon:SetPoint("CENTER", 1, -1)
+    end)
+    btn:SetScript("OnMouseUp", function(self)
+        self.icon:SetPoint("CENTER", 0, 0)
+    end)
     btn:SetScript("OnClick", function()
         if not cachedEnabled then return end
         if not chatFrame.GetNumMessages or not chatFrame.GetMessageInfo then return end
-        
+
         local numMessages = chatFrame:GetNumMessages()
         if numMessages > 0 then
             local allText = {}
@@ -408,27 +455,35 @@ local function CreateChatCopyButton(chatFrame)
                     end
                 end
             end
-            
+
             if #allText > 0 then
                 ShowCopyFrame(table_concat(allText, "\n"), "Recent Chat", nil)
             end
         end
     end)
-    
-    btn:SetAlpha(0)
-    chatFrame:HookScript("OnEnter", function() 
+
+    -- Visibility control - show on hover over chat area
+    btn:SetAlpha(0.4) -- Slightly visible so users can find it
+
+    local function ShowButton()
         if cachedEnabled and cachedCopyButton then
-            btn:SetAlpha(0.6) 
+            btn:SetAlpha(0.8)
+        end
+    end
+
+    local function HideButton()
+        btn:SetAlpha(0.4)
+    end
+
+    chatFrame:HookScript("OnEnter", ShowButton)
+    chatFrame:HookScript("OnLeave", function()
+        if not btn:IsMouseOver() then
+            HideButton()
         end
     end)
-    chatFrame:HookScript("OnLeave", function() btn:SetAlpha(0) end)
-    btn:HookScript("OnEnter", function() 
-        if cachedEnabled and cachedCopyButton then
-            btn:SetAlpha(1) 
-        end
-    end)
-    btn:HookScript("OnLeave", function() btn:SetAlpha(0) end)
-    
+    btn:HookScript("OnEnter", ShowButton)
+    btn:HookScript("OnLeave", HideButton)
+
     chatFrame.RefactorCopyButton = btn
 end
 
@@ -438,10 +493,10 @@ end
 local function Initialize()
     -- Cache initial settings
     UpdateCachedSettings()
-    
+
     -- Hook SetItemRef for Wowhead lookup
     SetItemRef = HookedSetItemRef
-    
+
     -- Hook all chat frames
     for i = 1, NUM_CHAT_WINDOWS do
         local chatFrame = _G["ChatFrame" .. i]
@@ -450,7 +505,7 @@ local function Initialize()
             CreateChatCopyButton(chatFrame)
         end
     end
-    
+
     -- Hook new chat windows
     hooksecurefunc("FCF_OpenTemporaryWindow", function()
         C_Timer.After(0.1, function()
@@ -463,7 +518,7 @@ local function Initialize()
             end
         end)
     end)
-    
+
     -- Register URL filters
     local chatEvents = {
         "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM",
@@ -472,11 +527,11 @@ local function Initialize()
         "CHAT_MSG_CHANNEL", "CHAT_MSG_BN_WHISPER", "CHAT_MSG_BN_WHISPER_INFORM",
         "CHAT_MSG_COMMUNITIES_CHANNEL", "CHAT_MSG_SYSTEM", "CHAT_MSG_EMOTE", "CHAT_MSG_TEXT_EMOTE",
     }
-    
+
     for _, event in ipairs(chatEvents) do
         ChatFrame_AddMessageEventFilter(event, ChatMessageFilter)
     end
-    
+
     -- Register setting change callbacks
     addon.CallbackRegistry:Register("SettingChanged.ChatPlus", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.ChatPlus_ClickableURLs", UpdateCachedSettings)

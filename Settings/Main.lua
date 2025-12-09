@@ -1,5 +1,5 @@
 -- Refactor Addon - Settings Main Panel
--- Premium 2-column layout (Optimized)
+-- Sidebar navigation layout (WoW Game Menu style)
 
 local addonName, addon = ...
 local L = addon.L
@@ -12,24 +12,26 @@ local C = addon.Constants
 local SettingsPanel = {}
 addon.SettingsPanel = SettingsPanel
 
-local frame, containers, tabs = nil, {}, {}
+local frame, sidebarButtons, contentPanels = nil, {}, {}
+local selectedCategory = nil
 
 ----------------------------------------------
 -- Layout Constants
 ----------------------------------------------
 local LAYOUT = {
-    PANEL_WIDTH = 720, PANEL_HEIGHT = 660,
-    LEFT_MARGIN = 20, RIGHT_MARGIN = 20,
-    COLUMN_WIDTH = 320, COLUMN_GAP = 30,
-    SECTION_SPACING = 18, ROW_HEIGHT = 24,
-    SUB_OPTION_HEIGHT = 22, SUB_OPTION_INDENT = 22,
-    HEADER_HEIGHT = 28, MODULE_HEIGHT = 26,
-}
-
--- Precomputed column X positions
-local COL_X = {
-    LEFT = LAYOUT.LEFT_MARGIN,
-    RIGHT = LAYOUT.LEFT_MARGIN + LAYOUT.COLUMN_WIDTH + LAYOUT.COLUMN_GAP,
+    PANEL_WIDTH = 820,
+    PANEL_HEIGHT = 660,
+    SIDEBAR_WIDTH = 180,
+    CONTENT_MARGIN = 15,
+    CATEGORY_HEIGHT = 24,
+    SUBCATEGORY_HEIGHT = 22,
+    SUBCATEGORY_INDENT = 16,
+    SECTION_SPACING = 18,
+    ROW_HEIGHT = 24,
+    SUB_OPTION_HEIGHT = 22,
+    SUB_OPTION_INDENT = 22,
+    HEADER_HEIGHT = 28,
+    MODULE_HEIGHT = 26,
 }
 
 ----------------------------------------------
@@ -38,117 +40,132 @@ local COL_X = {
 local SCROLL_SPEED, SCROLL_SMOOTHNESS, SCROLL_THRESHOLD = 50, 0.22, 0.5
 local SCROLL_STEP = 30
 
--- Dropdown options are defined in Core/Constants.lua (addon.Constants)
+----------------------------------------------
+-- Category Configuration
+-- Organized into logical groups for intuitive navigation
+----------------------------------------------
+local CATEGORIES = {
+    {
+        name = "Gameplay",
+        subcategories = {
+            { key = "questing", name = "Questing" }, -- Auto Quest + Skip Cinematics
+            { key = "looting",  name = "Looting" },  -- Fast Loot + Loot Toasts
+            { key = "camera",   name = "Camera" },   -- Action Camera
+        }
+    },
+    {
+        name = "Automation",
+        subcategories = {
+            { key = "vendors",       name = "Vendors" },       -- Auto Sell + Auto Repair
+            { key = "confirmations", name = "Confirmations" }, -- Ready check, summon, etc.
+            { key = "social",        name = "Social" },        -- Auto Invite + Auto Release
+        }
+    },
+    {
+        name = "Interface",
+        subcategories = {
+            { key = "tooltips",   name = "Tooltips" },   -- Tooltip+
+            { key = "chat",       name = "Chat" },       -- Chat+
+            { key = "nameplates", name = "Nameplates" }, -- Quest Nameplates
+            { key = "frames",     name = "Frames" },     -- Combat Fade
+        }
+    },
+}
 
 ----------------------------------------------
 -- Atlas Button Helper (3-Part Red Button)
--- Uses Left/Center/Right pieces for proper scaling
 ----------------------------------------------
 local function StyleButtonWithAtlas(button)
-    -- Hide default UIPanelButtonTemplate textures
     if button.Left then button.Left:Hide() end
     if button.Middle then button.Middle:Hide() end
     if button.Right then button.Right:Hide() end
-    
-    -- Create texture sets for each state
-    -- Atlas dimensions: Left=114x128, Center=64x128 (tiling), Right=292x128
+
     local function CreateButtonTextures(suffix, layer)
         local btnHeight = button:GetHeight()
-        -- Calculate scaled widths based on aspect ratio (original height is 128)
         local leftWidth = math.floor(114 * (btnHeight / 128) + 0.5)
         local rightWidth = math.floor(292 * (btnHeight / 128) + 0.5)
-        
+
         local left = button:CreateTexture(nil, layer)
         left:SetAtlas("128-RedButton-Left" .. suffix, false)
         left:SetPoint("TOPLEFT", 0, 0)
         left:SetPoint("BOTTOMLEFT", 0, 0)
         left:SetWidth(leftWidth)
-        
+
         local right = button:CreateTexture(nil, layer)
         right:SetAtlas("128-RedButton-Right" .. suffix, false)
         right:SetPoint("TOPRIGHT", 0, 0)
         right:SetPoint("BOTTOMRIGHT", 0, 0)
         right:SetWidth(rightWidth)
-        
+
         local center = button:CreateTexture(nil, layer, nil, -1)
         center:SetAtlas("_128-RedButton-Center" .. suffix, false)
         center:SetPoint("TOPLEFT", left, "TOPRIGHT", 0, 0)
         center:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT", 0, 0)
-        
+
         return { left = left, center = center, right = right }
     end
-    
-    -- Normal state
+
     button.normalTex = CreateButtonTextures("", "BACKGROUND")
-    
-    -- Pressed state (hidden by default)
     button.pushedTex = CreateButtonTextures("-Pressed", "BACKGROUND")
     button.pushedTex.left:Hide()
     button.pushedTex.center:Hide()
     button.pushedTex.right:Hide()
-    
-    -- Disabled state (hidden by default)
+
     button.disabledTex = CreateButtonTextures("-Disabled", "BACKGROUND")
     button.disabledTex.left:Hide()
     button.disabledTex.center:Hide()
     button.disabledTex.right:Hide()
-    
-    -- Highlight overlay
+
     local highlight = button:CreateTexture(nil, "HIGHLIGHT")
     highlight:SetAtlas("128-RedButton-Highlight", false)
     highlight:SetAllPoints()
     highlight:SetBlendMode("ADD")
-    
-    -- Helper functions to show/hide texture sets
+
     local function ShowTexSet(set)
         set.left:Show()
         set.center:Show()
         set.right:Show()
     end
-    
+
     local function HideTexSet(set)
         set.left:Hide()
         set.center:Hide()
         set.right:Hide()
     end
-    
-    -- Handle button states via scripts
+
     button:HookScript("OnMouseDown", function(self)
         if self:IsEnabled() then
             HideTexSet(self.normalTex)
             ShowTexSet(self.pushedTex)
         end
     end)
-    
+
     button:HookScript("OnMouseUp", function(self)
         if self:IsEnabled() then
             HideTexSet(self.pushedTex)
             ShowTexSet(self.normalTex)
         end
     end)
-    
-    -- Reset state when leaving button while pressed
+
     button:HookScript("OnLeave", function(self)
         if self:IsEnabled() then
             HideTexSet(self.pushedTex)
             ShowTexSet(self.normalTex)
         end
     end)
-    
-    -- Handle disabled state
+
     button:HookScript("OnDisable", function(self)
         HideTexSet(self.normalTex)
         HideTexSet(self.pushedTex)
         ShowTexSet(self.disabledTex)
     end)
-    
+
     button:HookScript("OnEnable", function(self)
         HideTexSet(self.disabledTex)
         HideTexSet(self.pushedTex)
         ShowTexSet(self.normalTex)
     end)
-    
-    -- Update text appearance for red button
+
     button:SetNormalFontObject(GameFontNormal)
     button:SetHighlightFontObject(GameFontHighlight)
     button:SetDisabledFontObject(GameFontDisable)
@@ -156,142 +173,136 @@ local function StyleButtonWithAtlas(button)
 end
 
 ----------------------------------------------
--- Helper: Create Scrollable Tab Container
--- Scrollbar uses Blizzard's minimal scrollbar style
+-- Helper: Create Scrollable Content Panel
 ----------------------------------------------
-local function CreateTabContainer(parent)
+local function CreateScrollableContent(parent)
     local container = CreateFrame("Frame", nil, parent)
     container:SetAllPoints()
-    
+
     local scrollFrame = CreateFrame("ScrollFrame", nil, container)
     scrollFrame:SetPoint("TOPLEFT", 5, -5)
     scrollFrame:SetPoint("BOTTOMRIGHT", -16, 5)
-    
+
     local content = CreateFrame("Frame", nil, scrollFrame)
     content:SetWidth(scrollFrame:GetWidth())
     content:SetHeight(1000)
     scrollFrame:SetScrollChild(content)
-    
-    -- Scrollbar constants for Blizzard's minimal style
+
+    -- Scrollbar constants
     local TRACK_WIDTH = 10
     local THUMB_WIDTH = 8
     local THUMB_MIN_SIZE = 18
     local STEPPER_RESERVE = 20
     local STEPPER_MARGIN_Y = 2
-    local THUMB_MID_OFS_T = 8  -- Offset from thumb top texture
-    local THUMB_MID_OFS_B = 10 -- Offset from thumb bottom texture
-    
-    -- Main scrollbar frame
+    local THUMB_MID_OFS_T = 8
+    local THUMB_MID_OFS_B = 10
+
     local scrollBar = CreateFrame("Frame", nil, container)
     scrollBar:SetWidth(TRACK_WIDTH)
     scrollBar:SetPoint("TOPRIGHT", -4, -4)
     scrollBar:SetPoint("BOTTOMRIGHT", -4, 4)
-    
-    -- Up Arrow Button
+
+    -- Up Arrow
     local upButton = CreateFrame("Button", nil, scrollBar)
     upButton:SetPoint("TOP", 0, -STEPPER_MARGIN_Y)
-    
+
     local upNormal = upButton:CreateTexture(nil, "ARTWORK")
     upNormal:SetAtlas("minimal-scrollbar-arrow-top", true)
     upNormal:SetPoint("CENTER")
     upButton:SetSize(upNormal:GetSize())
     upButton:SetNormalTexture(upNormal)
-    
+
     local upHighlight = upButton:CreateTexture(nil, "HIGHLIGHT")
     upHighlight:SetAtlas("minimal-scrollbar-arrow-top-over", true)
     upHighlight:SetPoint("CENTER")
-    
+
     local upPushed = upButton:CreateTexture(nil, "ARTWORK")
     upPushed:SetAtlas("minimal-scrollbar-arrow-top-down", true)
-    upPushed:SetPoint("CENTER", 0, -2) -- Push offset
+    upPushed:SetPoint("CENTER", 0, -2)
     upButton:SetPushedTexture(upPushed)
-    
-    -- Down Arrow Button
+
+    -- Down Arrow
     local downButton = CreateFrame("Button", nil, scrollBar)
     downButton:SetPoint("BOTTOM", 0, STEPPER_MARGIN_Y)
-    
+
     local downNormal = downButton:CreateTexture(nil, "ARTWORK")
     downNormal:SetAtlas("minimal-scrollbar-arrow-bottom", true)
     downNormal:SetPoint("CENTER")
     downButton:SetSize(downNormal:GetSize())
     downButton:SetNormalTexture(downNormal)
-    
+
     local downHighlight = downButton:CreateTexture(nil, "HIGHLIGHT")
     downHighlight:SetAtlas("minimal-scrollbar-arrow-bottom-over", true)
     downHighlight:SetPoint("CENTER")
-    
+
     local downPushed = downButton:CreateTexture(nil, "ARTWORK")
     downPushed:SetAtlas("minimal-scrollbar-arrow-bottom-down", true)
-    downPushed:SetPoint("CENTER", 0, 2) -- Push offset (opposite direction)
+    downPushed:SetPoint("CENTER", 0, 2)
     downButton:SetPushedTexture(downPushed)
-    
-    -- Track (between arrows)
+
+    -- Track
     local track = CreateFrame("Frame", nil, scrollBar)
     track:SetPoint("TOP", 0, -STEPPER_RESERVE)
     track:SetPoint("BOTTOM", 0, STEPPER_RESERVE)
     track:SetWidth(TRACK_WIDTH)
-    
-    -- Track textures - use natural atlas sizes
+
     local trackTop = track:CreateTexture(nil, "BACKGROUND")
     trackTop:SetAtlas("minimal-scrollbar-track-top", true)
-    trackTop:SetPoint("TOP", 0, 1) -- Slight adjustment to connect with stepper
-    
+    trackTop:SetPoint("TOP", 0, 1)
+
     local trackBot = track:CreateTexture(nil, "BACKGROUND")
     trackBot:SetAtlas("minimal-scrollbar-track-bottom", true)
     trackBot:SetPoint("BOTTOM", 0, -1)
-    
+
     local trackMid = track:CreateTexture(nil, "BACKGROUND")
     trackMid:SetAtlas("!minimal-scrollbar-track-middle", true)
     trackMid:SetPoint("TOPLEFT", trackTop, "BOTTOMLEFT", 0, 0)
     trackMid:SetPoint("BOTTOMRIGHT", trackBot, "TOPRIGHT", 0, 0)
-    
+
     -- Thumb
     local thumb = CreateFrame("Button", nil, track)
     thumb:SetWidth(THUMB_WIDTH)
     thumb:SetHeight(THUMB_MIN_SIZE)
-    
-    -- Normal thumb textures (BACKGROUND layer)
+
     local thumbTop = thumb:CreateTexture(nil, "BACKGROUND")
     thumbTop:SetAtlas("minimal-scrollbar-thumb-top", true)
     thumbTop:SetPoint("TOP", 0, 0)
-    
+
     local thumbBot = thumb:CreateTexture(nil, "BACKGROUND")
     thumbBot:SetAtlas("minimal-scrollbar-thumb-bottom", true)
     thumbBot:SetPoint("BOTTOM", 0, 0)
-    
-    local thumbMid = thumb:CreateTexture(nil, "BACKGROUND", nil, -1) -- Lower sublevel
+
+    local thumbMid = thumb:CreateTexture(nil, "BACKGROUND", nil, -1)
     thumbMid:SetAtlas("minimal-scrollbar-thumb-middle", true)
     thumbMid:SetPoint("TOP", 0, -THUMB_MID_OFS_T)
     thumbMid:SetPoint("BOTTOM", 0, THUMB_MID_OFS_B)
-    
-    -- Hover thumb textures (HIGHLIGHT layer - auto-shown on hover)
+
     local thumbTopH = thumb:CreateTexture(nil, "HIGHLIGHT")
     thumbTopH:SetAtlas("minimal-scrollbar-thumb-top-over", true)
     thumbTopH:SetPoint("TOP", 0, 0)
-    
+
     local thumbBotH = thumb:CreateTexture(nil, "HIGHLIGHT")
     thumbBotH:SetAtlas("minimal-scrollbar-thumb-bottom-over", true)
     thumbBotH:SetPoint("BOTTOM", 0, 0)
-    
+
     local thumbMidH = thumb:CreateTexture(nil, "HIGHLIGHT")
     thumbMidH:SetAtlas("minimal-scrollbar-thumb-middle-over", true)
     thumbMidH:SetPoint("TOP", 0, -THUMB_MID_OFS_T)
     thumbMidH:SetPoint("BOTTOM", 0, THUMB_MID_OFS_B)
-    
-    -- Update scrollbar state
+
     local function UpdateScrollBar()
         local scrollRange = math.max(0, content:GetHeight() - scrollFrame:GetHeight())
         local scrollValue = scrollFrame:GetVerticalScroll()
         local trackHeight = track:GetHeight()
-        
+
         if scrollRange > 0 and trackHeight > 0 then
             local thumbHeight = math.max(THUMB_MIN_SIZE, (scrollFrame:GetHeight() / content:GetHeight()) * trackHeight)
             thumb:SetHeight(thumbHeight)
-            
+
             local thumbPos = (scrollValue / scrollRange) * (trackHeight - thumbHeight)
             thumb:ClearAllPoints()
             thumb:SetPoint("TOP", track, "TOP", 0, -thumbPos)
-            
+
             scrollBar:Show()
             upButton:SetEnabled(scrollValue > 0)
             downButton:SetEnabled(scrollValue < scrollRange)
@@ -299,54 +310,52 @@ local function CreateTabContainer(parent)
             scrollBar:Hide()
         end
     end
-    
-    -- Thumb dragging
+
     thumb:EnableMouse(true)
     thumb:RegisterForDrag("LeftButton")
-    
+
     thumb:SetScript("OnDragStart", function(self)
         self.isDragging = true
         self.startY = select(2, GetCursorPosition()) / UIParent:GetEffectiveScale()
         self.startScroll = scrollFrame:GetVerticalScroll()
     end)
-    
+
     thumb:SetScript("OnDragStop", function(self) self.isDragging = false end)
-    
+
     thumb:SetScript("OnUpdate", function(self)
         if not self.isDragging then return end
         local currentY = select(2, GetCursorPosition()) / UIParent:GetEffectiveScale()
         local deltaY = self.startY - currentY
         local scrollRange = math.max(1, content:GetHeight() - scrollFrame:GetHeight())
         local trackTravel = track:GetHeight() - thumb:GetHeight()
-        
+
         if trackTravel > 0 then
             local newScroll = math.max(0, math.min(scrollRange, self.startScroll + (deltaY / trackTravel) * scrollRange))
             scrollFrame:SetVerticalScroll(newScroll)
             UpdateScrollBar()
         end
     end)
-    
-    -- Arrow buttons
+
     upButton:SetScript("OnClick", function()
         scrollFrame:SetVerticalScroll(math.max(0, scrollFrame:GetVerticalScroll() - SCROLL_STEP))
         UpdateScrollBar()
     end)
-    
+
     downButton:SetScript("OnClick", function()
         local maxScroll = math.max(0, content:GetHeight() - scrollFrame:GetHeight())
         scrollFrame:SetVerticalScroll(math.min(maxScroll, scrollFrame:GetVerticalScroll() + SCROLL_STEP))
         UpdateScrollBar()
     end)
-    
+
     -- Smooth scroll
     local targetScroll, isAnimating = 0, false
     local animFrame = CreateFrame("Frame", nil, scrollFrame)
     animFrame:Hide()
-    
+
     animFrame:SetScript("OnUpdate", function(self)
         local currentScroll = scrollFrame:GetVerticalScroll()
         local diff = targetScroll - currentScroll
-        
+
         if math.abs(diff) < SCROLL_THRESHOLD then
             scrollFrame:SetVerticalScroll(targetScroll)
             isAnimating = false
@@ -356,7 +365,7 @@ local function CreateTabContainer(parent)
         end
         UpdateScrollBar()
     end)
-    
+
     local function OnMouseWheel(_, delta)
         local maxScroll = math.max(0, content:GetHeight() - scrollFrame:GetHeight())
         targetScroll = math.max(0, math.min(maxScroll, targetScroll - delta * SCROLL_SPEED))
@@ -365,407 +374,502 @@ local function CreateTabContainer(parent)
             animFrame:Show()
         end
     end
-    
+
     scrollFrame:SetScript("OnMouseWheel", OnMouseWheel)
     content:EnableMouseWheel(true)
     content:SetScript("OnMouseWheel", function(_, delta) OnMouseWheel(nil, delta) end)
-    
+
     scrollFrame:SetScript("OnSizeChanged", function(_, width)
         content:SetWidth(width)
         UpdateScrollBar()
     end)
-    
+
     scrollFrame:SetScript("OnShow", function() C_Timer.After(0.1, UpdateScrollBar) end)
-    
-    container.scrollFrame, container.scrollBar, container.content = scrollFrame, scrollBar, content
+
+    container.scrollFrame = scrollFrame
+    container.scrollBar = scrollBar
+    container.content = content
+    container.UpdateScrollBar = UpdateScrollBar
     container.allControls = {}
-    
+
     return container
 end
 
 ----------------------------------------------
--- 2-Column Layout Builder (Optimized)
+-- Content Layout Builder
 ----------------------------------------------
-local function CreateTwoColumnLayout(parent)
+local function CreateContentLayout(parent)
     local layout = {
         parent = parent,
-        columns = { LEFT = {}, RIGHT = {} },
-        currentY = 0,
+        currentY = -15,
         allModules = {},
+        allControls = {}, -- Track ALL controls for refresh
+        settingKeys = {}, -- Track all setting keys for per-tab reset
     }
-    
-    -- Generic column position helper
-    local function getColumnY(colItems)
-        local y = layout.currentY
-        for _, item in ipairs(colItems) do
-            y = y - (item:GetHeight() or LAYOUT.SUB_OPTION_HEIGHT)
-        end
-        return y
-    end
-    
-    -- Add section header (spans both columns) - for single-column sections
+
+    -- Get content width for single-column layout
+    local contentWidth = parent:GetParent():GetWidth() - 40
+
     function layout:AddSection(text)
         self.currentY = self.currentY - LAYOUT.SECTION_SPACING
         local header = Components.CreateSectionHeader(self.parent, text)
-        header:SetPoint("TOPLEFT", COL_X.LEFT, self.currentY)
-        header:SetPoint("RIGHT", -LAYOUT.RIGHT_MARGIN, 0)
+        header:SetPoint("TOPLEFT", 0, self.currentY)
+        header:SetPoint("RIGHT", -10, 0)
         self.currentY = self.currentY - LAYOUT.HEADER_HEIGHT
-        self.columns.LEFT, self.columns.RIGHT = {}, {}
         return header
     end
-    
-    -- Add column-specific section headers (independent headers per column)
-    function layout:AddColumnSections(leftText, rightText)
-        self.currentY = self.currentY - LAYOUT.SECTION_SPACING
-        
-        -- Left column header
-        local leftHeader = Components.CreateSectionHeader(self.parent, leftText)
-        leftHeader:SetPoint("TOPLEFT", COL_X.LEFT, self.currentY)
-        leftHeader:SetWidth(LAYOUT.COLUMN_WIDTH)
-        
-        -- Right column header (only if provided)
-        local rightHeader
-        if rightText then
-            rightHeader = Components.CreateSectionHeader(self.parent, rightText)
-            rightHeader:SetPoint("TOPLEFT", COL_X.RIGHT, self.currentY)
-            rightHeader:SetWidth(LAYOUT.COLUMN_WIDTH)
-        end
-        
-        self.currentY = self.currentY - LAYOUT.HEADER_HEIGHT
-        self.columns.LEFT, self.columns.RIGHT = {}, {}
-        return leftHeader, rightHeader
-    end
-    
-    -- Generic add module (works for both columns)
-    function layout:AddModule(col, label, moduleKey, tooltip)
+
+    function layout:AddModule(label, moduleKey, tooltip)
         local toggle = Components.CreateModuleToggle(self.parent, label, moduleKey, tooltip)
-        toggle:SetPoint("TOPLEFT", COL_X[col], self.currentY)
-        toggle:SetWidth(LAYOUT.COLUMN_WIDTH)
-        table.insert(self.columns[col], toggle)
+        toggle:SetPoint("TOPLEFT", 0, self.currentY)
+        toggle:SetWidth(contentWidth)
         table.insert(self.allModules, toggle)
+        table.insert(self.allControls, toggle)
+        if moduleKey then table.insert(self.settingKeys, moduleKey) end
+        self.currentY = self.currentY - LAYOUT.MODULE_HEIGHT - 4
         return toggle
     end
-    
-    -- Convenience wrappers
-    function layout:AddModuleLeft(l, k, t) return self:AddModule("LEFT", l, k, t) end
-    function layout:AddModuleRight(l, k, t) return self:AddModule("RIGHT", l, k, t) end
-    
-    -- Generic sub-component adder
-    local function addSubComponent(self, col, creator, ...)
-        local y = getColumnY(self.columns[col])
-        local widget = creator(self.parent, ...)
-        widget:SetPoint("TOPLEFT", COL_X[col], y)
-        widget:SetWidth(LAYOUT.COLUMN_WIDTH)
-        table.insert(self.columns[col], widget)
+
+    function layout:AddSubCheckbox(label, optionKey, tooltip, parentToggle)
+        local widget = Components.CreateSubCheckbox(self.parent, label, optionKey, tooltip, parentToggle)
+        widget:SetPoint("TOPLEFT", 0, self.currentY)
+        widget:SetWidth(contentWidth)
+        table.insert(self.allControls, widget)
+        if optionKey then table.insert(self.settingKeys, optionKey) end
+        self.currentY = self.currentY - LAYOUT.SUB_OPTION_HEIGHT - 4
         return widget
     end
-    
-    -- Sub-checkbox
-    function layout:AddSubCheckbox(col, label, optionKey, tooltip, parentToggle)
-        return addSubComponent(self, col, Components.CreateSubCheckbox, label, optionKey, tooltip, parentToggle)
+
+    function layout:AddSubSlider(label, optionKey, min, max, step, tooltip, parentToggle)
+        local widget = Components.CreateSubSlider(self.parent, label, optionKey, min, max, step, tooltip, parentToggle)
+        widget:SetPoint("TOPLEFT", 0, self.currentY)
+        widget:SetWidth(contentWidth)
+        table.insert(self.allControls, widget)
+        if optionKey then table.insert(self.settingKeys, optionKey) end
+        self.currentY = self.currentY - 32
+        return widget
     end
-    function layout:AddSubCheckboxLeft(l, k, t, p) return self:AddSubCheckbox("LEFT", l, k, t, p) end
-    function layout:AddSubCheckboxRight(l, k, t, p) return self:AddSubCheckbox("RIGHT", l, k, t, p) end
-    
-    -- Sub-slider
-    function layout:AddSubSlider(col, label, optionKey, min, max, step, tooltip, parentToggle)
-        return addSubComponent(self, col, Components.CreateSubSlider, label, optionKey, min, max, step, tooltip, parentToggle)
+
+    function layout:AddSubDropdown(label, optionKey, options, tooltip, parentToggle)
+        local widget = Components.CreateSubDropdown(self.parent, label, optionKey, options, tooltip, parentToggle)
+        widget:SetPoint("TOPLEFT", 0, self.currentY)
+        widget:SetWidth(contentWidth)
+        table.insert(self.allControls, widget)
+        if optionKey then table.insert(self.settingKeys, optionKey) end
+        self.currentY = self.currentY - 32
+        return widget
     end
-    function layout:AddSubSliderLeft(l, k, mn, mx, s, t, p) return self:AddSubSlider("LEFT", l, k, mn, mx, s, t, p) end
-    function layout:AddSubSliderRight(l, k, mn, mx, s, t, p) return self:AddSubSlider("RIGHT", l, k, mn, mx, s, t, p) end
-    
-    -- Sub-dropdown
-    function layout:AddSubDropdown(col, label, optionKey, options, tooltip, parentToggle)
-        return addSubComponent(self, col, Components.CreateSubDropdown, label, optionKey, options, tooltip, parentToggle)
+
+    function layout:AddSpacer(height)
+        self.currentY = self.currentY - (height or 10)
     end
-    function layout:AddSubDropdownLeft(l, k, o, t, p) return self:AddSubDropdown("LEFT", l, k, o, t, p) end
-    function layout:AddSubDropdownRight(l, k, o, t, p) return self:AddSubDropdown("RIGHT", l, k, o, t, p) end
-    
-    -- Advance to next row
-    function layout:NextRow()
-        local leftH, rightH = 0, 0
-        for _, item in ipairs(self.columns.LEFT) do leftH = leftH + (item:GetHeight() or LAYOUT.SUB_OPTION_HEIGHT) end
-        for _, item in ipairs(self.columns.RIGHT) do rightH = rightH + (item:GetHeight() or LAYOUT.SUB_OPTION_HEIGHT) end
-        self.currentY = self.currentY - math.max(leftH, rightH) - 8
-        self.columns.LEFT, self.columns.RIGHT = {}, {}
+
+    function layout:Finalize()
+        return math.abs(self.currentY) + 30
     end
-    
-    function layout:Finalize() return math.abs(self.currentY) + 30 end
-    
+
     function layout:RefreshAll()
+        -- Refresh all controls (modules, checkboxes, sliders, dropdowns)
+        for _, control in ipairs(self.allControls) do
+            if control.Refresh then control:Refresh() end
+        end
+        -- Update sub-options enabled state based on parent module state
         for _, module in ipairs(self.allModules) do
-            if module.Refresh then module:Refresh() end
+            if module.moduleKey and module.UpdateSubOptionsState then
+                local enabled = addon.GetDBBool(module.moduleKey)
+                module:UpdateSubOptionsState(enabled)
+            end
         end
     end
-    
+
+    -- Reset only this tab's settings to defaults
+    function layout:ResetToDefaults()
+        if addon.DEFAULT_SETTINGS and RefactorDB then
+            for _, key in ipairs(self.settingKeys) do
+                local defaultValue = addon.DEFAULT_SETTINGS[key]
+                if defaultValue ~= nil then
+                    RefactorDB[key] = defaultValue
+                    addon.SetDBValue(key, defaultValue, true)
+                end
+            end
+            self:RefreshAll()
+        end
+    end
+
+    -- Add a per-tab defaults button at the top right corner (fixed position, not in scroll)
+    function layout:AddDefaultsButton(container)
+        -- Parent to container so it's fixed, not scrolling with content
+        local btn = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
+        btn:SetSize(80, 20)
+        btn:SetPoint("TOPRIGHT", container, "TOPRIGHT", -20, -8)
+        btn:SetText("Defaults")
+        btn:SetNormalFontObject(GameFontNormalSmall)
+        btn:SetHighlightFontObject(GameFontHighlightSmall)
+
+        -- Store reference to layout for the click handler
+        local layoutRef = self
+        btn:SetScript("OnClick", function()
+            layoutRef:ResetToDefaults()
+            PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+        end)
+
+        -- Tooltip explaining this only affects current tab
+        btn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+            GameTooltip:SetText("Reset Tab Settings", 1, 0.82, 0)
+            GameTooltip:AddLine("Reset only the settings on this tab to their default values.", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        self.defaultsButton = btn
+        return btn
+    end
+
     return layout
 end
 
 ----------------------------------------------
--- Tab 1: General
+-- Content Panel Setup Functions
 ----------------------------------------------
-local function SetupGeneralTab(parent)
-    local container = CreateTabContainer(parent)
+
+-- QUESTING
+local function SetupQuestingContent(parent)
+    local container = CreateScrollableContent(parent)
     local content = container.content
-    
-    local infoBox = Components.CreateInfoBox(content, L.ADDON_NAME, addon.VERSION, L.ADDON_DESCRIPTION)
-    infoBox:SetPoint("TOP", 0, -10)
-    infoBox:SetPoint("LEFT", 15, 0)
-    infoBox:SetPoint("RIGHT", -15, 0)
-    
-    local layout = CreateTwoColumnLayout(content)
-    layout.currentY = -95
-    
-    -- AUTOMATION SECTION
-    layout:AddColumnSections(L.MODULE_AUTO_SELL, L.MODULE_AUTO_REPAIR)
-    
-    local sellToggle = layout:AddModuleLeft(L.MODULE_AUTO_SELL, "AutoSellJunk", L.TIP_SELL_NOTIFY)
-    local repairToggle = layout:AddModuleRight(L.MODULE_AUTO_REPAIR, "AutoRepair", L.TIP_REPAIR_NOTIFY)
-    layout:NextRow()
-    
-    layout:AddSubCheckboxLeft(L.SHOW_NOTIFICATIONS, "AutoSellJunk_ShowNotify", L.TIP_SELL_NOTIFY, sellToggle)
-    layout:AddSubCheckboxLeft(L.SELL_KNOWN_TRANSMOG, "AutoSellJunk_SellKnownTransmog", L.TIP_SELL_KNOWN_TRANSMOG, sellToggle)
-    layout:AddSubCheckboxLeft(L.KEEP_TRANSMOG, "AutoSellJunk_KeepTransmog", L.TIP_KEEP_TRANSMOG, sellToggle)
-    layout:AddSubCheckboxLeft(L.SELL_LOW_ILVL, "AutoSellJunk_SellLowILvl", L.TIP_SELL_LOW_ILVL, sellToggle)
-    layout:AddSubSliderLeft("Max iLvl", "AutoSellJunk_MaxILvl", 0, 700, 10, L.TIP_MAX_ILVL, sellToggle)
-    
-    layout:AddSubCheckboxRight(L.USE_GUILD_FUNDS, "AutoRepair_UseGuild", L.TIP_USE_GUILD_FUNDS, repairToggle)
-    layout:AddSubCheckboxRight(L.SHOW_NOTIFICATIONS, "AutoRepair_ShowNotify", L.TIP_REPAIR_NOTIFY, repairToggle)
-    layout:NextRow()
-    
-    -- QUESTING SECTION
-    layout:AddColumnSections(L.MODULE_AUTO_QUEST, L.MODULE_SKIP_CINEMATICS)
-    
-    local questToggle = layout:AddModuleLeft(L.MODULE_AUTO_QUEST, "AutoQuest", L.TIP_AUTO_ACCEPT)
-    local cinToggle = layout:AddModuleRight(L.MODULE_SKIP_CINEMATICS, "SkipCinematics", L.TIP_ALWAYS_SKIP)
-    layout:NextRow()
-    
-    layout:AddSubCheckboxLeft(L.AUTO_ACCEPT, "AutoQuest_Accept", L.TIP_AUTO_ACCEPT, questToggle)
-    layout:AddSubCheckboxLeft(L.AUTO_TURNIN, "AutoQuest_TurnIn", L.TIP_AUTO_TURNIN, questToggle)
-    layout:AddSubCheckboxLeft(L.SKIP_GOSSIP, "AutoQuest_SkipGossip", L.TIP_SKIP_GOSSIP, questToggle)
-    layout:AddSubCheckboxLeft(L.AUTO_SINGLE_OPTION, "AutoQuest_SingleOption", L.TIP_AUTO_SINGLE_OPTION, questToggle)
-    layout:AddSubCheckboxLeft(L.AUTO_CONTINUE_DIALOGUE, "AutoQuest_ContinueDialogue", L.TIP_AUTO_CONTINUE_DIALOGUE, questToggle)
-    layout:AddSubCheckboxLeft(L.DAILY_QUESTS_ONLY, "AutoQuest_DailyOnly", L.TIP_DAILY_ONLY, questToggle)
-    layout:AddSubDropdownLeft(L.MODIFIER_KEY, "AutoQuest_ModifierKey", C.MODIFIER_OPTIONS, nil, questToggle)
-    
-    layout:AddSubCheckboxRight(L.ALWAYS_SKIP, "SkipCinematics_AlwaysSkip", L.TIP_ALWAYS_SKIP, cinToggle)
-    layout:AddSubDropdownRight(L.MODIFIER_KEY, "SkipCinematics_ModifierKey", C.MODIFIER_OPTIONS, nil, cinToggle)
-    layout:NextRow()
-    
-    -- LOOTING SECTION
-    layout:AddColumnSections(L.MODULE_FAST_LOOT, L.MODULE_LOOT_TOAST)
-    
-    local lootToggle = layout:AddModuleLeft(L.MODULE_FAST_LOOT, "FastLoot", "Instantly loot all items.")
-    local toastToggle = layout:AddModuleRight(L.MODULE_LOOT_TOAST, "LootToast", "Display loot notifications.")
-    layout:NextRow()
-    
-    layout:AddSubSliderRight(L.LOOT_TOAST_DURATION, "LootToast_Duration", 2, 10, 1, L.TIP_LOOT_TOAST_DURATION, toastToggle)
-    layout:AddSubSliderRight(L.LOOT_TOAST_MAX_VISIBLE, "LootToast_MaxVisible", 3, 10, 1, L.TIP_LOOT_TOAST_MAX, toastToggle)
-    layout:AddSubCheckboxRight(L.LOOT_TOAST_SHOW_CURRENCY, "LootToast_ShowCurrency", L.TIP_LOOT_TOAST_CURRENCY, toastToggle)
-    layout:AddSubCheckboxRight(L.LOOT_TOAST_SHOW_QUANTITY, "LootToast_ShowQuantity", L.TIP_LOOT_TOAST_QUANTITY, toastToggle)
-    layout:NextRow()
-    
-    -- DISPLAY SECTION
-    layout:AddColumnSections(L.MODULE_QUEST_NAMEPLATES, L.MODULE_COMBAT_FADE)
-    
-    local npToggle = layout:AddModuleLeft(L.MODULE_QUEST_NAMEPLATES, "QuestNameplates", L.TIP_QUEST_NAMEPLATES)
-    local fadeToggle = layout:AddModuleRight(L.MODULE_COMBAT_FADE, "CombatFade", L.TIP_COMBAT_FADE)
-    layout:NextRow()
-    
-    layout:AddSubCheckboxLeft(L.SHOW_KILL_ICON, "QuestNameplates_ShowKillIcon", nil, npToggle)
-    layout:AddSubCheckboxLeft(L.SHOW_LOOT_ICON, "QuestNameplates_ShowLootIcon", nil, npToggle)
-    
-    layout:AddSubCheckboxRight(L.COMBAT_FADE_ACTION_BARS, "CombatFade_ActionBars", L.TIP_COMBAT_FADE_ACTION_BARS, fadeToggle)
-    layout:AddSubSliderRight("Action Bar Opacity", "CombatFade_ActionBars_Opacity", 0, 100, 5, L.TIP_COMBAT_FADE_ACTION_BARS_OPACITY, fadeToggle)
-    layout:AddSubCheckboxRight(L.COMBAT_FADE_PLAYER_FRAME, "CombatFade_PlayerFrame", L.TIP_COMBAT_FADE_PLAYER_FRAME, fadeToggle)
-    layout:AddSubSliderRight("Player Frame Opacity", "CombatFade_PlayerFrame_Opacity", 0, 100, 5, L.TIP_COMBAT_FADE_PLAYER_FRAME_OPACITY, fadeToggle)
-    layout:NextRow()
-    
-    -- CAMERA SECTION (single column, uses full-width section)
-    layout:AddSection(L.MODULE_ACTIONCAM)
-    
-    local camToggle = layout:AddModuleLeft(L.MODULE_ACTIONCAM, "ActionCam", L.TIP_ACTIONCAM)
-    layout:NextRow()
-    
-    layout:AddSubDropdownLeft(L.ACTIONCAM_MODE, "ActionCam_Mode", C.ACTIONCAM_MODE_OPTIONS, nil, camToggle)
-    layout:NextRow()
-    
-    -- CONFIRMATIONS SECTION
-    layout:AddColumnSections(L.MODULE_AUTO_CONFIRM, L.MODULE_AUTO_INVITE)
-    
-    local confirmToggle = layout:AddModuleLeft(L.MODULE_AUTO_CONFIRM, "AutoConfirm", "Auto-confirm ready checks, summons, etc.")
-    local inviteToggle = layout:AddModuleRight(L.MODULE_AUTO_INVITE, "AutoInvite", "Accept invites from trusted sources.")
-    layout:NextRow()
-    
-    layout:AddSubCheckboxLeft(L.CONFIRM_READY_CHECK, "AutoConfirm_ReadyCheck", L.TIP_READY_CHECK, confirmToggle)
-    layout:AddSubCheckboxLeft(L.CONFIRM_SUMMON, "AutoConfirm_Summon", L.TIP_SUMMON, confirmToggle)
-    layout:AddSubCheckboxLeft(L.CONFIRM_ROLE_CHECK, "AutoConfirm_RoleCheck", L.TIP_ROLE_CHECK, confirmToggle)
-    layout:AddSubCheckboxLeft(L.CONFIRM_RESURRECT, "AutoConfirm_Resurrect", L.TIP_RESURRECT, confirmToggle)
-    layout:AddSubCheckboxLeft(L.CONFIRM_BINDING, "AutoConfirm_Binding", L.TIP_BINDING, confirmToggle)
-    layout:AddSubCheckboxLeft(L.CONFIRM_DELETE_GREY, "AutoConfirm_DeleteGrey", L.TIP_DELETE_GREY, confirmToggle)
-    
-    layout:AddSubCheckboxRight(L.INVITE_FRIENDS, "AutoInvite_Friends", L.TIP_INVITE_FRIENDS, inviteToggle)
-    layout:AddSubCheckboxRight(L.INVITE_BNET, "AutoInvite_BNetFriends", L.TIP_INVITE_BNET, inviteToggle)
-    layout:AddSubCheckboxRight(L.INVITE_GUILD, "AutoInvite_Guild", L.TIP_INVITE_GUILD, inviteToggle)
-    layout:AddSubCheckboxRight(L.INVITE_GUILD_INVITES, "AutoInvite_GuildInvites", L.TIP_GUILD_INVITES, inviteToggle)
-    layout:NextRow()
-    
-    -- AUTO-RELEASE SECTION (single column, uses full-width section)
-    layout:AddSection(L.MODULE_AUTO_RELEASE)
-    
-    local releaseToggle = layout:AddModuleLeft(L.MODULE_AUTO_RELEASE, "AutoRelease", "Release spirit automatically.")
-    layout:NextRow()
-    
-    layout:AddSubDropdownLeft(L.RELEASE_MODE, "AutoRelease_Mode", C.RELEASE_MODE_OPTIONS, nil, releaseToggle)
-    layout:AddSubCheckboxLeft(L.SHOW_NOTIFICATIONS, "AutoRelease_Notify", L.TIP_RELEASE_NOTIFY, releaseToggle)
-    layout:NextRow()
-    
+    local layout = CreateContentLayout(content)
+
+    -- Auto Quest
+    layout:AddSection(L.MODULE_AUTO_QUEST or "Auto Quest")
+    local questToggle = layout:AddModule(L.MODULE_AUTO_QUEST or "Auto Quest", "AutoQuest", L.TIP_AUTO_ACCEPT)
+    layout:AddSubCheckbox(L.AUTO_ACCEPT or "Auto Accept", "AutoQuest_Accept", L.TIP_AUTO_ACCEPT, questToggle)
+    layout:AddSubCheckbox(L.AUTO_TURNIN or "Auto Turn In", "AutoQuest_TurnIn", L.TIP_AUTO_TURNIN, questToggle)
+    layout:AddSubCheckbox(L.SKIP_GOSSIP or "Skip Gossip", "AutoQuest_SkipGossip", L.TIP_SKIP_GOSSIP, questToggle)
+    layout:AddSubCheckbox(L.AUTO_SINGLE_OPTION or "Auto Select Single Option", "AutoQuest_SingleOption",
+        L.TIP_AUTO_SINGLE_OPTION, questToggle)
+    layout:AddSubCheckbox(L.AUTO_CONTINUE_DIALOGUE or "Auto Continue Dialogue", "AutoQuest_ContinueDialogue",
+        L.TIP_AUTO_CONTINUE_DIALOGUE, questToggle)
+    layout:AddSubCheckbox(L.DAILY_QUESTS_ONLY or "Daily Quests Only", "AutoQuest_DailyOnly", L.TIP_DAILY_ONLY,
+        questToggle)
+    layout:AddSubDropdown(L.MODIFIER_KEY or "Modifier Key", "AutoQuest_ModifierKey", C.MODIFIER_OPTIONS, nil, questToggle)
+
+    layout:AddSpacer(10)
+
+    -- Cinematics
+    layout:AddSection(L.MODULE_SKIP_CINEMATICS or "Skip Cinematics")
+    local cinToggle = layout:AddModule(L.MODULE_SKIP_CINEMATICS or "Skip Cinematics", "SkipCinematics", L
+        .TIP_ALWAYS_SKIP)
+    layout:AddSubCheckbox(L.ALWAYS_SKIP or "Always Skip", "SkipCinematics_AlwaysSkip", L.TIP_ALWAYS_SKIP, cinToggle)
+    layout:AddSubDropdown(L.MODIFIER_KEY or "Modifier Key", "SkipCinematics_ModifierKey", C.MODIFIER_OPTIONS, nil,
+        cinToggle)
+
+    layout:AddDefaultsButton(container)
     content:SetHeight(layout:Finalize())
     container.layout = layout
     container:SetScript("OnShow", function() layout:RefreshAll() end)
-    
     return container
 end
 
-----------------------------------------------
--- Tab 2: Tooltip
-----------------------------------------------
-local function SetupTooltipTab(parent)
-    local container = CreateTabContainer(parent)
+-- LOOTING (Fast Loot + Loot Toasts)
+local function SetupLootingContent(parent)
+    local container = CreateScrollableContent(parent)
     local content = container.content
-    
-    local layout = CreateTwoColumnLayout(content)
-    layout.currentY = -15
-    
-    layout:AddSection(L.MODULE_TOOLTIP_PLUS)
-    local tooltipToggle = layout:AddModuleLeft("Enable Tooltip+", "TooltipPlus", "Enhanced tooltip features")
-    layout:NextRow()
-    
-    -- POSITIONING
+    local layout = CreateContentLayout(content)
+
+    -- Fast Loot
+    layout:AddSection(L.MODULE_FAST_LOOT or "Fast Loot")
+    layout:AddModule(L.MODULE_FAST_LOOT or "Fast Loot", "FastLoot", "Instantly loot all items from corpses.")
+
+    layout:AddSpacer(10)
+
+    -- Loot Toasts
+    layout:AddSection(L.MODULE_LOOT_TOAST or "Loot Toasts")
+    local toastToggle = layout:AddModule(L.MODULE_LOOT_TOAST or "Loot Toasts", "LootToast",
+        "Display loot notifications on screen.")
+    layout:AddSubSlider(L.LOOT_TOAST_DURATION or "Duration", "LootToast_Duration", 2, 10, 1, L.TIP_LOOT_TOAST_DURATION,
+        toastToggle)
+    layout:AddSubSlider(L.LOOT_TOAST_MAX_VISIBLE or "Max Visible", "LootToast_MaxVisible", 3, 10, 1, L
+        .TIP_LOOT_TOAST_MAX, toastToggle)
+    layout:AddSubCheckbox(L.LOOT_TOAST_SHOW_CURRENCY or "Show Currency", "LootToast_ShowCurrency",
+        L.TIP_LOOT_TOAST_CURRENCY, toastToggle)
+    layout:AddSubCheckbox(L.LOOT_TOAST_SHOW_QUANTITY or "Show Quantity", "LootToast_ShowQuantity",
+        L.TIP_LOOT_TOAST_QUANTITY, toastToggle)
+
+    layout:AddDefaultsButton(container)
+    content:SetHeight(layout:Finalize())
+    container.layout = layout
+    container:SetScript("OnShow", function() layout:RefreshAll() end)
+    return container
+end
+
+-- VENDORS
+local function SetupVendorsContent(parent)
+    local container = CreateScrollableContent(parent)
+    local content = container.content
+    local layout = CreateContentLayout(content)
+
+    -- Auto Sell
+    layout:AddSection(L.MODULE_AUTO_SELL or "Auto Sell Junk")
+    local sellToggle = layout:AddModule(L.MODULE_AUTO_SELL or "Auto Sell Junk", "AutoSellJunk", L.TIP_SELL_NOTIFY)
+    layout:AddSubCheckbox(L.SHOW_NOTIFICATIONS or "Show Notifications", "AutoSellJunk_ShowNotify", L.TIP_SELL_NOTIFY,
+        sellToggle)
+    layout:AddSubCheckbox(L.SELL_KNOWN_TRANSMOG or "Sell Known Transmog", "AutoSellJunk_SellKnownTransmog",
+        L.TIP_SELL_KNOWN_TRANSMOG, sellToggle)
+    layout:AddSubCheckbox(L.KEEP_TRANSMOG or "Keep Uncollected Transmog", "AutoSellJunk_KeepTransmog",
+        L.TIP_KEEP_TRANSMOG, sellToggle)
+    layout:AddSubCheckbox(L.SELL_LOW_ILVL or "Sell Low iLvl Gear", "AutoSellJunk_SellLowILvl", L.TIP_SELL_LOW_ILVL,
+        sellToggle)
+    layout:AddSubSlider("Max iLvl", "AutoSellJunk_MaxILvl", 0, 700, 10, L.TIP_MAX_ILVL, sellToggle)
+
+    layout:AddSpacer(10)
+
+    -- Auto Repair
+    layout:AddSection(L.MODULE_AUTO_REPAIR or "Auto Repair")
+    local repairToggle = layout:AddModule(L.MODULE_AUTO_REPAIR or "Auto Repair", "AutoRepair", L.TIP_REPAIR_NOTIFY)
+    layout:AddSubCheckbox(L.USE_GUILD_FUNDS or "Use Guild Funds", "AutoRepair_UseGuild", L.TIP_USE_GUILD_FUNDS,
+        repairToggle)
+    layout:AddSubCheckbox(L.SHOW_NOTIFICATIONS or "Show Notifications", "AutoRepair_ShowNotify", L.TIP_REPAIR_NOTIFY,
+        repairToggle)
+
+    layout:AddDefaultsButton(container)
+    content:SetHeight(layout:Finalize())
+    container.layout = layout
+    container:SetScript("OnShow", function() layout:RefreshAll() end)
+    return container
+end
+
+-- CONFIRMATIONS
+local function SetupConfirmationsContent(parent)
+    local container = CreateScrollableContent(parent)
+    local content = container.content
+    local layout = CreateContentLayout(content)
+
+    layout:AddSection(L.MODULE_AUTO_CONFIRM or "Auto Confirm")
+    local confirmToggle = layout:AddModule(L.MODULE_AUTO_CONFIRM or "Auto Confirm", "AutoConfirm",
+        "Auto-confirm ready checks, summons, and more.")
+    layout:AddSubCheckbox(L.CONFIRM_READY_CHECK or "Ready Check", "AutoConfirm_ReadyCheck", L.TIP_READY_CHECK,
+        confirmToggle)
+    layout:AddSubCheckbox(L.CONFIRM_SUMMON or "Summon", "AutoConfirm_Summon", L.TIP_SUMMON, confirmToggle)
+    layout:AddSubCheckbox(L.CONFIRM_ROLE_CHECK or "Role Check", "AutoConfirm_RoleCheck", L.TIP_ROLE_CHECK, confirmToggle)
+    layout:AddSubCheckbox(L.CONFIRM_RESURRECT or "Resurrect", "AutoConfirm_Resurrect", L.TIP_RESURRECT, confirmToggle)
+    layout:AddSubCheckbox(L.CONFIRM_BINDING or "Bind Confirmation", "AutoConfirm_Binding", L.TIP_BINDING, confirmToggle)
+    layout:AddSubCheckbox(L.CONFIRM_DELETE_GREY or "Delete Grey Items", "AutoConfirm_DeleteGrey", L.TIP_DELETE_GREY,
+        confirmToggle)
+
+    layout:AddDefaultsButton(container)
+    content:SetHeight(layout:Finalize())
+    container.layout = layout
+    container:SetScript("OnShow", function() layout:RefreshAll() end)
+    return container
+end
+
+-- TOOLTIPS
+local function SetupTooltipsContent(parent)
+    local container = CreateScrollableContent(parent)
+    local content = container.content
+    local layout = CreateContentLayout(content)
+
+    layout:AddSection(L.MODULE_TOOLTIP_PLUS or "Tooltip+")
+    local tooltipToggle = layout:AddModule("Enable Tooltip+", "TooltipPlus", "Enhanced tooltip features")
+
+    layout:AddSpacer(5)
+
+    -- Positioning
     layout:AddSection("Positioning")
-    
-    -- Anchor dropdown (left column)
-    local anchorFrame = CreateFrame("Frame", nil, content)
-    anchorFrame:SetHeight(32)
-    anchorFrame:SetPoint("TOPLEFT", COL_X.LEFT, layout.currentY)
-    anchorFrame:SetWidth(LAYOUT.COLUMN_WIDTH)
-    
-    local anchorLabel = anchorFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    anchorLabel:SetPoint("LEFT", 0, 0)
-    anchorLabel:SetText(L.TOOLTIP_ANCHOR)
-    
-    local anchorDropdown = CreateFrame("DropdownButton", nil, anchorFrame, "WowStyle1DropdownTemplate")
-    anchorDropdown:SetWidth(140)
-    anchorDropdown:SetPoint("LEFT", anchorLabel, "RIGHT", 10, 0)
-    
-    MenuUtil.CreateRadioMenu(anchorDropdown,
-        function(value) return addon.GetDBValue("TooltipPlus_Anchor") == value end,
-        function(value) addon.SetDBValue("TooltipPlus_Anchor", value, true) end,
-        { L.ANCHOR_DEFAULT, "DEFAULT" }, { L.ANCHOR_MOUSE, "MOUSE" },
-        { L.ANCHOR_TOPLEFT, "TOPLEFT" }, { L.ANCHOR_TOPRIGHT, "TOPRIGHT" },
-        { L.ANCHOR_BOTTOMLEFT, "BOTTOMLEFT" }, { L.ANCHOR_BOTTOMRIGHT, "BOTTOMRIGHT" }
-    )
-    
-    -- Mouse side dropdown (right column)
-    local sideFrame = CreateFrame("Frame", nil, content)
-    sideFrame:SetHeight(32)
-    sideFrame:SetPoint("TOPLEFT", COL_X.RIGHT, layout.currentY)
-    sideFrame:SetWidth(LAYOUT.COLUMN_WIDTH)
-    
-    local sideLabel = sideFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    sideLabel:SetPoint("LEFT", 0, 0)
-    sideLabel:SetText(L.TOOLTIP_MOUSE_SIDE)
-    
-    local sideDropdown = CreateFrame("DropdownButton", nil, sideFrame, "WowStyle1DropdownTemplate")
-    sideDropdown:SetWidth(100)
-    sideDropdown:SetPoint("LEFT", sideLabel, "RIGHT", 10, 0)
-    
-    MenuUtil.CreateRadioMenu(sideDropdown,
-        function(value) return addon.GetDBValue("TooltipPlus_MouseSide") == value end,
-        function(value) addon.SetDBValue("TooltipPlus_MouseSide", value, true) end,
-        { L.SIDE_RIGHT, "RIGHT" }, { L.SIDE_LEFT, "LEFT" }, { L.SIDE_TOP, "TOP" }
-    )
-    
-    layout.currentY = layout.currentY - 40
-    
-    -- APPEARANCE
+    layout:AddSubDropdown(L.TOOLTIP_ANCHOR or "Anchor Position", "TooltipPlus_Anchor", C.TOOLTIP_ANCHOR_OPTIONS, nil,
+        tooltipToggle)
+    layout:AddSubDropdown(L.TOOLTIP_MOUSE_SIDE or "Mouse Side", "TooltipPlus_MouseSide", C.MOUSE_SIDE_OPTIONS, nil,
+        tooltipToggle)
+
+    layout:AddSpacer(5)
+
+    -- Appearance
     layout:AddSection("Appearance")
-    layout:AddSubCheckboxLeft(L.TOOLTIP_CLASS_COLORS, "TooltipPlus_ClassColors", "Color the tooltip border based on class (players) or reaction (NPCs).", tooltipToggle)
-    layout:AddSubCheckboxLeft(L.TOOLTIP_RARITY_BORDER, "TooltipPlus_RarityBorder", "Color item tooltip borders based on item quality/rarity.", tooltipToggle)
-    layout:AddSubCheckboxLeft(L.TOOLTIP_SHOW_TRANSMOG, "TooltipPlus_ShowTransmog", "Show whether an item's appearance is collected in the tooltip.", tooltipToggle)
-    layout:NextRow()
-    
-    -- TRANSMOG OVERLAY
+    layout:AddSubCheckbox(L.TOOLTIP_CLASS_COLORS or "Class Color Border", "TooltipPlus_ClassColors",
+        "Color border based on class/reaction.", tooltipToggle)
+    layout:AddSubCheckbox(L.TOOLTIP_RARITY_BORDER or "Rarity Border", "TooltipPlus_RarityBorder",
+        "Color item borders by quality.", tooltipToggle)
+    layout:AddSubCheckbox(L.TOOLTIP_SHOW_TRANSMOG or "Show Transmog Status", "TooltipPlus_ShowTransmog",
+        "Show collection status on items.", tooltipToggle)
+
+    layout:AddSpacer(5)
+
+    -- Transmog Overlay
     layout:AddSection("Transmog Overlay")
-    layout:AddSubCheckboxLeft(L.TOOLTIP_TRANSMOG_OVERLAY, "TooltipPlus_TransmogOverlay", "Show collection status icons on item buttons in bags, vendors, and loot windows.", tooltipToggle)
-    layout:AddSubDropdownLeft(L.TOOLTIP_TRANSMOG_CORNER, "TooltipPlus_TransmogCorner", C.CORNER_OPTIONS, "Which corner to display the transmog collection icon.", tooltipToggle)
-    layout:NextRow()
-    
-    -- HIDE ELEMENTS
+    layout:AddSubCheckbox(L.TOOLTIP_TRANSMOG_OVERLAY or "Show Overlay Icons", "TooltipPlus_TransmogOverlay",
+        "Show icons on item buttons.", tooltipToggle)
+    layout:AddSubDropdown(L.TOOLTIP_TRANSMOG_CORNER or "Icon Corner", "TooltipPlus_TransmogCorner", C.CORNER_OPTIONS, nil,
+        tooltipToggle)
+
+    layout:AddSpacer(5)
+
+    -- Hide Elements
     layout:AddSection("Hide Elements")
-    layout:AddSubCheckboxLeft(L.TOOLTIP_HIDE_HEALTHBAR, "TooltipPlus_HideHealthbar", "Hide the health bar shown below unit tooltips.", tooltipToggle)
-    layout:AddSubCheckboxLeft(L.TOOLTIP_HIDE_GUILD, "TooltipPlus_HideGuild", "Hide the guild name line from player tooltips.", tooltipToggle)
-    layout:AddSubCheckboxLeft(L.TOOLTIP_HIDE_FACTION, "TooltipPlus_HideFaction", "Hide the faction (Alliance/Horde) line from unit tooltips.", tooltipToggle)
-    layout:AddSubCheckboxRight(L.TOOLTIP_HIDE_PVP, "TooltipPlus_HidePvP", "Hide the 'PvP' text from player tooltips.", tooltipToggle)
-    layout:AddSubCheckboxRight(L.TOOLTIP_HIDE_REALM, "TooltipPlus_HideRealm", "Hide the realm name from cross-realm player names.", tooltipToggle)
-    layout:NextRow()
-    
-    -- EXTRA INFO
+    layout:AddSubCheckbox(L.TOOLTIP_HIDE_HEALTHBAR or "Hide Health Bar", "TooltipPlus_HideHealthbar",
+        "Hide unit health bar.", tooltipToggle)
+    layout:AddSubCheckbox(L.TOOLTIP_HIDE_GUILD or "Hide Guild", "TooltipPlus_HideGuild", "Hide guild name.",
+        tooltipToggle)
+    layout:AddSubCheckbox(L.TOOLTIP_HIDE_FACTION or "Hide Faction", "TooltipPlus_HideFaction", "Hide faction text.",
+        tooltipToggle)
+    layout:AddSubCheckbox(L.TOOLTIP_HIDE_PVP or "Hide PvP", "TooltipPlus_HidePvP", "Hide PvP status.", tooltipToggle)
+    layout:AddSubCheckbox(L.TOOLTIP_HIDE_REALM or "Hide Realm", "TooltipPlus_HideRealm", "Hide cross-realm names.",
+        tooltipToggle)
+
+    layout:AddSpacer(5)
+
+    -- Extra Info
     layout:AddSection("Extra Info")
-    layout:AddSubCheckboxLeft(L.TOOLTIP_SHOW_ITEM_ID, "TooltipPlus_ShowItemID", "Display the item's database ID at the bottom of item tooltips.", tooltipToggle)
-    layout:AddSubCheckboxRight(L.TOOLTIP_SHOW_SPELL_ID, "TooltipPlus_ShowSpellID", "Display the spell's database ID at the bottom of spell tooltips.", tooltipToggle)
-    layout:NextRow()
-    
+    layout:AddSubCheckbox(L.TOOLTIP_SHOW_ITEM_ID or "Show Item ID", "TooltipPlus_ShowItemID", "Display item database ID.",
+        tooltipToggle)
+    layout:AddSubCheckbox(L.TOOLTIP_SHOW_SPELL_ID or "Show Spell ID", "TooltipPlus_ShowSpellID",
+        "Display spell database ID.", tooltipToggle)
+
+    layout:AddDefaultsButton(container)
     content:SetHeight(layout:Finalize())
     container.layout = layout
     container:SetScript("OnShow", function() layout:RefreshAll() end)
-    
     return container
 end
 
-----------------------------------------------
--- Tab 3: Chat
-----------------------------------------------
-local function SetupChatTab(parent)
-    local container = CreateTabContainer(parent)
+-- CHAT
+local function SetupChatContent(parent)
+    local container = CreateScrollableContent(parent)
     local content = container.content
-    
-    local layout = CreateTwoColumnLayout(content)
-    layout.currentY = -15
-    
-    layout:AddSection(L.MODULE_CHAT_PLUS or "Chat Plus")
-    local chatToggle = layout:AddModuleLeft("Enable Chat+", "ChatPlus", "Enhanced chat features")
-    layout:NextRow()
-    
+    local layout = CreateContentLayout(content)
+
+    layout:AddSection(L.MODULE_CHAT_PLUS or "Chat+")
+    local chatToggle = layout:AddModule("Enable Chat+", "ChatPlus", "Enhanced chat features")
+
+    layout:AddSpacer(5)
+
     layout:AddSection("Features")
-    
-    local wowheadCb = layout:AddSubCheckboxLeft(L.CHAT_WOWHEAD_LOOKUP or "Wowhead Lookup", "ChatPlus_WowheadLookup", nil, chatToggle)
-    
-    local wowheadHint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    wowheadHint:SetPoint("TOPLEFT", wowheadCb, "BOTTOMLEFT", LAYOUT.SUB_OPTION_INDENT, -2)
-    wowheadHint:SetText("Shift+Click on links to get Wowhead URL")
-    wowheadHint:SetTextColor(0.5, 0.5, 0.5)
-    wowheadHint:SetWidth(LAYOUT.COLUMN_WIDTH - LAYOUT.SUB_OPTION_INDENT)
-    wowheadHint:SetJustifyH("LEFT")
-    
-    layout:AddSubCheckboxLeft(L.CHAT_CLICKABLE_URLS or "Clickable URLs", "ChatPlus_ClickableURLs", nil, chatToggle)
-    layout:AddSubCheckboxLeft(L.CHAT_COPY_BUTTON or "Show Copy Button", "ChatPlus_CopyButton", nil, chatToggle)
-    layout:NextRow()
-    
-    content:SetHeight(math.max(layout:Finalize(), 300))
+    layout:AddSubCheckbox(L.CHAT_WOWHEAD_LOOKUP or "Wowhead Lookup", "ChatPlus_WowheadLookup",
+        "Shift+Click links to open Wowhead.", chatToggle)
+    layout:AddSubCheckbox(L.CHAT_CLICKABLE_URLS or "Clickable URLs", "ChatPlus_ClickableURLs",
+        "Make URLs in chat clickable.", chatToggle)
+    layout:AddSubCheckbox(L.CHAT_COPY_BUTTON or "Show Copy Button", "ChatPlus_CopyButton", "Show button to copy chat.",
+        chatToggle)
+
+    layout:AddDefaultsButton(container)
+    content:SetHeight(layout:Finalize())
     container.layout = layout
     container:SetScript("OnShow", function() layout:RefreshAll() end)
-    
+    return container
+end
+
+-- FRAMES (Combat Fade)
+local function SetupFramesContent(parent)
+    local container = CreateScrollableContent(parent)
+    local content = container.content
+    local layout = CreateContentLayout(content)
+
+    layout:AddSection(L.MODULE_COMBAT_FADE or "Combat Fade")
+    local fadeToggle = layout:AddModule(L.MODULE_COMBAT_FADE or "Combat Fade", "CombatFade", L.TIP_COMBAT_FADE)
+    layout:AddSubCheckbox(L.COMBAT_FADE_ACTION_BARS or "Fade Action Bars", "CombatFade_ActionBars",
+        L.TIP_COMBAT_FADE_ACTION_BARS, fadeToggle)
+    layout:AddSubSlider("Action Bar Opacity", "CombatFade_ActionBars_Opacity", 0, 100, 5,
+        L.TIP_COMBAT_FADE_ACTION_BARS_OPACITY, fadeToggle)
+    layout:AddSubCheckbox(L.COMBAT_FADE_PLAYER_FRAME or "Fade Player Frame", "CombatFade_PlayerFrame",
+        L.TIP_COMBAT_FADE_PLAYER_FRAME, fadeToggle)
+    layout:AddSubSlider("Player Frame Opacity", "CombatFade_PlayerFrame_Opacity", 0, 100, 5,
+        L.TIP_COMBAT_FADE_PLAYER_FRAME_OPACITY, fadeToggle)
+
+    layout:AddDefaultsButton(container)
+    content:SetHeight(layout:Finalize())
+    container.layout = layout
+    container:SetScript("OnShow", function() layout:RefreshAll() end)
+    return container
+end
+
+
+-- NAMEPLATES
+local function SetupNameplatesContent(parent)
+    local container = CreateScrollableContent(parent)
+    local content = container.content
+    local layout = CreateContentLayout(content)
+
+    layout:AddSection(L.MODULE_QUEST_NAMEPLATES or "Quest Nameplates")
+    local npToggle = layout:AddModule(L.MODULE_QUEST_NAMEPLATES or "Quest Nameplates", "QuestNameplates",
+        L.TIP_QUEST_NAMEPLATES)
+    layout:AddSubCheckbox(L.SHOW_KILL_ICON or "Show Kill Icon", "QuestNameplates_ShowKillIcon", nil, npToggle)
+    layout:AddSubCheckbox(L.SHOW_LOOT_ICON or "Show Loot Icon", "QuestNameplates_ShowLootIcon", nil, npToggle)
+
+    layout:AddDefaultsButton(container)
+    content:SetHeight(layout:Finalize())
+    container.layout = layout
+    container:SetScript("OnShow", function() layout:RefreshAll() end)
+    return container
+end
+
+-- CAMERA
+local function SetupCameraContent(parent)
+    local container = CreateScrollableContent(parent)
+    local content = container.content
+    local layout = CreateContentLayout(content)
+
+    layout:AddSection(L.MODULE_ACTIONCAM or "Action Camera")
+    local camToggle = layout:AddModule(L.MODULE_ACTIONCAM or "Action Camera", "ActionCam", L.TIP_ACTIONCAM)
+    layout:AddSubDropdown(L.ACTIONCAM_MODE or "Camera Mode", "ActionCam_Mode", C.ACTIONCAM_MODE_OPTIONS, nil, camToggle)
+
+    layout:AddDefaultsButton(container)
+    content:SetHeight(layout:Finalize())
+    container.layout = layout
+    container:SetScript("OnShow", function() layout:RefreshAll() end)
+    return container
+end
+
+-- SOCIAL (Auto Invite + Auto Release)
+local function SetupSocialContent(parent)
+    local container = CreateScrollableContent(parent)
+    local content = container.content
+    local layout = CreateContentLayout(content)
+
+    -- Auto Invite
+    layout:AddSection(L.MODULE_AUTO_INVITE or "Auto Accept Invite")
+    local inviteToggle = layout:AddModule(L.MODULE_AUTO_INVITE or "Auto Accept Invite", "AutoInvite",
+        "Accept invites from trusted sources.")
+    layout:AddSubCheckbox(L.INVITE_FRIENDS or "Friends", "AutoInvite_Friends", L.TIP_INVITE_FRIENDS, inviteToggle)
+    layout:AddSubCheckbox(L.INVITE_BNET or "Battle.net Friends", "AutoInvite_BNetFriends", L.TIP_INVITE_BNET,
+        inviteToggle)
+    layout:AddSubCheckbox(L.INVITE_GUILD or "Guild Members", "AutoInvite_Guild", L.TIP_INVITE_GUILD, inviteToggle)
+    layout:AddSubCheckbox(L.INVITE_GUILD_INVITES or "Guild Invites", "AutoInvite_GuildInvites", L.TIP_GUILD_INVITES,
+        inviteToggle)
+
+    layout:AddSpacer(10)
+
+    -- Auto Release
+    layout:AddSection(L.MODULE_AUTO_RELEASE or "Auto Release")
+    local releaseToggle = layout:AddModule(L.MODULE_AUTO_RELEASE or "Auto Release", "AutoRelease",
+        "Release spirit automatically when you die.")
+    layout:AddSubDropdown(L.RELEASE_MODE or "Release Mode", "AutoRelease_Mode", C.RELEASE_MODE_OPTIONS, nil,
+        releaseToggle)
+    layout:AddSubCheckbox(L.SHOW_NOTIFICATIONS or "Show Notifications", "AutoRelease_Notify", L.TIP_RELEASE_NOTIFY,
+        releaseToggle)
+
+    layout:AddDefaultsButton(container)
+    content:SetHeight(layout:Finalize())
+    container.layout = layout
+    container:SetScript("OnShow", function() layout:RefreshAll() end)
     return container
 end
 
 ----------------------------------------------
--- Tab Configuration
+-- Content Setup Map
 ----------------------------------------------
-local TabSetups = {
-    { name = L.SETTINGS_GENERAL, callback = SetupGeneralTab },
-    { name = L.SETTINGS_TOOLTIP, callback = SetupTooltipTab },
-    { name = L.SETTINGS_CHAT, callback = SetupChatTab },
+local CONTENT_SETUP = {
+    -- Gameplay
+    questing = SetupQuestingContent,
+    looting = SetupLootingContent,
+    camera = SetupCameraContent,
+    -- Automation
+    vendors = SetupVendorsContent,
+    confirmations = SetupConfirmationsContent,
+    social = SetupSocialContent,
+    -- Interface
+    tooltips = SetupTooltipsContent,
+    chat = SetupChatContent,
+    nameplates = SetupNameplatesContent,
+    frames = SetupFramesContent,
 }
 
 ----------------------------------------------
@@ -793,9 +897,10 @@ local function ResetToDefaults()
             RefactorDB[k] = v
             addon.SetDBValue(k, v, true)
         end
-        if frame and containers then
-            for _, c in ipairs(containers) do
-                if c.layout and c.layout.RefreshAll then c.layout:RefreshAll() end
+        -- Refresh all visible content
+        for _, panel in pairs(contentPanels) do
+            if panel.layout and panel.layout.RefreshAll then
+                panel.layout:RefreshAll()
             end
         end
         print("|cff00ff00Refactor:|r All settings reset to defaults.")
@@ -803,23 +908,136 @@ local function ResetToDefaults()
 end
 
 ----------------------------------------------
+-- Create Sidebar Category Header
+----------------------------------------------
+local function CreateCategoryHeader(parent, text, yOffset)
+    local header = CreateFrame("Frame", nil, parent)
+    header:SetHeight(LAYOUT.CATEGORY_HEIGHT)
+    header:SetPoint("TOPLEFT", 8, yOffset)
+    header:SetPoint("RIGHT", -8, 0)
+
+    -- Category label (gold text like Blizzard's)
+    local label = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    label:SetPoint("LEFT", 4, 0)
+    label:SetText(text)
+    label:SetTextColor(1, 0.82, 0) -- Gold color like WoW headers
+
+    -- Horizontal divider line using native atlas
+    local line = header:CreateTexture(nil, "ARTWORK")
+    line:SetAtlas("Options_HorizontalDivider", false)
+    line:SetHeight(1)
+    line:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    line:SetPoint("RIGHT", 0, 0)
+
+    return header, LAYOUT.CATEGORY_HEIGHT
+end
+
+----------------------------------------------
+-- Create Sidebar Subcategory Button
+-- Uses native Options_List_Active and Options_List_Hover atlases
+----------------------------------------------
+local function CreateSubcategoryButton(parent, text, key, yOffset, onClick)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetHeight(21) -- Match atlas height (Options_List_Active is 21px tall)
+    btn:SetPoint("TOPLEFT", LAYOUT.SUBCATEGORY_INDENT, yOffset)
+    btn:SetPoint("RIGHT", -4, 0)
+    btn.key = key
+
+    -- Hover highlight using native atlas (hidden by default)
+    local hover = btn:CreateTexture(nil, "BACKGROUND")
+    hover:SetAtlas("Options_List_Hover", false)
+    hover:SetAllPoints()
+    hover:Hide()
+    btn.hoverTex = hover
+
+    -- Selected/Active state using native atlas (hidden by default)
+    local active = btn:CreateTexture(nil, "BACKGROUND")
+    active:SetAtlas("Options_List_Active", false)
+    active:SetAllPoints()
+    active:Hide()
+    btn.activeTex = active
+
+    -- Label
+    local label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("LEFT", 8, 0)
+    label:SetText(text)
+    label:SetTextColor(0.9, 0.9, 0.9)
+    btn.label = label
+
+    -- Hover effect
+    btn:SetScript("OnEnter", function(self)
+        if selectedCategory ~= self.key then
+            self.hoverTex:Show()
+            self.label:SetTextColor(1, 1, 1)
+        end
+    end)
+
+    btn:SetScript("OnLeave", function(self)
+        if selectedCategory ~= self.key then
+            self.hoverTex:Hide()
+            self.label:SetTextColor(0.9, 0.9, 0.9)
+        end
+    end)
+
+    btn:SetScript("OnClick", function(self)
+        onClick(self.key)
+        PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+    end)
+
+    return btn, 21 + 2 -- Height + spacing
+end
+
+----------------------------------------------
+-- Select Category
+----------------------------------------------
+local function SelectCategory(key)
+    -- Deselect all buttons
+    for _, btn in ipairs(sidebarButtons) do
+        btn.hoverTex:Hide()
+        btn.activeTex:Hide()
+        btn.label:SetTextColor(0.9, 0.9, 0.9)
+    end
+
+    -- Hide all content panels
+    for _, panel in pairs(contentPanels) do
+        panel:Hide()
+    end
+
+    -- Find and select the button
+    for _, btn in ipairs(sidebarButtons) do
+        if btn.key == key then
+            btn.activeTex:Show()
+            btn.label:SetTextColor(1, 0.82, 0) -- Gold text
+            break
+        end
+    end
+
+    -- Show the content panel
+    if contentPanels[key] then
+        contentPanels[key]:Show()
+    end
+
+    selectedCategory = key
+end
+
+----------------------------------------------
 -- Create Main Frame
 ----------------------------------------------
 local function CreateSettingsFrame()
     if frame then return frame end
-    
+
     frame = CreateFrame("Frame", "RefactorSettingsDialog", UIParent, "SettingsFrameTemplate")
     frame:SetToplevel(true)
     frame:SetSize(LAYOUT.PANEL_WIDTH, LAYOUT.PANEL_HEIGHT)
     frame:SetPoint("CENTER", 0, 50)
     frame:SetFrameStrata("HIGH")
     frame:Raise()
-    
-    frame.NineSlice.Text:SetText(L.SETTINGS_TITLE)
-    
+
+    frame.NineSlice.Text:SetText(L.SETTINGS_TITLE or "Refactor Settings")
+
     frame:SetClampedToScreen(true)
     frame:SetClampRectInsets(5, 0, 0, 0)
-    
+
     -- Drag handle
     local dragHandle = CreateFrame("Frame", nil, frame)
     dragHandle:SetPoint("TOPLEFT", 4, 0)
@@ -827,50 +1045,107 @@ local function CreateSettingsFrame()
     dragHandle:RegisterForDrag("LeftButton")
     dragHandle:SetScript("OnEnter", function() SetCursor("Interface/CURSOR/UI-Cursor-Move.crosshair") end)
     dragHandle:SetScript("OnLeave", function() SetCursor(nil) end)
-    dragHandle:SetScript("OnDragStart", function() frame:SetMovable(true); frame:StartMoving() end)
+    dragHandle:SetScript("OnDragStart", function()
+        frame:SetMovable(true)
+        frame:StartMoving()
+    end)
     dragHandle:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
-    
+
     frame:EnableMouse(true)
     frame:SetMouseClickEnabled(true)
     frame:SetMouseMotionEnabled(true)
     frame:SetScript("OnMouseWheel", function() end)
-    
-    -- Inner content area
+
+    -- Unified inner frame (contains both sidebar and content - like Blizzard's Game Menu)
     local innerFrame = CreateFrame("Frame", nil, frame)
-    innerFrame:SetPoint("TOPLEFT", 10, -60)
+    innerFrame:SetPoint("TOPLEFT", 10, -35)
     innerFrame:SetPoint("BOTTOMRIGHT", -10, 45)
     innerFrame:SetClipsChildren(true)
-    
+
+    -- Shared background for entire inner frame (sidebar + content)
     local bgLeft = innerFrame:CreateTexture(nil, "BACKGROUND")
     bgLeft:SetAtlas("Options_InnerFrame")
     bgLeft:SetPoint("TOPLEFT", 0, 0)
     bgLeft:SetPoint("BOTTOMRIGHT", innerFrame, "BOTTOM", 0, 0)
     bgLeft:SetTexCoord(1, 0.64, 0, 1)
-    
+
     local bgRight = innerFrame:CreateTexture(nil, "BACKGROUND")
     bgRight:SetAtlas("Options_InnerFrame")
     bgRight:SetPoint("TOPRIGHT", 0, 0)
     bgRight:SetPoint("BOTTOMLEFT", innerFrame, "BOTTOM", 0, 0)
     bgRight:SetTexCoord(0.64, 1, 0, 1)
-    
+
     frame.InnerFrame = innerFrame
-    
+
+    -- Sidebar (left portion of inner frame)
+    local sidebar = CreateFrame("Frame", nil, innerFrame)
+    sidebar:SetWidth(LAYOUT.SIDEBAR_WIDTH)
+    sidebar:SetPoint("TOPLEFT", 0, 0)
+    sidebar:SetPoint("BOTTOMLEFT", 0, 0)
+
+    -- Subtle divider line between sidebar and content
+    local sidebarDivider = innerFrame:CreateTexture(nil, "ARTWORK")
+    sidebarDivider:SetWidth(1)
+    sidebarDivider:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 0, -5)
+    sidebarDivider:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMRIGHT", 0, 5)
+    sidebarDivider:SetColorTexture(0.35, 0.35, 0.35, 0.5)
+
+    frame.Sidebar = sidebar
+
+    -- Content area (right portion of inner frame)
+    local contentArea = CreateFrame("Frame", nil, innerFrame)
+    contentArea:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 10, 0)
+    contentArea:SetPoint("BOTTOMRIGHT", 0, 0)
+    contentArea:SetClipsChildren(true)
+
+    frame.ContentArea = contentArea
+
+    -- Build sidebar categories
+    local currentY = -10
+    for _, category in ipairs(CATEGORIES) do
+        -- Category header
+        local header, headerHeight = CreateCategoryHeader(sidebar, category.name, currentY)
+        currentY = currentY - headerHeight - 4
+
+        -- Subcategories
+        for _, sub in ipairs(category.subcategories) do
+            local btn, btnHeight = CreateSubcategoryButton(sidebar, sub.name, sub.key, currentY, SelectCategory)
+            table.insert(sidebarButtons, btn)
+            currentY = currentY - btnHeight - 2
+
+            -- Create content panel for this subcategory
+            if CONTENT_SETUP[sub.key] then
+                local panel = CONTENT_SETUP[sub.key](contentArea)
+                panel:SetPoint("TOPLEFT", 5, -5)
+                panel:SetPoint("BOTTOMRIGHT", -5, 5)
+                panel:Hide()
+                contentPanels[sub.key] = panel
+            end
+        end
+
+        currentY = currentY - 8 -- Space between categories
+    end
+
     -- Bottom buttons
-    local defaultsBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    defaultsBtn:SetSize(110, 24)
-    defaultsBtn:SetPoint("BOTTOMLEFT", 15, 12)
-    defaultsBtn:SetText(DEFAULTS or "Defaults")
-    defaultsBtn:SetScript("OnClick", function()
-        StaticPopupDialogs["REFACTOR_RESET_DEFAULTS"] = {
-            text = "Reset all Refactor settings to their default values?",
-            button1 = YES, button2 = NO,
+    local resetAllBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    resetAllBtn:SetSize(110, 24)
+    resetAllBtn:SetPoint("BOTTOMLEFT", 15, 12)
+    resetAllBtn:SetText("Reset All")
+    resetAllBtn:SetScript("OnClick", function()
+        StaticPopupDialogs["REFACTOR_RESET_ALL"] = {
+            text = "Reset ALL Refactor settings to their default values?\n\n|cffff8800This will affect every tab.|r",
+            button1 = YES,
+            button2 = NO,
             OnAccept = ResetToDefaults,
-            timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
         }
-        StaticPopup_Show("REFACTOR_RESET_DEFAULTS")
+        StaticPopup_Show("REFACTOR_RESET_ALL")
     end)
-    StyleButtonWithAtlas(defaultsBtn)
-    
+    StyleButtonWithAtlas(resetAllBtn)
+
     local cancelBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     cancelBtn:SetSize(110, 24)
     cancelBtn:SetPoint("BOTTOMRIGHT", -15, 12)
@@ -881,7 +1156,7 @@ local function CreateSettingsFrame()
         PlaySound(SOUNDKIT.IG_MAINMENU_CLOSE)
     end)
     StyleButtonWithAtlas(cancelBtn)
-    
+
     local okayBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     okayBtn:SetSize(110, 24)
     okayBtn:SetPoint("RIGHT", cancelBtn, "LEFT", -5, 0)
@@ -891,47 +1166,19 @@ local function CreateSettingsFrame()
         PlaySound(SOUNDKIT.IG_MAINMENU_CLOSE)
     end)
     StyleButtonWithAtlas(okayBtn)
-    
-    frame.DefaultsButton, frame.CancelButton, frame.OkayButton = defaultsBtn, cancelBtn, okayBtn
-    
+
+    frame.ResetAllButton, frame.CancelButton, frame.OkayButton = resetAllBtn, cancelBtn, okayBtn
+
     table.insert(UISpecialFrames, frame:GetName())
-    
-    -- Create tabs
-    local lastTab = nil
-    for i, setup in ipairs(TabSetups) do
-        local tabContainer = setup.callback(innerFrame)
-        tabContainer:SetPoint("TOPLEFT", 5, -5)
-        tabContainer:SetPoint("BOTTOMRIGHT", -5, 5)
-        tabContainer:Hide()
-        
-        local tabButton = Components.CreateTab(frame, setup.name)
-        if lastTab then
-            tabButton:SetPoint("LEFT", lastTab, "RIGHT", 4, 0)
-        else
-            tabButton:SetPoint("BOTTOMLEFT", innerFrame, "TOPLEFT", 5, 0)
-        end
-        lastTab = tabButton
-        tabContainer.button = tabButton
-        
-        tabButton:SetScript("OnClick", function()
-            for _, c in ipairs(containers) do
-                if c.button.Deselect then c.button:Deselect() end
-                c:Hide()
-            end
-            if tabButton.Select then tabButton:Select() end
-            tabContainer:Show()
-        end)
-        
-        table.insert(tabs, tabButton)
-        table.insert(containers, tabContainer)
+
+    -- Select first category by default
+    if CATEGORIES[1] and CATEGORIES[1].subcategories[1] then
+        SelectCategory(CATEGORIES[1].subcategories[1].key)
     end
-    
-    frame.Tabs = tabs
-    containers[1].button:Click()
-    
+
     frame:SetScript("OnShow", SaveSessionState)
     frame:Hide()
-    
+
     return frame
 end
 

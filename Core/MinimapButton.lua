@@ -40,59 +40,124 @@ MinimapButton.background:SetPoint("CENTER")
 ----------------------------------------------
 -- Position Management
 ----------------------------------------------
+
+-- Minimap shape definitions for proper positioning
+-- https://wowwiki-archive.fandom.com/wiki/USERAPI_GetMinimapShape
+local minimapShapes = {
+    ["ROUND"] = { true, true, true, true },
+    ["SQUARE"] = { false, false, false, false },
+    ["CORNER-TOPLEFT"] = { false, false, false, true },
+    ["CORNER-TOPRIGHT"] = { false, false, true, false },
+    ["CORNER-BOTTOMLEFT"] = { false, true, false, false },
+    ["CORNER-BOTTOMRIGHT"] = { true, false, false, false },
+    ["SIDE-LEFT"] = { false, true, false, true },
+    ["SIDE-RIGHT"] = { true, false, true, false },
+    ["SIDE-TOP"] = { false, false, true, true },
+    ["SIDE-BOTTOM"] = { true, true, false, false },
+    ["TRICORNER-TOPLEFT"] = { false, true, true, true },
+    ["TRICORNER-TOPRIGHT"] = { true, false, true, true },
+    ["TRICORNER-BOTTOMLEFT"] = { true, true, false, true },
+    ["TRICORNER-BOTTOMRIGHT"] = { true, true, true, false },
+}
+
+local function GetButtonPosition(angle, radius)
+    local rad = math.rad(angle)
+    local cos = math.cos(rad)
+    local sin = math.sin(rad)
+
+    -- Determine which quadrant we're in (1-4)
+    local q = 1
+    if cos < 0 then q = q + 1 end
+    if sin > 0 then q = q + 2 end
+
+    local width = (Minimap:GetWidth() / 2) + radius
+    local height = (Minimap:GetHeight() / 2) + radius
+
+    -- Check minimap shape and adjust positioning accordingly
+    local minimapShape = GetMinimapShape and GetMinimapShape() or "ROUND"
+    local shapeTable = minimapShapes[minimapShape] or minimapShapes["ROUND"]
+
+    local x, y
+    if shapeTable[q] then
+        -- Circular positioning for this quadrant
+        x = cos * width
+        y = sin * height
+    else
+        -- Square positioning - clamp to edges
+        local diagRadius = math.sqrt(2 * width ^ 2) - 10
+        x = math.max(-width, math.min(cos * diagRadius, width))
+        y = math.max(-height, math.min(sin * diagRadius, height))
+    end
+
+    return x, y
+end
+
 local function UpdatePosition()
     local angle = addon.GetDBValue("MinimapButtonAngle") or 220
-    local radius = 100
-
-    local x = math.cos(math.rad(angle)) * radius
-    local y = math.sin(math.rad(angle)) * radius
+    local x, y = GetButtonPosition(angle, 5)
 
     MinimapButton:ClearAllPoints()
     MinimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
-end
-
-local function SavePosition()
-    local mx, my = Minimap:GetCenter()
-    local bx, by = MinimapButton:GetCenter()
-    local angle = math.deg(math.atan(by - my, bx - mx))
-
-    addon.SetDBValue("MinimapButtonAngle", angle)
 end
 
 ----------------------------------------------
 -- Dragging
 ----------------------------------------------
 local isDragging = false
+local hasDragged = false
+
+local function OnUpdate(self)
+    local minimapScale = Minimap:GetEffectiveScale()
+    local minimapX, minimapY = Minimap:GetCenter()
+
+    local cursorX, cursorY = GetCursorPosition()
+    cursorX = cursorX / minimapScale
+    cursorY = cursorY / minimapScale
+
+    -- Calculate angle using atan2 and normalize to 0-360
+    local angle = math.deg(math.atan2(cursorY - minimapY, cursorX - minimapX)) % 360
+
+    -- Update button position
+    local x, y = GetButtonPosition(angle, 5)
+    self:ClearAllPoints()
+    self:SetPoint("CENTER", Minimap, "CENTER", x, y)
+
+    -- Store the angle for saving
+    self.currentAngle = angle
+    hasDragged = true
+end
 
 MinimapButton:SetScript("OnDragStart", function(self)
     isDragging = true
-    self:SetScript("OnUpdate", function()
-        local mx, my = Minimap:GetCenter()
-        local cx, cy = GetCursorPosition()
-        local scale = Minimap:GetEffectiveScale()
-        cx, cy = cx / scale, cy / scale
-
-        local angle = math.deg(math.atan(cy - my, cx - mx))
-        local radius = 100
-
-        local x = math.cos(math.rad(angle)) * radius
-        local y = math.sin(math.rad(angle)) * radius
-
-        self:ClearAllPoints()
-        self:SetPoint("CENTER", Minimap, "CENTER", x, y)
-    end)
+    hasDragged = false
+    self:LockHighlight()
+    self:SetScript("OnUpdate", OnUpdate)
 end)
 
 MinimapButton:SetScript("OnDragStop", function(self)
-    isDragging = false
+    self:UnlockHighlight()
     self:SetScript("OnUpdate", nil)
-    SavePosition()
+
+    if hasDragged and self.currentAngle then
+        addon.SetDBValue("MinimapButtonAngle", self.currentAngle)
+    end
+
+    isDragging = false
+    -- Delay resetting hasDragged so OnClick can check it
+    C_Timer.After(0.01, function()
+        hasDragged = false
+    end)
 end)
 
 ----------------------------------------------
 -- Click Handlers
 ----------------------------------------------
 MinimapButton:SetScript("OnClick", function(self, button)
+    -- Ignore clicks if we just finished dragging
+    if hasDragged then
+        return
+    end
+
     if button == "LeftButton" then
         -- Open settings
         if addon.SettingsPanel then

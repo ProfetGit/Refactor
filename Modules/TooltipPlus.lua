@@ -657,41 +657,22 @@ else
 end
 
 ----------------------------------------------
--- Tooltip Transmog Overlay (always on top)
+-- Tooltip Transmog Icon (positioned next to text line)
 ----------------------------------------------
-local tooltipTransmogOverlayFrame
+local tooltipTransmogIcon
 
-local function GetTooltipTransmogElements()
-    if not tooltipTransmogOverlayFrame then
-        -- Create a dedicated overlay frame at TOOLTIP strata
-        tooltipTransmogOverlayFrame = CreateFrame("Frame", nil, GameTooltip)
-        tooltipTransmogOverlayFrame:SetFrameStrata("TOOLTIP")
-        tooltipTransmogOverlayFrame:SetFrameLevel(GameTooltip:GetFrameLevel() + 100)
-        tooltipTransmogOverlayFrame:SetSize(150, 30)
-
-        -- Create icon as child of overlay
-        tooltipTransmogOverlayFrame.icon = tooltipTransmogOverlayFrame:CreateTexture(nil, "OVERLAY", nil, 7)
-        tooltipTransmogOverlayFrame.icon:SetSize(24, 24)
-
-        -- Create text as child of overlay
-        tooltipTransmogOverlayFrame.text = tooltipTransmogOverlayFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local function GetTooltipTransmogIcon()
+    if not tooltipTransmogIcon then
+        tooltipTransmogIcon = GameTooltip:CreateTexture(nil, "OVERLAY", nil, 7)
+        tooltipTransmogIcon:SetSize(14, 14)
     end
-    return tooltipTransmogOverlayFrame.icon, tooltipTransmogOverlayFrame.text
+    return tooltipTransmogIcon
 end
 
 local function HideTooltipTransmogIcon()
-    if tooltipTransmogOverlayFrame then
-        tooltipTransmogOverlayFrame:Hide()
-        tooltipTransmogOverlayFrame:ClearAllPoints()
-    end
-end
-
-local function ShowTooltipTransmogOverlay(tooltip)
-    if tooltipTransmogOverlayFrame then
-        tooltipTransmogOverlayFrame:ClearAllPoints()
-        tooltipTransmogOverlayFrame:SetPoint("BOTTOMRIGHT", tooltip, "BOTTOMRIGHT", 0, 0)
-        tooltipTransmogOverlayFrame:SetFrameLevel(tooltip:GetFrameLevel() + 100)
-        tooltipTransmogOverlayFrame:Show()
+    if tooltipTransmogIcon then
+        tooltipTransmogIcon:Hide()
+        tooltipTransmogIcon:ClearAllPoints()
     end
 end
 
@@ -713,10 +694,7 @@ local function OnTooltipSetItem(tooltip)
     if not isEnabled or not tooltip.GetItem then return end
 
     local _, link = tooltip:GetItem()
-    if not link then
-        HideTooltipTransmogIcon()
-        return
-    end
+    if not link then return end
 
     -- Rarity border (use cached setting)
     if cachedRarityBorder then
@@ -752,32 +730,42 @@ local function OnTooltipSetItem(tooltip)
         end
     end
 
-    -- Transmog status (use cached setting) - displayed in bottom-right corner overlay
+    -- Transmog status (use cached setting) - displayed as its own line at the bottom
     if cachedShowTransmog and CanItemBeTransmogged(link) then
         local isCollected = IsTransmogCollected(link)
         if isCollected ~= nil then
-            local icon, text = GetTooltipTransmogElements()
-
-            -- Position text in bottom-right of overlay frame
-            text:ClearAllPoints()
-            text:SetPoint("BOTTOMRIGHT", tooltipTransmogOverlayFrame, "BOTTOMRIGHT", -8, 8)
-
-            -- Position icon to the left of text
-            icon:ClearAllPoints()
-            icon:SetPoint("RIGHT", text, "LEFT", -2, 0)
+            local r, g, b
+            local statusText
 
             if isCollected then
-                text:SetText("Collected")
-                text:SetTextColor(unpack(TRANSMOG_COLLECTED_COLOR))
+                r, g, b = unpack(TRANSMOG_COLLECTED_COLOR)
+                statusText = "Collected"
             else
-                text:SetText("Not Collected")
-                text:SetTextColor(1, 0.4, 0.4)
+                r, g, b = 1, 0.4, 0.4 -- Red-ish for not collected
+                statusText = "Not Collected"
             end
 
+            -- Add spacing and the status text line (right-aligned)
+            tooltip:AddLine(" ") -- Spacing line
+            tooltip:AddDoubleLine(" ", statusText, 1, 1, 1, r, g, b)
+            tooltip:Show()       -- Force tooltip to recalculate size
+
+            -- Position the icon next to the text on the last line
+            local icon = GetTooltipTransmogIcon()
             ApplyTransmogIconStyle(icon, isCollected)
-            icon:Show()
-            text:Show()
-            ShowTooltipTransmogOverlay(tooltip)
+
+            -- Find the last right-side text line and position icon to the left of the actual text
+            local tooltipName = tooltip:GetName()
+            local lastRightLine = _G[tooltipName .. "TextRight" .. tooltip:NumLines()]
+
+            if lastRightLine and lastRightLine:GetText() then
+                -- Get the text width to position icon immediately to its left
+                local textWidth = lastRightLine:GetStringWidth()
+                icon:ClearAllPoints()
+                -- Anchor to RIGHT of the text line, offset by text width + small gap + icon width
+                icon:SetPoint("RIGHT", lastRightLine, "RIGHT", -(textWidth + 4), 0)
+                icon:Show()
+            end
         else
             HideTooltipTransmogIcon()
         end
