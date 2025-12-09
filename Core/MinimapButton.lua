@@ -43,10 +43,10 @@ MinimapButton.background:SetPoint("CENTER")
 local function UpdatePosition()
     local angle = addon.GetDBValue("MinimapButtonAngle") or 220
     local radius = 100
-    
+
     local x = math.cos(math.rad(angle)) * radius
     local y = math.sin(math.rad(angle)) * radius
-    
+
     MinimapButton:ClearAllPoints()
     MinimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
 end
@@ -54,8 +54,8 @@ end
 local function SavePosition()
     local mx, my = Minimap:GetCenter()
     local bx, by = MinimapButton:GetCenter()
-    local angle = math.deg(math.atan2(by - my, bx - mx))
-    
+    local angle = math.deg(math.atan(by - my, bx - mx))
+
     addon.SetDBValue("MinimapButtonAngle", angle)
 end
 
@@ -71,13 +71,13 @@ MinimapButton:SetScript("OnDragStart", function(self)
         local cx, cy = GetCursorPosition()
         local scale = Minimap:GetEffectiveScale()
         cx, cy = cx / scale, cy / scale
-        
-        local angle = math.deg(math.atan2(cy - my, cx - mx))
+
+        local angle = math.deg(math.atan(cy - my, cx - mx))
         local radius = 100
-        
+
         local x = math.cos(math.rad(angle)) * radius
         local y = math.sin(math.rad(angle)) * radius
-        
+
         self:ClearAllPoints()
         self:SetPoint("CENTER", Minimap, "CENTER", x, y)
     end)
@@ -153,7 +153,7 @@ end
 addon.CallbackRegistry:Register("AddonLoaded", function()
     -- Set initial position
     UpdatePosition()
-    
+
     -- Check if hidden
     if addon.GetDBBool("MinimapButtonHidden") then
         MinimapButton:Hide()

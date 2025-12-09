@@ -21,9 +21,9 @@ function CallbackRegistry:Register(event, func, owner)
     if not self.events[event] then
         self.events[event] = {}
     end
-    
+
     local callbackType = type(func) == "string" and 2 or 1
-    table.insert(self.events[event], {callbackType, func, owner})
+    table.insert(self.events[event], { callbackType, func, owner })
 end
 
 function CallbackRegistry:Trigger(event, ...)
@@ -44,7 +44,7 @@ end
 
 function CallbackRegistry:Unregister(event, func, owner)
     if not self.events[event] then return end
-    
+
     local callbacks = self.events[event]
     for i = #callbacks, 1, -1 do
         local cb = callbacks[i]
@@ -90,113 +90,175 @@ end
 ----------------------------------------------
 -- Default Settings
 ----------------------------------------------
+-- DESIGN PHILOSOPHY:
+-- ✅ ON by default: Pure QoL features with no risk (auto repair, fast loot, tooltips)
+-- ❌ OFF by default: Features that significantly change gameplay (auto quest, cinematics)
+--                   OR have potential for regret (binding confirmation, sell transmog)
+--
+-- Sub-options: When a module is enabled, its sub-options should reflect what
+--              users most commonly want from that feature.
+----------------------------------------------
+
 local DefaultValues = {
-    -- Auto-Sell Junk (Smart Vendor)
+    ----------------------------------------------
+    -- AUTO-SELL JUNK
+    -- ON: Everyone hates grey items cluttering bags
+    ----------------------------------------------
     AutoSellJunk = true,
-    AutoSellJunk_ShowNotify = true,
-    AutoSellJunk_SellLowILvl = false, -- OFF by default - risky feature
-    AutoSellJunk_MaxILvl = 400, -- Only sell items BELOW this iLvl (safe default: old expansion gear)
-    AutoSellJunk_SellKnownTransmog = false,
-    AutoSellJunk_KeepTransmog = true,
-    
-    -- Auto-Repair
+    AutoSellJunk_ShowNotify = true,         -- ON: Transparency - show what was sold
+    AutoSellJunk_SellKnownTransmog = false, -- OFF: Risky - might regret selling
+    AutoSellJunk_KeepTransmog = true,       -- ON: Protect uncollected appearances
+    AutoSellJunk_SellLowILvl = false,       -- OFF: Risky - could sell sentimental gear
+    AutoSellJunk_MaxILvl = 400,             -- Safe threshold (old expansion gear)
+
+    ----------------------------------------------
+    -- AUTO-REPAIR
+    -- ON: Universal QoL, nobody wants broken gear
+    ----------------------------------------------
     AutoRepair = true,
-    AutoRepair_UseGuild = true,
-    AutoRepair_ShowNotify = true,
-    
-    -- Auto-Quest
-    AutoQuest = false, -- Disabled by default - affects gameplay
-    AutoQuest_Accept = true,
-    AutoQuest_TurnIn = true,
-    AutoQuest_SkipGossip = true,
-    AutoQuest_SingleOption = true, -- Auto-select when NPC has only 1 dialogue option
-    AutoQuest_ContinueDialogue = true, -- Auto-click "Continue" type dialogue options
-    AutoQuest_DailyOnly = false,
-    AutoQuest_ModifierKey = "SHIFT", -- SHIFT, CTRL, ALT, NONE
-    
-    -- Fast Loot
-    FastLoot = true, -- Enabled by default - pure QoL
-    
-    -- Skip Cinematics
-    SkipCinematics = false, -- Disabled by default - first-time experience
-    SkipCinematics_AlwaysSkip = false,
+    AutoRepair_UseGuild = true,   -- ON: Expected behavior, saves gold
+    AutoRepair_ShowNotify = true, -- ON: Transparency
+
+    ----------------------------------------------
+    -- AUTO-QUEST
+    -- OFF: Significantly changes how you interact with NPCs
+    --      Let players opt-in to this automation
+    ----------------------------------------------
+    AutoQuest = false,
+    AutoQuest_Accept = true,           -- ON: If enabled, they want full automation
+    AutoQuest_TurnIn = true,           -- ON: Core functionality
+    AutoQuest_SkipGossip = true,       -- ON: Skip "I have a quest" dialogue
+    AutoQuest_SingleOption = true,     -- ON: Auto-select lone dialogue option
+    AutoQuest_ContinueDialogue = true, -- ON: Auto-click "Continue" options
+    AutoQuest_DailyOnly = false,       -- OFF: Too restrictive
+    AutoQuest_ModifierKey = "SHIFT",   -- Standard modifier for overrides
+
+    ----------------------------------------------
+    -- SKIP CINEMATICS
+    -- OFF: Preserve first-time story experience
+    --      Cinematics are content, not annoyance
+    ----------------------------------------------
+    SkipCinematics = false,
+    SkipCinematics_AlwaysSkip = false, -- OFF: Even more important
     SkipCinematics_ModifierKey = "SHIFT",
-    
-    -- Auto-Confirm Dialogs
+
+    ----------------------------------------------
+    -- FAST LOOT
+    -- ON: Pure QoL, zero downside, everyone wants faster looting
+    ----------------------------------------------
+    FastLoot = true,
+
+    ----------------------------------------------
+    -- AUTO-CONFIRM DIALOGS
+    -- ON: Ready checks, summons, etc. are just confirmation clicks
+    ----------------------------------------------
     AutoConfirm = true,
-    AutoConfirm_ReadyCheck = true,
-    AutoConfirm_Summon = true,
-    AutoConfirm_RoleCheck = true,
-    AutoConfirm_Resurrect = true,
-    AutoConfirm_Binding = false, -- Off by default - risky
-    AutoConfirm_DeleteGrey = true,
-    
-    -- Auto-Invite Accept
-    AutoInvite = false, -- Off by default - opt-in
-    AutoInvite_Friends = true,
-    AutoInvite_BNetFriends = true,
-    AutoInvite_Guild = true,
-    AutoInvite_GuildInvites = false,
-    
-    -- Auto-Release Spirit
-    AutoRelease = false, -- Off by default - opt-in
-    AutoRelease_Mode = "PVP", -- ALWAYS, PVP, PVE, OPENWORLD
+    AutoConfirm_ReadyCheck = true, -- ON: No one enjoys clicking this
+    AutoConfirm_Summon = true,     -- ON: Safe, expected
+    AutoConfirm_RoleCheck = true,  -- ON: Standard convenience
+    AutoConfirm_Resurrect = true,  -- ON: Always want to accept rez
+    AutoConfirm_Binding = false,   -- OFF: Risky - accidental BoP hurts
+    AutoConfirm_DeleteGrey = true, -- ON: It's grey, safe to confirm
+
+    ----------------------------------------------
+    -- AUTO-INVITE ACCEPT
+    -- OFF: Social preference, opt-in only
+    ----------------------------------------------
+    AutoInvite = false,
+    AutoInvite_Friends = true,       -- ON: If enabled, trusted sources
+    AutoInvite_BNetFriends = true,   -- ON: If enabled, trusted sources
+    AutoInvite_Guild = true,         -- ON: If enabled, trusted sources
+    AutoInvite_GuildInvites = false, -- OFF: Random guild spam, keep manual
+
+    ----------------------------------------------
+    -- AUTO-RELEASE SPIRIT
+    -- OFF: Some players hate auto-release
+    --      Must be explicit opt-in
+    ----------------------------------------------
+    AutoRelease = false,
+    AutoRelease_Mode = "PVP",  -- Safest mode (only in battlegrounds/arenas)
     AutoRelease_Delay = 0.5,
-    AutoRelease_Notify = true,
-    
-    -- Tooltip Plus
-    TooltipPlus = true, -- Enabled by default
-    TooltipPlus_Anchor = "DEFAULT", -- DEFAULT, MOUSE, TOPLEFT, TOPRIGHT, BOTTOMLEFT, BOTTOMRIGHT
-    TooltipPlus_MouseSide = "RIGHT", -- RIGHT, LEFT, TOP, BOTTOM
+    AutoRelease_Notify = true, -- ON: Always notify on auto-actions
+
+    ----------------------------------------------
+    -- TOOLTIP PLUS
+    -- ON: Core feature that shows addon value immediately
+    ----------------------------------------------
+    TooltipPlus = true,
+    TooltipPlus_Anchor = "DEFAULT", -- DEFAULT: Don't surprise users
+    TooltipPlus_MouseSide = "RIGHT",
     TooltipPlus_MouseOffset = 20,
     TooltipPlus_Scale = 100,
+    TooltipPlus_ClassColors = true,     -- ON: Visually nice, expected
+    TooltipPlus_RarityBorder = true,    -- ON: Visually nice, expected
+    TooltipPlus_ShowTransmog = true,    -- ON: Key useful feature
+    TooltipPlus_TransmogOverlay = true, -- ON: Visual QoL for transmog hunters
+    TooltipPlus_TransmogCorner = "TOPRIGHT",
+    -- Hide options - OFF: Don't remove info by default
     TooltipPlus_HideHealthbar = false,
     TooltipPlus_HideGuild = false,
     TooltipPlus_HideFaction = false,
     TooltipPlus_HidePvP = false,
     TooltipPlus_HideRealm = false,
-    TooltipPlus_ClassColors = true,
-    TooltipPlus_RarityBorder = true, -- Color border by item rarity
-    TooltipPlus_Compact = false,
+    -- Developer/Advanced options - OFF
     TooltipPlus_ShowItemID = false,
     TooltipPlus_ShowSpellID = false,
-    TooltipPlus_ShowTransmog = true, -- Show transmog collection status in tooltip
-    TooltipPlus_TransmogOverlay = true, -- Show transmog icon on item buttons
-    TooltipPlus_TransmogCorner = "TOPRIGHT", -- TOPLEFT, TOPRIGHT, BOTTOMLEFT, BOTTOMRIGHT
-    
-    -- Quest Nameplates
-    QuestNameplates = true, -- Enabled by default
-    QuestNameplates_ShowKillIcon = true, -- Sword icon for kill objectives
-    QuestNameplates_ShowLootIcon = true, -- Sparkle for loot/interact
-    
-    -- Loot Toast
-    LootToast = true, -- Enabled by default
-    LootToast_Duration = 4, -- seconds
-    LootToast_MaxVisible = 6,
-    LootToast_ShowCurrency = true,
-    LootToast_ShowQuantity = true,
-    
-    -- Minimap Button
-    MinimapButtonAngle = 220,
-    MinimapButtonHidden = false,
+    TooltipPlus_Compact = false,
 
-    -- ActionCam
-    ActionCam = false, -- Disabled by default
-    ActionCam_Mode = "basic",
-    
-    -- Chat Plus
+    ----------------------------------------------
+    -- QUEST NAMEPLATES
+    -- ON: Visual QoL showing quest progress on mobs
+    ----------------------------------------------
+    QuestNameplates = true,
+    QuestNameplates_ShowKillIcon = true, -- ON: Core visual feature
+    QuestNameplates_ShowLootIcon = true, -- ON: Core visual feature
+
+    ----------------------------------------------
+    -- LOOT TOAST
+    -- ON: Nice visual loot notifications
+    ----------------------------------------------
+    LootToast = true,
+    LootToast_Duration = 4,        -- Balanced duration
+    LootToast_MaxVisible = 6,      -- Reasonable amount
+    LootToast_ShowCurrency = true, -- ON: Users want to see gains
+    LootToast_ShowQuantity = true, -- ON: Context is good
+
+    ----------------------------------------------
+    -- CHAT PLUS
+    -- ON: Useful chat enhancements
+    ----------------------------------------------
     ChatPlus = true,
-    ChatPlus_ClickableURLs = true,
-    ChatPlus_CopyButton = true,
-    ChatPlus_WowheadLookup = true, -- Shift+Click links for Wowhead
+    ChatPlus_ClickableURLs = true, -- ON: Everyone wants this
+    ChatPlus_CopyButton = true,    -- ON: Useful feature
+    ChatPlus_WowheadLookup = true, -- ON: Shift+Click is non-intrusive
 
-    -- Combat Fade (Hide UI out of combat)
-    CombatFade = false, -- Disabled by default (master toggle)
-    CombatFade_ActionBars = true, -- Hide action bars
-    CombatFade_ActionBars_Opacity = 0, -- 0-100
-    CombatFade_PlayerFrame = false, -- Hide player frame
-    CombatFade_PlayerFrame_Opacity = 0, -- 0-100
+    ----------------------------------------------
+    -- ACTION CAM
+    -- OFF: Significantly changes core camera feel
+    --      Must be explicit opt-in
+    ----------------------------------------------
+    ActionCam = false,
+    ActionCam_Mode = "basic",
+
+    ----------------------------------------------
+    -- COMBAT FADE
+    -- OFF: Major UI change, must be opt-in
+    ----------------------------------------------
+    CombatFade = false,
+    CombatFade_ActionBars = true,   -- ON: If enabled, this is what they want
+    CombatFade_ActionBars_Opacity = 0,
+    CombatFade_PlayerFrame = false, -- OFF: More aggressive, separate opt-in
+    CombatFade_PlayerFrame_Opacity = 0,
+
+    ----------------------------------------------
+    -- MINIMAP BUTTON
+    ----------------------------------------------
+    MinimapButtonAngle = 220,
+    MinimapButtonHidden = false, -- OFF: Show button for settings access
 }
+
+-- Expose for Reset to Defaults functionality
+addon.DEFAULT_SETTINGS = DefaultValues
 
 local DefaultCharValues = {
     -- Track seen cinematics per character
@@ -210,17 +272,17 @@ local DefaultCharValues = {
 local function LoadDatabase()
     RefactorDB = RefactorDB or {}
     RefactorCharDB = RefactorCharDB or {}
-    
+
     DB = RefactorDB
     DB_PC = RefactorCharDB
-    
+
     -- Apply defaults
     for key, value in pairs(DefaultValues) do
         if DB[key] == nil then
             DB[key] = value
         end
     end
-    
+
     for key, value in pairs(DefaultCharValues) do
         if DB_PC[key] == nil then
             if type(value) == "table" then
@@ -230,12 +292,12 @@ local function LoadDatabase()
             end
         end
     end
-    
+
     -- Trigger initial setting events
     for key, value in pairs(DB) do
         CallbackRegistry:Trigger("SettingChanged." .. key, value, false)
     end
-    
+
     CallbackRegistry:Trigger("DatabaseLoaded", DB, DB_PC)
 end
 
@@ -261,7 +323,7 @@ function addon.FormatMoney(copper)
     local gold = math.floor(copper / 10000)
     local silver = math.floor((copper % 10000) / 100)
     local copperLeft = copper % 100
-    
+
     local str = ""
     if gold > 0 then
         str = str .. "|cffffd700" .. gold .. "g|r "
@@ -270,7 +332,7 @@ function addon.FormatMoney(copper)
         str = str .. "|cffc7c7cf" .. silver .. "s|r "
     end
     str = str .. "|cffeda55f" .. copperLeft .. "c|r"
-    
+
     return str
 end
 
