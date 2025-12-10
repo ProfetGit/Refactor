@@ -316,6 +316,95 @@ local function IsTransmogCollected(itemLink)
 end
 
 ----------------------------------------------
+-- Ensemble Detection & Collection Status
+-- Uses the proper WoW API: C_Item.GetItemLearnTransmogSet
+----------------------------------------------
+
+-- Cache for ensemble status to avoid repeated API calls
+local ensembleStatusCache = {}
+local CACHE_DURATION = 30 -- seconds (increased for performance)
+
+-- Check if an item is an Ensemble using the proper API
+local function IsEnsembleItem(itemLink)
+    if not itemLink then return false end
+    if not C_Item or not C_Item.GetItemLearnTransmogSet then return false end
+
+    local itemID = GetItemInfoInstant(itemLink)
+    if not itemID then return false end
+
+    local setID = C_Item.GetItemLearnTransmogSet(itemID)
+    return setID ~= nil
+end
+
+-- Get the collection status of an ensemble using the proper API
+-- Returns: { collected = number, total = number, isFullyCollected = bool } or nil
+local function GetEnsembleCollectionStatus(itemLink)
+    if not itemLink then return nil end
+
+    local itemID = GetItemInfoInstant(itemLink)
+    if not itemID then return nil end
+
+    -- Check cache first
+    local cached = ensembleStatusCache[itemID]
+    if cached and (GetTime() - cached.time) < CACHE_DURATION then
+        return cached.status
+    end
+
+    -- Check if it's an ensemble
+    if not C_Item or not C_Item.GetItemLearnTransmogSet then return nil end
+
+    local setID = C_Item.GetItemLearnTransmogSet(itemID)
+    if not setID then return nil end
+
+    -- Get all appearances in the set
+    if not C_Transmog or not C_Transmog.GetAllSetAppearancesByID then return nil end
+
+    local setSources = C_Transmog.GetAllSetAppearancesByID(setID)
+    if not setSources or #setSources == 0 then
+        -- Ensemble exists but no sources found (possibly broken vendor data)
+        local status = {
+            collected = 0,
+            total = 0,
+            isFullyCollected = false,
+            isUnknown = true
+        }
+        ensembleStatusCache[itemID] = { status = status, time = GetTime() }
+        return status
+    end
+
+    -- Count collected appearances
+    local collectedCount = 0
+    local totalCount = #setSources
+
+    if C_TransmogCollection and C_TransmogCollection.PlayerHasTransmogItemModifiedAppearance then
+        for _, source in ipairs(setSources) do
+            local sourceID = source.itemModifiedAppearanceID
+            if sourceID and C_TransmogCollection.PlayerHasTransmogItemModifiedAppearance(sourceID) then
+                collectedCount = collectedCount + 1
+            end
+        end
+    end
+
+    local status = {
+        collected = collectedCount,
+        total = totalCount,
+        isFullyCollected = collectedCount >= totalCount
+    }
+
+    -- Cache the result
+    ensembleStatusCache[itemID] = { status = status, time = GetTime() }
+
+    return status
+end
+
+-- Get collection status for overlay purposes (returns: true = collected, false = not collected, nil = N/A)
+local function GetEnsembleOverlayStatus(itemLink)
+    local status = GetEnsembleCollectionStatus(itemLink)
+    if not status then return nil end
+    return status.isFullyCollected
+end
+
+----------------------------------------------
 -- Overlay System
 ----------------------------------------------
 
@@ -401,9 +490,16 @@ local function UpdateButtonOverlay(button, itemLink)
     end
 
     if not cachedTransmogOverlay or not itemLink then return end
-    if not CanItemBeTransmogged(itemLink) then return end
 
-    local isCollected = IsTransmogCollected(itemLink)
+    -- Check for regular transmog items first
+    local isCollected = nil
+    if CanItemBeTransmogged(itemLink) then
+        isCollected = IsTransmogCollected(itemLink)
+    else
+        -- Check for Ensemble items
+        isCollected = GetEnsembleOverlayStatus(itemLink)
+    end
+
     if isCollected == nil then return end
 
     local overlay = GetOverlayFrame(button)
@@ -595,11 +691,19 @@ local function RegisterBaganatorWidget()
                 widget:Hide()
                 return false
             end
-            if not details.itemLink or not CanItemBeTransmogged(details.itemLink) then
+            if not details.itemLink then
                 widget:Hide()
                 return false
             end
-            local collected = IsTransmogCollected(details.itemLink)
+
+            -- Check for regular transmog items first, then Ensemble items
+            local collected = nil
+            if CanItemBeTransmogged(details.itemLink) then
+                collected = IsTransmogCollected(details.itemLink)
+            else
+                collected = GetEnsembleOverlayStatus(details.itemLink)
+            end
+
             if collected == nil then
                 widget:Hide()
                 return false
@@ -659,20 +763,22 @@ end
 ----------------------------------------------
 -- Tooltip Transmog Icon (positioned next to text line)
 ----------------------------------------------
-local tooltipTransmogIcon
+local tooltipTransmogIcons = {} -- Cache icons per tooltip
 
-local function GetTooltipTransmogIcon()
-    if not tooltipTransmogIcon then
-        tooltipTransmogIcon = GameTooltip:CreateTexture(nil, "OVERLAY", nil, 7)
-        tooltipTransmogIcon:SetSize(14, 14)
+local function GetTooltipTransmogIcon(tooltip)
+    local tooltipName = tooltip:GetName()
+    if not tooltipTransmogIcons[tooltipName] then
+        tooltipTransmogIcons[tooltipName] = tooltip:CreateTexture(nil, "OVERLAY", nil, 7)
+        tooltipTransmogIcons[tooltipName]:SetSize(14, 14)
     end
-    return tooltipTransmogIcon
+    return tooltipTransmogIcons[tooltipName]
 end
 
-local function HideTooltipTransmogIcon()
-    if tooltipTransmogIcon then
-        tooltipTransmogIcon:Hide()
-        tooltipTransmogIcon:ClearAllPoints()
+local function HideTooltipTransmogIcon(tooltip)
+    local tooltipName = tooltip and tooltip:GetName()
+    if tooltipName and tooltipTransmogIcons[tooltipName] then
+        tooltipTransmogIcons[tooltipName]:Hide()
+        tooltipTransmogIcons[tooltipName]:ClearAllPoints()
     end
 end
 
@@ -731,6 +837,7 @@ local function OnTooltipSetItem(tooltip)
     end
 
     -- Transmog status (use cached setting) - displayed as its own line at the bottom
+    -- Check for regular transmog items
     if cachedShowTransmog and CanItemBeTransmogged(link) then
         local isCollected = IsTransmogCollected(link)
         if isCollected ~= nil then
@@ -751,7 +858,7 @@ local function OnTooltipSetItem(tooltip)
             tooltip:Show()       -- Force tooltip to recalculate size
 
             -- Position the icon next to the text on the last line
-            local icon = GetTooltipTransmogIcon()
+            local icon = GetTooltipTransmogIcon(tooltip)
             ApplyTransmogIconStyle(icon, isCollected)
 
             -- Find the last right-side text line and position icon to the left of the actual text
@@ -767,10 +874,58 @@ local function OnTooltipSetItem(tooltip)
                 icon:Show()
             end
         else
-            HideTooltipTransmogIcon()
+            HideTooltipTransmogIcon(tooltip)
+        end
+        -- Check for Ensemble items
+    elseif cachedShowTransmog then
+        local ensembleStatus = GetEnsembleCollectionStatus(link)
+        if ensembleStatus then
+            local r, g, b
+            local statusText
+            local isCollected = ensembleStatus.isFullyCollected
+
+            if isCollected then
+                r, g, b = unpack(TRANSMOG_COLLECTED_COLOR)
+                statusText = "Collected"
+            elseif ensembleStatus.isUnknown then
+                -- Couldn't determine collection status from tooltip
+                r, g, b = 0.7, 0.7, 0.7 -- Gray for unknown
+                statusText = "Unknown"
+            elseif ensembleStatus.collected > 0 then
+                -- Partially collected - show progress
+                r, g, b = 1, 0.8, 0.3 -- Yellow-ish for partial
+                statusText = string.format("%d/%d", ensembleStatus.collected, ensembleStatus.total)
+            else
+                r, g, b = 1, 0.4, 0.4 -- Red-ish for not collected
+                statusText = "Not Collected"
+            end
+
+            -- Add spacing and the status text line (right-aligned)
+            tooltip:AddLine(" ") -- Spacing line
+            tooltip:AddDoubleLine(" ", statusText, 1, 1, 1, r, g, b)
+            tooltip:Show()       -- Force tooltip to recalculate size
+
+            -- Position the icon next to the text on the last line
+            local icon = GetTooltipTransmogIcon(tooltip)
+            ApplyTransmogIconStyle(icon, isCollected)
+
+            -- Find the last right-side text line and position icon to the left of the actual text
+            local tooltipName = tooltip:GetName()
+            local lastRightLine = _G[tooltipName .. "TextRight" .. tooltip:NumLines()]
+
+            if lastRightLine and lastRightLine:GetText() then
+                -- Get the text width to position icon immediately to its left
+                local textWidth = lastRightLine:GetStringWidth()
+                icon:ClearAllPoints()
+                -- Anchor to RIGHT of the text line, offset by text width + small gap + icon width
+                icon:SetPoint("RIGHT", lastRightLine, "RIGHT", -(textWidth + 4), 0)
+                icon:Show()
+            end
+        else
+            HideTooltipTransmogIcon(tooltip)
         end
     else
-        HideTooltipTransmogIcon()
+        HideTooltipTransmogIcon(tooltip)
     end
 
     -- Item ID (use cached setting)
@@ -847,7 +1002,7 @@ local function InitializeHooks()
     GameTooltip:HookScript("OnHide", function(self)
         if isEnabled then
             ResetTooltipBorderColor(self)
-            HideTooltipTransmogIcon()
+            HideTooltipTransmogIcon(self)
         end
     end)
 

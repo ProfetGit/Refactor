@@ -63,10 +63,10 @@ local QUALITY_COLORS = {
 local LOOT_ATLAS = "Interface/LootFrame/LootFrame"
 local CYPHER_TEXTURE = "Interface\\Reforging\\CypherSetItemUpgrade"
 local CYPHER_COORDS = { 0.00195312, 0.162109, 0.572266, 0.757812 }
-local LOOT_HIGHLIGHT_COORDS = { 0.00195312, 0.583984, 0.522461, 0.59668 }    -- Looting_ItemCard_HighlightState
-local LOOT_BG_COORDS = { 0.00195312, 0.583984, 0.446289, 0.520508 }          -- Looting_ItemCard_BG
+local LOOT_HIGHLIGHT_COORDS = { 0.00195312, 0.583984, 0.522461, 0.59668 }      -- Looting_ItemCard_HighlightState
+local LOOT_BG_COORDS = { 0.00195312, 0.583984, 0.446289, 0.520508 }            -- Looting_ItemCard_BG
 local LOOT_STROKE_NORMAL_COORDS = { 0.00195312, 0.583984, 0.674805, 0.749023 } -- Looting_ItemCard_Stroke_Normal
-local LOOT_STROKE_CLICK_COORDS = { 0.00195312, 0.583984, 0.598633, 0.672852 } -- Looting_ItemCard_Stroke_ClickState
+local LOOT_STROKE_CLICK_COORDS = { 0.00195312, 0.583984, 0.598633, 0.672852 }  -- Looting_ItemCard_Stroke_ClickState
 
 -- Constants (layout spacing - these control toast slot positions)
 local TOAST_HEIGHT = 40 -- Slot height
@@ -130,8 +130,8 @@ local function CreateToastFrame()
     toast:SetSize(TOAST_WIDTH, TOAST_HEIGHT)
 
     -- Highlight Layer (Looting_ItemCard_HighlightState) - shown on hover
-    toast.highlight = toast:CreateTexture(nil, "BACKGROUND", nil, 1)
-    toast.highlight:SetAllPoints()
+    -- Note: Highlight is created early but positioned after textBg exists
+    toast.highlight = toast:CreateTexture(nil, "BACKGROUND", nil, 2)
     toast.highlight:SetTexture(LOOT_ATLAS)
     toast.highlight:SetTexCoord(LOOT_HIGHLIGHT_COORDS[1], LOOT_HIGHLIGHT_COORDS[2], LOOT_HIGHLIGHT_COORDS[3],
         LOOT_HIGHLIGHT_COORDS[4])
@@ -140,7 +140,7 @@ local function CreateToastFrame()
     -- Icon
     toast.icon = toast:CreateTexture(nil, "ARTWORK")
     toast.icon:SetSize(36, 36)
-    toast.icon:SetPoint("LEFT", 4, 0)
+    toast.icon:SetPoint("LEFT", 4, 2)
     toast.icon:SetTexCoord(0.12, 0.88, 0.12, 0.88)
 
     -- Icon Mask (round corners to fit within Cypher frame cutouts)
@@ -158,7 +158,7 @@ local function CreateToastFrame()
 
     -- Text Background (Rarity Gradient)
     toast.textBg = toast:CreateTexture(nil, "BACKGROUND")
-    toast.textBg:SetHeight(36)
+    toast.textBg:SetHeight(37)
     toast.textBg:SetPoint("LEFT", toast.icon, "RIGHT", -2, 0)
     toast.textBg:SetPoint("RIGHT", 0, 0)
     toast.textBg:SetTexture(LOOT_ATLAS)
@@ -171,6 +171,11 @@ local function CreateToastFrame()
     toast.border:SetTexCoord(LOOT_STROKE_NORMAL_COORDS[1], LOOT_STROKE_NORMAL_COORDS[2], LOOT_STROKE_NORMAL_COORDS[3],
         LOOT_STROKE_NORMAL_COORDS[4])
     toast.border:SetAlpha(0.2)
+
+    -- Position highlight to match textBg (must be set after textBg exists)
+    toast.highlight:SetHeight(37)
+    toast.highlight:SetPoint("LEFT", toast.icon, "RIGHT", -2, 0)
+    toast.highlight:SetPoint("RIGHT", 0, 0)
 
     toast.name = toast:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     toast.name:SetPoint("LEFT", toast.icon, "RIGHT", 6, 0)
@@ -452,7 +457,7 @@ local function CreatePreviewToast(index, icon, name, quantity, quality)
         -- Icon (matches CreateToastFrame)
         toast.icon = toast:CreateTexture(nil, "ARTWORK")
         toast.icon:SetSize(36, 36)
-        toast.icon:SetPoint("LEFT", 4, 0)
+        toast.icon:SetPoint("LEFT", 4, 2)
         toast.icon:SetTexCoord(0.12, 0.88, 0.12, 0.88)
 
         -- Icon Mask (round corners to fit within Cypher frame cutouts)
@@ -470,7 +475,7 @@ local function CreatePreviewToast(index, icon, name, quantity, quality)
 
         -- Text Background (Rarity Gradient)
         toast.textBg = toast:CreateTexture(nil, "BACKGROUND")
-        toast.textBg:SetHeight(36)
+        toast.textBg:SetHeight(38)
         toast.textBg:SetPoint("LEFT", toast.icon, "RIGHT", -2, 0)
         toast.textBg:SetPoint("RIGHT", 0, 0)
         toast.textBg:SetTexture(LOOT_ATLAS)
@@ -481,7 +486,7 @@ local function CreatePreviewToast(index, icon, name, quantity, quality)
         toast.border:SetAllPoints(toast.textBg)
         toast.border:SetTexture(LOOT_ATLAS)
         toast.border:SetTexCoord(LOOT_STROKE_NORMAL_COORDS[1], LOOT_STROKE_NORMAL_COORDS[2], LOOT_STROKE_NORMAL_COORDS
-        [3], LOOT_STROKE_NORMAL_COORDS[4])
+            [3], LOOT_STROKE_NORMAL_COORDS[4])
         toast.border:SetAlpha(0.2)
 
         -- Text: Name (matches CreateToastFrame)

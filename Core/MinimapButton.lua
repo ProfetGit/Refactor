@@ -21,9 +21,9 @@ MinimapButton:RegisterForDrag("LeftButton")
 
 -- Icon
 MinimapButton.icon = MinimapButton:CreateTexture(nil, "ARTWORK")
-MinimapButton.icon:SetTexture("Interface\\Icons\\INV_Misc_Gear_01")
+MinimapButton.icon:SetTexture("Interface\\AddOns\\Refactor\\Refactor.tga")
 MinimapButton.icon:SetSize(20, 20)
-MinimapButton.icon:SetPoint("CENTER")
+MinimapButton.icon:SetPoint("CENTER", 1, -1)
 
 -- Border
 MinimapButton.border = MinimapButton:CreateTexture(nil, "OVERLAY")
@@ -193,11 +193,11 @@ end)
 -- Push Effect
 ----------------------------------------------
 MinimapButton:SetScript("OnMouseDown", function(self)
-    self.icon:SetPoint("CENTER", 1, -1)
+    self.icon:SetPoint("CENTER", 2, -2)
 end)
 
 MinimapButton:SetScript("OnMouseUp", function(self)
-    self.icon:SetPoint("CENTER", 0, 0)
+    self.icon:SetPoint("CENTER", 1, -1)
 end)
 
 ----------------------------------------------
