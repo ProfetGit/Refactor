@@ -1,21 +1,17 @@
 # ⚙️ Refactor
 
-<p align="center">
-  <img src="https://img.shields.io/badge/WoW-11.0%2B-blue?style=for-the-badge&logo=worldofwarcraft" alt="WoW Version">
-  <img src="https://img.shields.io/badge/Version-1.0.0-green?style=for-the-badge" alt="Addon Version">
-  <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
-</p>
+**Quality of Life automation for World of Warcraft**  
+*Less clicking. More playing.*
 
-<p align="center">
-  <strong>Quality of Life automation for World of Warcraft</strong><br>
-  <em>Less clicking. More playing.</em>
-</p>
+**Version:** 1.0.0 | **WoW:** The War Within (11.0+) | **License:** MIT
 
 ---
 
 ## ✨ Features
 
 Refactor streamlines your WoW experience by automating tedious tasks, letting you focus on what matters — the gameplay.
+
+---
 
 ### 🪙 Smart Vendor
 > Automatically sell items when you visit a merchant
@@ -24,7 +20,9 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 - **Sell low iLvl gear** — Automatically vendor soulbound equipment below a customizable item level threshold
 - **Keep unknown transmogs** — Protect items you haven't collected for transmog yet
 - **Sell known transmogs** — Clear out collected appearances you no longer need
-- **BoE protection** — Never accidentally vendors valuable Bind on Equip items
+- **BoE protection** — Never accidentally vendor valuable Bind on Equip items
+
+---
 
 ### 🔧 Auto-Repair
 > Never forget to repair your gear again
@@ -33,13 +31,19 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 - **Guild bank support** — Uses guild funds first if available (with permission)
 - **Cost notifications** — See exactly how much gold was spent on repairs
 
+---
+
 ### 📜 Auto-Quest
 > Speed through questing content
 
 - **Auto-accept quests** — Instantly accept quests from NPCs
 - **Auto-turn in quests** — Complete quests automatically when objectives are done
 - **Skip gossip dialogue** — Jump straight to quest options
+- **Auto-continue dialogue** — Automatically click through "Continue" dialogue options
+- **Single option selection** — Auto-select when there's only one dialogue choice
 - **Modifier key bypass** — Hold Shift (configurable) to pause automation when you want to read quest text
+
+---
 
 ### ⚡ Fast Loot
 > Lightning-fast item collection
@@ -47,21 +51,35 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 - **Instant looting** — Grab all loot in a single frame
 - **No loot window** — Items go directly to your bags
 
+---
+
 ### 🎁 Loot Toasts
 > Elegant loot notifications
 
 - **Visual loot feed** — See what you pick up in stylish popup toasts
 - **Quality filtering** — Only show items above a minimum quality threshold
-- **Transmog protection** — Always show uncollected appearances regardless of quality
 - **Currency display** — Track gold and other currencies as they're looted
 - **Customizable** — Adjust duration, max visible toasts, and positioning
 
-### 🎬 Skip Cinematics
+---
+
+### � Quest Nameplates
+> See quest objectives at a glance
+
+- **Kill objectives** — Sword icon on mobs you need to kill for quests
+- **Loot objectives** — Bag icon on mobs that drop quest items
+- **Progress tracking** — Visual indicators show your current objective progress
+
+---
+
+### �🎬 Skip Cinematics
 > Seen it once? Skip it forever
 
 - **Auto-skip watched cutscenes** — Remembers which cinematics you've seen
 - **Always skip option** — Or just skip everything, no questions asked
 - **Modifier key to watch** — Hold a key to watch cinematics when you want to
+
+---
 
 ### ✅ Auto-Confirm
 > Eliminate repetitive popups
@@ -72,6 +90,8 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 - **Resurrections** — Accept resurrection requests
 - **Binding confirmations** — Skip BoP/BoE warnings
 
+---
+
 ### 👥 Auto-Invite
 > Streamline group formation
 
@@ -79,6 +99,8 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 - **Accept from Battle.net** — Include BNet friends
 - **Accept from guild** — Auto-accept from guildmates
 - **Guild invites** — Join guilds from trusted sources automatically
+
+---
 
 ### 💀 Auto-Release
 > Get back in the action faster
@@ -88,6 +110,36 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 - **PvE mode** — For dungeons and raids
 - **Open world** — Including War Mode support
 - **Customizable delay** — Set how quickly to release
+
+---
+
+### 🎥 Action Camera
+> Dynamic camera for immersive gameplay
+
+- **Multiple presets** — Basic, Full, or custom camera modes
+- **Dynamic movement** — Camera responds to your character's actions
+- **Easy toggle** — Enable/disable with a single click
+
+---
+
+### 🎮 Combat Fade
+> Clean UI when you're not fighting
+
+- **Action bar fade** — Bars fade out of combat, appear when needed
+- **Adjustable opacity** — Set exactly how visible bars are when faded
+- **Player frame fade** — Optional fade for player unit frame
+- **Smooth transitions** — Gentle fade animations
+
+---
+
+### 🏃 Speed Display
+> Always know how fast you're moving
+
+- **Real-time speed** — Shows current movement speed percentage
+- **Positioned near player frame** — Easy to see at a glance
+- **Optional decimals** — Show 100% or 100.0% precision
+
+---
 
 ### 🔍 Tooltip Plus
 > Enhanced tooltip information
@@ -153,7 +205,7 @@ Each module can be individually enabled/disabled with granular sub-options.
 
 Found a bug? Have a feature request?
 
-- Open an issue on GitHub
+- Open an issue on [GitHub](https://github.com/ProfetGit/Refactor/issues)
 - Leave a comment on CurseForge
 
 ---
@@ -164,6 +216,4 @@ This addon is released under the MIT License. Feel free to modify and share!
 
 ---
 
-<p align="center">
-  <strong>⭐ If you enjoy Refactor, consider leaving a rating on CurseForge! ⭐</strong>
-</p>
+**⭐ If you enjoy Refactor, consider leaving a rating on CurseForge! ⭐**
