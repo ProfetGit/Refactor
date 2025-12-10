@@ -1,0 +1,108 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement for Refactor
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Have a great idea? We'd love to hear it! ✨
+        
+        Please fill out the form below to help us understand your suggestion.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: What type of feature is this?
+      options:
+        - New Module
+        - Enhancement to Auto-Sell Junk
+        - Enhancement to Auto-Repair
+        - Enhancement to Auto-Quest
+        - Enhancement to Fast Loot
+        - Enhancement to Skip Cinematics
+        - Enhancement to Auto-Confirm
+        - Enhancement to Auto-Invite
+        - Enhancement to Auto-Release
+        - Enhancement to Tooltip Plus
+        - Enhancement to Quest Nameplates
+        - Enhancement to Loot Toast
+        - Enhancement to Chat Plus
+        - Enhancement to Action Bars
+        - Enhancement to Action Cam
+        - Enhancement to Speed Display
+        - Settings/UI Improvement
+        - Quality of Life
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Is your feature request related to a problem?
+      description: A clear and concise description of what the problem is.
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution you'd like
+      description: A clear and concise description of what you want to happen.
+      placeholder: "I would like Refactor to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Describe alternatives you've considered
+      description: Any alternative solutions or features you've considered.
+      placeholder: "I've tried using X addon but..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How important is this feature to you?
+      description: Help us prioritize feature requests
+      options:
+        - Nice to have
+        - Would improve my experience
+        - Important for my workflow
+        - Critical - I really need this
+    validations:
+      required: true
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups / Examples
+      description: If you have any mockups, screenshots, or examples from other addons, please share them here.
+      placeholder: Drag and drop images or describe examples...
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, references, or API information about the feature request here.
+      placeholder: Any additional information...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues to ensure this feature hasn't already been requested
+          required: true
+        - label: I believe this feature fits within the scope of Refactor (QoL automation)
+          required: false

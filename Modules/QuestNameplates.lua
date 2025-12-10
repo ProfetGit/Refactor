@@ -45,7 +45,7 @@ local nameplateFrames = {} -- Track our overlay frames per nameplate
 ----------------------------------------------
 
 -- Get quest progress for a unit using C_TooltipInfo (Dragonflight+ API)
--- Returns: progressText, objectiveType, objectiveCount, questID
+-- Returns: progressText, objectiveType, objectiveCount, questID, isPercent
 local function GetQuestProgress(unitID)
     -- CRITICAL: This is the ONLY reliable gate for quest-related mobs
     -- If the game says this unit is NOT related to an active quest, do NOT show anything
@@ -68,6 +68,7 @@ local function GetQuestProgress(unitID)
     local objectiveCount = 0
     local questID = nil
     local hasItemObjective = false
+    local isPercent = false
 
     -- Scan tooltip lines for quest information
     for i = 3, #tooltipData.lines do
@@ -94,6 +95,7 @@ local function GetQuestProgress(unitID)
                     if progress and progress <= 100 then
                         objectiveCount = ceil(100 - progress)
                         progressText = text
+                        isPercent = true
                     end
                 end
 
@@ -111,12 +113,12 @@ local function GetQuestProgress(unitID)
     end
 
     if progressText then
-        return progressText, hasItemObjective and "item" or "monster", objectiveCount, questID
+        return progressText, hasItemObjective and "item" or "monster", objectiveCount, questID, isPercent
     end
 
     -- If we got here, the unit IS quest-related but we couldn't parse tooltip
     -- Return minimal data
-    return "Quest Objective", "monster", 0, questID
+    return "Quest Objective", "monster", 0, questID, false
 end
 
 ----------------------------------------------
@@ -196,7 +198,7 @@ local function UpdateNameplate(unitId)
     end
 
     -- Get quest progress using the proper API
-    local progressText, objectiveType, objectiveCount, questID = GetQuestProgress(unitId)
+    local progressText, objectiveType, objectiveCount, questID, isPercent = GetQuestProgress(unitId)
 
     -- If no quest progress, hide overlay
     if not progressText then
@@ -227,8 +229,22 @@ local function UpdateNameplate(unitId)
 
     -- Set progress count text
     if objectiveCount > 0 then
-        overlay.text:SetText(objectiveCount)
+        if isPercent then
+            -- For percentage objectives, show with % suffix
+            if objectiveCount == 100 then
+                -- Shrink font for "100%" to fit in frame
+                overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
+            else
+                overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+            end
+            overlay.text:SetText(objectiveCount .. "%")
+        else
+            -- Regular count objectives
+            overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+            overlay.text:SetText(objectiveCount)
+        end
     else
+        overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
         overlay.text:SetText("!")
     end
 

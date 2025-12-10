@@ -1,0 +1,160 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in Refactor
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Thanks for taking the time to report a bug! 🐛
+        
+        Please fill out as much information as possible to help us investigate the issue.
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Affected Module
+      description: Which module is experiencing the issue?
+      options:
+        - Auto-Sell Junk
+        - Auto-Repair
+        - Auto-Quest
+        - Fast Loot
+        - Skip Cinematics
+        - Auto-Confirm
+        - Auto-Invite
+        - Auto-Release
+        - Tooltip Plus
+        - Quest Nameplates
+        - Loot Toast
+        - Chat Plus
+        - Action Bars
+        - Action Cam
+        - Speed Display
+        - Settings/Configuration
+        - Minimap Button
+        - Multiple Modules
+        - Not Sure / Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe what's happening...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: What should have happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Enable '...' setting
+        2. Go to '...'
+        3. Click on '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: input
+    id: addon-version
+    attributes:
+      label: Refactor Version
+      description: "Which version of Refactor are you using? (Check in `/refactor` settings or .toc file)"
+      placeholder: "e.g., 1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: wow-version
+    attributes:
+      label: WoW Version
+      description: "Which version of World of Warcraft are you running?"
+      placeholder: "e.g., 11.0.7.58238"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: wow-region
+    attributes:
+      label: WoW Region
+      description: Which region are you playing on?
+      options:
+        - EU
+        - US
+        - OCE
+        - Asia
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-addons
+    attributes:
+      label: Other Addons
+      description: |
+        List any other addons you have enabled that might be relevant.
+        Especially UI addons like ElvUI, WeakAuras, Baganator, etc.
+      placeholder: |
+        - ElvUI
+        - WeakAuras
+        - Details!
+        - etc.
+    validations:
+      required: false
+
+  - type: textarea
+    id: lua-error
+    attributes:
+      label: Lua Errors
+      description: |
+        If you're seeing a Lua error, please paste it here.
+        Use an addon like BugSack or /console scriptErrors 1 to capture errors.
+      placeholder: Paste any Lua error messages here...
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain your problem. You can drag and drop images here.
+      placeholder: Drag and drop images here...
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here.
+      placeholder: Any additional information...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues to ensure this bug hasn't already been reported
+          required: true
+        - label: I have tested with only Refactor enabled to rule out addon conflicts
+          required: false
+        - label: I have included the Lua error (if applicable)
+          required: false
