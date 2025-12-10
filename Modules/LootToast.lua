@@ -83,6 +83,8 @@ local cachedDuration = 4
 local cachedMaxVisible = 6
 local cachedShowCurrency = true
 local cachedShowQuantity = true
+local cachedMinQuality = 0
+local cachedAlwaysShowUncollected = true
 
 local function UpdateCachedSettings()
     cachedDuration = tonumber(addon.GetDBValue("LootToast_Duration")) or 4
@@ -90,6 +92,67 @@ local function UpdateCachedSettings()
     cachedMaxVisible = addon.GetDBValue("LootToast_MaxVisible") or 6
     cachedShowCurrency = addon.GetDBBool("LootToast_ShowCurrency")
     cachedShowQuantity = addon.GetDBBool("LootToast_ShowQuantity")
+    cachedMinQuality = tonumber(addon.GetDBValue("LootToast_MinQuality")) or 0
+    cachedAlwaysShowUncollected = addon.GetDBBool("LootToast_AlwaysShowUncollected")
+end
+
+----------------------------------------------
+-- Transmog Collection Check
+-- Returns true if item is uncollected transmog, false if collected, nil if not transmogable
+----------------------------------------------
+local function IsUncollectedTransmog(itemLink)
+    if not itemLink or not C_TransmogCollection then return nil end
+
+    local itemID, _, _, _, _, classID, subClassID = GetItemInfoInstant(itemLink)
+    if not itemID then return nil end
+
+    -- Only check armor (4) and weapons (2)
+    if classID ~= 2 and classID ~= 4 then return nil end
+
+    -- Skip miscellaneous subclass (shields are OK)
+    if classID == 4 and subClassID == 0 then return nil end
+
+    -- Check if collected via appearance
+    local _, sourceID = C_TransmogCollection.GetItemInfo(itemLink)
+    if sourceID then
+        local isCollected = select(5, C_TransmogCollection.GetAppearanceSourceInfo(sourceID))
+        if isCollected then return false end
+        return true
+    end
+
+    -- Fallback: check via GetAllAppearanceSources
+    local appearanceID = C_TransmogCollection.GetItemInfo(itemLink)
+    if appearanceID then
+        local sources = C_TransmogCollection.GetAllAppearanceSources(appearanceID)
+        if sources then
+            for _, source in ipairs(sources) do
+                if source.isCollected then return false end
+            end
+        end
+        return true
+    end
+
+    return nil -- Not transmogable
+end
+
+----------------------------------------------
+-- Quality Filter Check
+-- Returns true if the item should be shown based on quality filter settings
+----------------------------------------------
+local function ShouldShowByQuality(quality, itemLink)
+    -- If no filter is set (show all), always show
+    if cachedMinQuality <= 0 then return true end
+
+    -- If quality meets threshold, show it
+    if quality and quality >= cachedMinQuality then return true end
+
+    -- If "always show uncollected" is enabled and item is uncollected transmog, show it
+    if cachedAlwaysShowUncollected and itemLink then
+        local isUncollected = IsUncollectedTransmog(itemLink)
+        if isUncollected == true then return true end
+    end
+
+    return false
 end
 
 
@@ -370,11 +433,15 @@ local function OnLootReceived(msg)
 
     local itemName, _, itemQuality, _, _, _, _, _, _, itemIcon = C_Item_GetItemInfo(itemLink)
     if itemName then
+        -- Apply quality filter
+        if not ShouldShowByQuality(itemQuality, itemLink) then return end
         ShowToast(itemIcon, itemName, quantity, itemQuality, false, itemLink)
     else
         local item = Item:CreateFromItemLink(itemLink)
         item:ContinueOnItemLoad(function()
             local name, _, quality, _, _, _, _, _, _, icon = C_Item_GetItemInfo(itemLink)
+            -- Apply quality filter
+            if not ShouldShowByQuality(quality, itemLink) then return end
             ShowToast(icon, name, quantity, quality, false, itemLink)
         end)
     end
@@ -685,6 +752,8 @@ function Module:OnInitialize()
     addon.CallbackRegistry:Register("SettingChanged.LootToast_MaxVisible", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.LootToast_ShowCurrency", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.LootToast_ShowQuantity", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.LootToast_MinQuality", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.LootToast_AlwaysShowUncollected", UpdateCachedSettings)
 end
 
 addon.RegisterModule("LootToast", Module)

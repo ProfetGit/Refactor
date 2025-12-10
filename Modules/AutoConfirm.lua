@@ -34,37 +34,36 @@ local confirmablePopups = {
     "LOOT_BIND",
     "EQUIP_BIND",
     "USE_BIND",
-    -- Item deletion (handled separately with quality check)
 }
 
 local function ShouldConfirmPopup(which)
     if not isEnabled then return false end
-    
+
     -- Ready check
     if which == "READY_CHECK" then
         return addon.GetDBBool("AutoConfirm_ReadyCheck")
     end
-    
+
     -- Summon
     if which == "CONFIRM_SUMMON" then
         return addon.GetDBBool("AutoConfirm_Summon")
     end
-    
+
     -- Role check
     if which == "LFG_ROLE_CHECK_POPUP" then
         return addon.GetDBBool("AutoConfirm_RoleCheck")
     end
-    
+
     -- Resurrect
     if which == "RESURRECT" or which == "RESURRECT_NO_TIMER" then
         return addon.GetDBBool("AutoConfirm_Resurrect")
     end
-    
+
     -- Binding confirmations
     if which == "LOOT_BIND" or which == "EQUIP_BIND" or which == "USE_BIND" then
         return addon.GetDBBool("AutoConfirm_Binding")
     end
-    
+
     return false
 end
 
@@ -74,7 +73,7 @@ end
 local function OnStaticPopupShow(dialog, which)
     if not isEnabled then return end
     if not which then return end
-    
+
     if ShouldConfirmPopup(which) then
         -- Small delay to ensure popup is ready
         C_Timer.After(0.1, function()
@@ -96,7 +95,7 @@ end
 local function OnReadyCheck()
     if not isEnabled then return end
     if not addon.GetDBBool("AutoConfirm_ReadyCheck") then return end
-    
+
     C_Timer.After(0.1, function()
         if ReadyCheckFrame and ReadyCheckFrame:IsShown() then
             ConfirmReadyCheck(true)
@@ -111,7 +110,7 @@ end
 local function OnLFGRoleCheck()
     if not isEnabled then return end
     if not addon.GetDBBool("AutoConfirm_RoleCheck") then return end
-    
+
     C_Timer.After(0.2, function()
         if LFDRoleCheckPopup and LFDRoleCheckPopup:IsShown() then
             LFDRoleCheckPopupAcceptButton:Click()
@@ -125,7 +124,7 @@ end
 local function OnSummonConfirm()
     if not isEnabled then return end
     if not addon.GetDBBool("AutoConfirm_Summon") then return end
-    
+
     C_Timer.After(0.1, function()
         C_SummonInfo.ConfirmSummon()
     end)
@@ -137,7 +136,7 @@ end
 local function OnResurrect()
     if not isEnabled then return end
     if not addon.GetDBBool("AutoConfirm_Resurrect") then return end
-    
+
     C_Timer.After(0.3, function()
         if StaticPopup_FindVisible("RESURRECT") then
             AcceptResurrect()
@@ -149,32 +148,6 @@ local function OnResurrect()
     end)
 end
 
-----------------------------------------------
--- Delete Item Confirmation (quality check)
-----------------------------------------------
-local function OnDeleteItem()
-    if not isEnabled then return end
-    if not addon.GetDBBool("AutoConfirm_DeleteGrey") then return end
-    
-    local popup = StaticPopup_FindVisible("DELETE_ITEM")
-    if not popup then return end
-    
-    -- Check item quality from the cursor
-    local cursorType, _, itemLink = GetCursorInfo()
-    if cursorType == "item" and itemLink then
-        local _, _, quality = GetItemInfo(itemLink)
-        -- Only auto-confirm for Poor (0) and Common (1) quality
-        if quality and quality <= 1 then
-            C_Timer.After(0.1, function()
-                local p = StaticPopup_FindVisible("DELETE_ITEM")
-                if p and p.editBox then
-                    p.editBox:SetText(DELETE_ITEM_CONFIRM_STRING)
-                    p.button1:Click()
-                end
-            end)
-        end
-    end
-end
 
 ----------------------------------------------
 -- Event Frame
@@ -212,13 +185,9 @@ local hookedPopups = false
 local function HookPopups()
     if hookedPopups then return end
     hookedPopups = true
-    
+
     hooksecurefunc("StaticPopup_Show", function(which)
-        if which == "DELETE_ITEM" or which == "DELETE_GOOD_ITEM" then
-            OnDeleteItem()
-        else
-            OnStaticPopupShow(nil, which)
-        end
+        OnStaticPopupShow(nil, which)
     end)
 end
 
@@ -243,7 +212,7 @@ function Module:OnInitialize()
     if addon.GetDBBool("AutoConfirm") then
         self:Enable()
     end
-    
+
     addon.CallbackRegistry:Register("SettingChanged.AutoConfirm", function(value)
         if value then
             Module:Enable()

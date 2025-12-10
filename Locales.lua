@@ -108,7 +108,6 @@ addon.L = {
     CONFIRM_ROLE_CHECK = "Role Checks",
     CONFIRM_RESURRECT = "Resurrections",
     CONFIRM_BINDING = "BoP/BoE Dialogs",
-    CONFIRM_DELETE_GREY = "Delete Grey Items",
 
     -- Auto-Confirm Tooltips
     TIP_READY_CHECK = "Automatically confirm ready checks in dungeons and raids.",
@@ -116,7 +115,6 @@ addon.L = {
     TIP_ROLE_CHECK = "Automatically confirm your role (tank/healer/DPS) when prompted.",
     TIP_RESURRECT = "Automatically accept resurrection spells from other players.",
     TIP_BINDING = "Automatically confirm 'Bind on Equip' and 'Bind on Pickup' dialogs.",
-    TIP_DELETE_GREY = "Skip the 'DELETE' typing confirmation when deleting grey items.",
 
     -- Auto-Invite
     INVITE_FRIENDS = "Accept from Friends",
@@ -178,6 +176,20 @@ addon.L = {
     TIP_LOOT_TOAST_MAX = "Maximum number of toasts visible at once. Older ones fade out first.",
     TIP_LOOT_TOAST_CURRENCY = "Show currency (gold, silver, copper) in the toast feed.",
     TIP_LOOT_TOAST_QUANTITY = "Display the quantity next to items when looting multiple.",
+    LOOT_TOAST_MIN_QUALITY = "Minimum Quality",
+    TIP_LOOT_TOAST_MIN_QUALITY =
+    "Only show items at or above this quality level. Currency always respects the 'Show Currency' setting.",
+    LOOT_TOAST_ALWAYS_SHOW_UNCOLLECTED = "Always Show Uncollected Transmog",
+    TIP_LOOT_TOAST_ALWAYS_SHOW_UNCOLLECTED =
+    "Always show items with uncollected transmog appearances, even if they're below the minimum quality threshold.",
+
+    -- Loot Quality Levels
+    QUALITY_ALL = "Show All",
+    QUALITY_COMMON = "Common+",
+    QUALITY_UNCOMMON = "Uncommon+",
+    QUALITY_RARE = "Rare+",
+    QUALITY_EPIC = "Epic+",
+    QUALITY_LEGENDARY = "Legendary+",
 
     -- Settings Labels
     ENABLE = "Enable",
@@ -221,16 +233,6 @@ addon.L = {
     TIP_TRANSMOG_CORNER = "Which corner of the item icon to display the transmog status indicator.",
     TIP_TRANSMOG_COLLECTED = "Show a green checkmark on items with appearances you've already collected.",
     TIP_TRANSMOG_NOT_COLLECTED = "Show an orange X on items with appearances you haven't collected yet.",
-
-    -- Chat Plus Labels
-    MODULE_CHAT_PLUS = "Chat Plus",
-    SETTINGS_CHAT = "Chat",
-    CHAT_CLICKABLE_URLS = "Clickable URLs",
-    CHAT_COPY_BUTTON = "Show Copy Button",
-    CHAT_WOWHEAD_LOOKUP = "Wowhead Lookup",
-
-    -- Chat Copy Dialog
-    CHAT_COPY_HINT = "Press Ctrl+C to copy, then Escape to close",
 
     -- Anchor Positions
     ANCHOR_DEFAULT = "Default",

@@ -65,7 +65,6 @@ local CATEGORIES = {
         name = "Interface",
         subcategories = {
             { key = "tooltips",   name = "Tooltips" },   -- Tooltip+
-            { key = "chat",       name = "Chat" },       -- Chat+
             { key = "nameplates", name = "Nameplates" }, -- Quest Nameplates
             { key = "frames",     name = "Frames" },     -- Combat Fade
         }
@@ -595,6 +594,15 @@ local function SetupLootingContent(parent)
     layout:AddSubCheckbox(L.LOOT_TOAST_SHOW_QUANTITY or "Show Quantity", "LootToast_ShowQuantity",
         L.TIP_LOOT_TOAST_QUANTITY, toastToggle)
 
+    layout:AddSpacer(5)
+
+    -- Filtering Section
+    layout:AddSection("Filtering")
+    layout:AddSubDropdown(L.LOOT_TOAST_MIN_QUALITY or "Minimum Quality", "LootToast_MinQuality",
+        C.LOOT_QUALITY_OPTIONS, L.TIP_LOOT_TOAST_MIN_QUALITY, toastToggle)
+    layout:AddSubCheckbox(L.LOOT_TOAST_ALWAYS_SHOW_UNCOLLECTED or "Always Show Uncollected Transmog",
+        "LootToast_AlwaysShowUncollected", L.TIP_LOOT_TOAST_ALWAYS_SHOW_UNCOLLECTED, toastToggle)
+
     layout:AddDefaultsButton(container)
     content:SetHeight(layout:Finalize())
     container.layout = layout
@@ -653,8 +661,6 @@ local function SetupConfirmationsContent(parent)
     layout:AddSubCheckbox(L.CONFIRM_ROLE_CHECK or "Role Check", "AutoConfirm_RoleCheck", L.TIP_ROLE_CHECK, confirmToggle)
     layout:AddSubCheckbox(L.CONFIRM_RESURRECT or "Resurrect", "AutoConfirm_Resurrect", L.TIP_RESURRECT, confirmToggle)
     layout:AddSubCheckbox(L.CONFIRM_BINDING or "Bind Confirmation", "AutoConfirm_Binding", L.TIP_BINDING, confirmToggle)
-    layout:AddSubCheckbox(L.CONFIRM_DELETE_GREY or "Delete Grey Items", "AutoConfirm_DeleteGrey", L.TIP_DELETE_GREY,
-        confirmToggle)
 
     layout:AddDefaultsButton(container)
     content:SetHeight(layout:Finalize())
@@ -723,32 +729,6 @@ local function SetupTooltipsContent(parent)
         tooltipToggle)
     layout:AddSubCheckbox(L.TOOLTIP_SHOW_SPELL_ID or "Show Spell ID", "TooltipPlus_ShowSpellID",
         "Display spell database ID.", tooltipToggle)
-
-    layout:AddDefaultsButton(container)
-    content:SetHeight(layout:Finalize())
-    container.layout = layout
-    container:SetScript("OnShow", function() layout:RefreshAll() end)
-    return container
-end
-
--- CHAT
-local function SetupChatContent(parent)
-    local container = CreateScrollableContent(parent)
-    local content = container.content
-    local layout = CreateContentLayout(content)
-
-    layout:AddSection(L.MODULE_CHAT_PLUS or "Chat+")
-    local chatToggle = layout:AddModule("Enable Chat+", "ChatPlus", "Enhanced chat features")
-
-    layout:AddSpacer(5)
-
-    layout:AddSection("Features")
-    layout:AddSubCheckbox(L.CHAT_WOWHEAD_LOOKUP or "Wowhead Lookup", "ChatPlus_WowheadLookup",
-        "Shift+Click links to open Wowhead.", chatToggle)
-    layout:AddSubCheckbox(L.CHAT_CLICKABLE_URLS or "Clickable URLs", "ChatPlus_ClickableURLs",
-        "Make URLs in chat clickable.", chatToggle)
-    layout:AddSubCheckbox(L.CHAT_COPY_BUTTON or "Show Copy Button", "ChatPlus_CopyButton", "Show button to copy chat.",
-        chatToggle)
 
     layout:AddDefaultsButton(container)
     content:SetHeight(layout:Finalize())
@@ -874,7 +854,6 @@ local CONTENT_SETUP = {
     social = SetupSocialContent,
     -- Interface
     tooltips = SetupTooltipsContent,
-    chat = SetupChatContent,
     nameplates = SetupNameplatesContent,
     frames = SetupFramesContent,
 }
@@ -1193,12 +1172,12 @@ end
 ----------------------------------------------
 function SettingsPanel:Toggle()
     if not frame then CreateSettingsFrame() end
-    frame:SetShown(not frame:IsShown())
+    if frame then frame:SetShown(not frame:IsShown()) end
 end
 
 function SettingsPanel:Show()
     if not frame then CreateSettingsFrame() end
-    frame:Show()
+    if frame then frame:Show() end
 end
 
 function SettingsPanel:Hide()

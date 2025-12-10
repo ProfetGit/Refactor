@@ -47,6 +47,15 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 - **Instant looting** — Grab all loot in a single frame
 - **No loot window** — Items go directly to your bags
 
+### 🎁 Loot Toasts
+> Elegant loot notifications
+
+- **Visual loot feed** — See what you pick up in stylish popup toasts
+- **Quality filtering** — Only show items above a minimum quality threshold
+- **Transmog protection** — Always show uncollected appearances regardless of quality
+- **Currency display** — Track gold and other currencies as they're looted
+- **Customizable** — Adjust duration, max visible toasts, and positioning
+
 ### 🎬 Skip Cinematics
 > Seen it once? Skip it forever
 
@@ -62,7 +71,6 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 - **Role checks** — Confirm your role automatically
 - **Resurrections** — Accept resurrection requests
 - **Binding confirmations** — Skip BoP/BoE warnings
-- **Delete grey items** — Auto-type DELETE for junk item removal
 
 ### 👥 Auto-Invite
 > Streamline group formation

@@ -150,15 +150,14 @@ local DefaultValues = {
 
     ----------------------------------------------
     -- AUTO-CONFIRM DIALOGS
-    -- ON: Ready checks, summons, etc. are just confirmation clicks
+    -- OFF: Users should opt-in to auto-confirming
     ----------------------------------------------
-    AutoConfirm = true,
+    AutoConfirm = false,
     AutoConfirm_ReadyCheck = true, -- ON: No one enjoys clicking this
     AutoConfirm_Summon = true,     -- ON: Safe, expected
     AutoConfirm_RoleCheck = true,  -- ON: Standard convenience
     AutoConfirm_Resurrect = true,  -- ON: Always want to accept rez
     AutoConfirm_Binding = false,   -- OFF: Risky - accidental BoP hurts
-    AutoConfirm_DeleteGrey = true, -- ON: It's grey, safe to confirm
 
     ----------------------------------------------
     -- AUTO-INVITE ACCEPT
@@ -218,19 +217,12 @@ local DefaultValues = {
     -- ON: Nice visual loot notifications
     ----------------------------------------------
     LootToast = true,
-    LootToast_Duration = 4,        -- Balanced duration
-    LootToast_MaxVisible = 6,      -- Reasonable amount
-    LootToast_ShowCurrency = true, -- ON: Users want to see gains
-    LootToast_ShowQuantity = true, -- ON: Context is good
-
-    ----------------------------------------------
-    -- CHAT PLUS
-    -- ON: Useful chat enhancements
-    ----------------------------------------------
-    ChatPlus = true,
-    ChatPlus_ClickableURLs = true, -- ON: Everyone wants this
-    ChatPlus_CopyButton = true,    -- ON: Useful feature
-    ChatPlus_WowheadLookup = true, -- ON: Shift+Click is non-intrusive
+    LootToast_Duration = 4,                 -- Balanced duration
+    LootToast_MaxVisible = 6,               -- Reasonable amount
+    LootToast_ShowCurrency = true,          -- ON: Users want to see gains
+    LootToast_ShowQuantity = true,          -- ON: Context is good
+    LootToast_MinQuality = 0,               -- 0 = Show all, 1 = Common+, 2 = Uncommon+, etc.
+    LootToast_AlwaysShowUncollected = true, -- ON: Always show uncollected transmog regardless of quality filter
 
     ----------------------------------------------
     -- ACTION CAM

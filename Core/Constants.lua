@@ -17,46 +17,56 @@ local C = addon.Constants
 -- Modifier key options (SHIFT, CTRL, ALT, NONE)
 C.MODIFIER_OPTIONS = {
     { value = "SHIFT", label = L.MODIFIER_SHIFT },
-    { value = "CTRL", label = L.MODIFIER_CTRL },
-    { value = "ALT", label = L.MODIFIER_ALT },
-    { value = "NONE", label = L.MODIFIER_NONE },
+    { value = "CTRL",  label = L.MODIFIER_CTRL },
+    { value = "ALT",   label = L.MODIFIER_ALT },
+    { value = "NONE",  label = L.MODIFIER_NONE },
 }
 
 -- Screen corner options
 C.CORNER_OPTIONS = {
-    { value = "TOPLEFT", label = L.ANCHOR_TOPLEFT },
-    { value = "TOPRIGHT", label = L.ANCHOR_TOPRIGHT },
-    { value = "BOTTOMLEFT", label = L.ANCHOR_BOTTOMLEFT },
+    { value = "TOPLEFT",     label = L.ANCHOR_TOPLEFT },
+    { value = "TOPRIGHT",    label = L.ANCHOR_TOPRIGHT },
+    { value = "BOTTOMLEFT",  label = L.ANCHOR_BOTTOMLEFT },
     { value = "BOTTOMRIGHT", label = L.ANCHOR_BOTTOMRIGHT },
 }
 
 -- Tooltip anchor options (includes MOUSE and DEFAULT)
 C.TOOLTIP_ANCHOR_OPTIONS = {
-    { value = "DEFAULT", label = L.ANCHOR_DEFAULT },
-    { value = "MOUSE", label = L.ANCHOR_MOUSE },
-    { value = "TOPLEFT", label = L.ANCHOR_TOPLEFT },
-    { value = "TOPRIGHT", label = L.ANCHOR_TOPRIGHT },
-    { value = "BOTTOMLEFT", label = L.ANCHOR_BOTTOMLEFT },
+    { value = "DEFAULT",     label = L.ANCHOR_DEFAULT },
+    { value = "MOUSE",       label = L.ANCHOR_MOUSE },
+    { value = "TOPLEFT",     label = L.ANCHOR_TOPLEFT },
+    { value = "TOPRIGHT",    label = L.ANCHOR_TOPRIGHT },
+    { value = "BOTTOMLEFT",  label = L.ANCHOR_BOTTOMLEFT },
     { value = "BOTTOMRIGHT", label = L.ANCHOR_BOTTOMRIGHT },
 }
 
 -- Mouse side options (for tooltip positioning)
 C.MOUSE_SIDE_OPTIONS = {
     { value = "RIGHT", label = L.SIDE_RIGHT },
-    { value = "LEFT", label = L.SIDE_LEFT },
-    { value = "TOP", label = L.SIDE_TOP },
+    { value = "LEFT",  label = L.SIDE_LEFT },
+    { value = "TOP",   label = L.SIDE_TOP },
 }
 
 -- ActionCam mode options
 C.ACTIONCAM_MODE_OPTIONS = {
     { value = "basic", label = L.ACTIONCAM_BASIC },
-    { value = "full", label = L.ACTIONCAM_FULL },
+    { value = "full",  label = L.ACTIONCAM_FULL },
 }
 
 -- Auto-release mode options
 C.RELEASE_MODE_OPTIONS = {
-    { value = "ALWAYS", label = L.RELEASE_ALWAYS },
-    { value = "PVP", label = L.RELEASE_PVP },
-    { value = "PVE", label = L.RELEASE_PVE },
+    { value = "ALWAYS",    label = L.RELEASE_ALWAYS },
+    { value = "PVP",       label = L.RELEASE_PVP },
+    { value = "PVE",       label = L.RELEASE_PVE },
     { value = "OPENWORLD", label = L.RELEASE_OPENWORLD },
+}
+
+-- Loot Toast minimum quality options
+C.LOOT_QUALITY_OPTIONS = {
+    { value = 0, label = L.QUALITY_ALL },       -- Poor+ (show all)
+    { value = 1, label = L.QUALITY_COMMON },    -- Common+
+    { value = 2, label = L.QUALITY_UNCOMMON },  -- Uncommon+
+    { value = 3, label = L.QUALITY_RARE },      -- Rare+
+    { value = 4, label = L.QUALITY_EPIC },      -- Epic+
+    { value = 5, label = L.QUALITY_LEGENDARY }, -- Legendary+
 }

@@ -161,7 +161,7 @@ local function CreateNameplateOverlay(nameplate)
 
     -- Loot indicator icon (bag, shown for item objectives)
     frame.lootIcon = frame:CreateTexture(nil, "OVERLAY")
-    frame.lootIcon:SetSize(12, 12)
+    frame.lootIcon:SetSize(14, 14)
     frame.lootIcon:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", -4, -4)
     frame.lootIcon:SetAtlas("Banker")
     frame.lootIcon:Hide()

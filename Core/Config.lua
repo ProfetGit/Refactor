@@ -21,7 +21,6 @@ addon.ModuleInfo = {
     { key = "TooltipPlus",     name = L.MODULE_TOOLTIP_PLUS },
     { key = "QuestNameplates", name = L.MODULE_QUEST_NAMEPLATES },
     { key = "LootToast",       name = L.MODULE_LOOT_TOAST },
-    { key = "ChatPlus",        name = L.MODULE_CHAT_PLUS },
     { key = "ActionCam",       name = L.MODULE_ACTIONCAM },
     { key = "CombatFade",      name = L.MODULE_COMBAT_FADE },
     { key = "SpeedDisplay",    name = L.MODULE_SPEED_DISPLAY },
@@ -101,10 +100,6 @@ function addon.ParseModuleKey(input)
         ["loottoast"] = "LootToast",
         ["toast"] = "LootToast",
         ["toasts"] = "LootToast",
-
-        -- ChatPlus
-        ["chatplus"] = "ChatPlus",
-        ["chat"] = "ChatPlus",
 
         -- ActionCam
         ["actioncam"] = "ActionCam",

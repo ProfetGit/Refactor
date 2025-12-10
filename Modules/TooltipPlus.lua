@@ -324,6 +324,136 @@ end
 local ensembleStatusCache = {}
 local CACHE_DURATION = 30 -- seconds (increased for performance)
 
+----------------------------------------------
+-- Housing Decor Detection & Collection Status
+-- New collectible type added in recent patches
+----------------------------------------------
+
+-- Localized patterns for detecting Housing Decor items
+-- These patterns handle different client languages
+local DECOR_TYPE_PATTERNS = {
+    "Housing Decor", -- enUS/enGB
+    "Wohnungsdeko", -- deDE
+    "Décor de logement", -- frFR
+    "Decoración de casa", -- esES/esMX
+    "Decoração de Casa", -- ptBR
+    "Украшение жилища", -- ruRU
+    "家居装饰", -- zhCN
+    "家居裝飾", -- zhTW
+    "주거 장식", -- koKR
+}
+
+-- Localized patterns for detecting "Owned: X" in tooltips
+-- Format: pattern to match "Owned: number" or equivalent
+local DECOR_OWNED_PATTERNS = {
+    "Owned:%s*(%d+)", -- enUS/enGB
+    "Besitz:%s*(%d+)", -- deDE
+    "Possédé[es]?:%s*(%d+)", -- frFR
+    "Poseído[as]?:%s*(%d+)", -- esES/esMX
+    "Possuído[as]?:%s*(%d+)", -- ptBR
+    "В наличии:%s*(%d+)", -- ruRU
+    "拥有:%s*(%d+)", -- zhCN
+    "擁有:%s*(%d+)", -- zhTW
+    "보유:%s*(%d+)", -- koKR
+}
+
+-- Cache for decor item status (itemID -> {isDecor, isCollected, time})
+local decorStatusCache = {}
+local DECOR_CACHE_DURATION = 60 -- seconds
+
+-- Check if an item is a Housing Decor item
+local function IsDecorItem(itemLink)
+    if not itemLink then return false end
+
+    local itemID = GetItemInfoInstant(itemLink)
+    if not itemID then return false end
+
+    -- Check cache first
+    local cached = decorStatusCache[itemID]
+    if cached and cached.isDecor ~= nil and (GetTime() - cached.time) < DECOR_CACHE_DURATION then
+        return cached.isDecor
+    end
+
+    local _, _, _, _, _, itemType, itemSubType = GetItemInfo(itemLink)
+    if not itemSubType then return false end
+
+    -- Check against all localized patterns
+    for _, pattern in ipairs(DECOR_TYPE_PATTERNS) do
+        if itemSubType == pattern then
+            -- Cache the result
+            decorStatusCache[itemID] = decorStatusCache[itemID] or {}
+            decorStatusCache[itemID].isDecor = true
+            decorStatusCache[itemID].time = GetTime()
+            return true
+        end
+    end
+
+    -- Not a decor item
+    decorStatusCache[itemID] = decorStatusCache[itemID] or {}
+    decorStatusCache[itemID].isDecor = false
+    decorStatusCache[itemID].time = GetTime()
+    return false
+end
+
+-- Get the collection status of a Housing Decor item from tooltip text
+-- Returns: true (owned >= 1), false (owned == 0), nil (couldn't determine)
+local function GetDecorCollectionStatus(tooltip, itemLink)
+    if not tooltip or not itemLink then return nil end
+
+    local itemID = GetItemInfoInstant(itemLink)
+    if not itemID then return nil end
+
+    -- Check cache first (for overlay system to reuse tooltip-parsed data)
+    local cached = decorStatusCache[itemID]
+    if cached and cached.isCollected ~= nil and (GetTime() - cached.time) < DECOR_CACHE_DURATION then
+        return cached.isCollected
+    end
+
+    -- Scan tooltip lines for "Owned: X" pattern
+    local tooltipName = tooltip:GetName()
+    for i = 1, tooltip:NumLines() do
+        local leftLine = _G[tooltipName .. "TextLeft" .. i]
+        if leftLine then
+            local text = leftLine:GetText()
+            if text then
+                -- Try all localized patterns
+                for _, pattern in ipairs(DECOR_OWNED_PATTERNS) do
+                    local owned = text:match(pattern)
+                    if owned then
+                        local count = tonumber(owned)
+                        local isCollected = count and count > 0
+
+                        -- Cache the result
+                        decorStatusCache[itemID] = decorStatusCache[itemID] or {}
+                        decorStatusCache[itemID].isCollected = isCollected
+                        decorStatusCache[itemID].time = GetTime()
+
+                        return isCollected
+                    end
+                end
+            end
+        end
+    end
+
+    return nil -- Couldn't determine
+end
+
+-- Get cached decor collection status (for overlay system without tooltip access)
+local function GetDecorOverlayStatus(itemLink)
+    if not itemLink then return nil end
+
+    local itemID = GetItemInfoInstant(itemLink)
+    if not itemID then return nil end
+
+    -- Only return from cache - don't parse tooltip here
+    local cached = decorStatusCache[itemID]
+    if cached and cached.isCollected ~= nil and (GetTime() - cached.time) < DECOR_CACHE_DURATION then
+        return cached.isCollected
+    end
+
+    return nil -- Not cached, will be populated when tooltip is shown
+end
+
 -- Check if an item is an Ensemble using the proper API
 local function IsEnsembleItem(itemLink)
     if not itemLink then return false end
