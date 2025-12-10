@@ -68,6 +68,7 @@ local LOOT_BG_COORDS = { 0.00195312, 0.583984, 0.446289, 0.520508 }            -
 local LOOT_STROKE_NORMAL_COORDS = { 0.00195312, 0.583984, 0.674805, 0.749023 } -- Looting_ItemCard_Stroke_Normal
 local LOOT_STROKE_CLICK_COORDS = { 0.00195312, 0.583984, 0.598633, 0.672852 }  -- Looting_ItemCard_Stroke_ClickState
 
+
 -- Constants (layout spacing - these control toast slot positions)
 local TOAST_HEIGHT = 40 -- Slot height
 local TOAST_WIDTH = 170 -- Slot width
@@ -90,6 +91,7 @@ local function UpdateCachedSettings()
     cachedShowCurrency = addon.GetDBBool("LootToast_ShowCurrency")
     cachedShowQuantity = addon.GetDBBool("LootToast_ShowQuantity")
 end
+
 
 ----------------------------------------------
 -- Helper Functions
@@ -191,6 +193,7 @@ local function CreateToastFrame()
     toast.quantity:SetPoint("BOTTOMRIGHT", toast.icon, "BOTTOMRIGHT", 2, -2)
     toast.quantity:SetJustifyH("RIGHT")
     toast.quantity:SetTextColor(1, 1, 1)
+
 
     -- Animation: Slide In (Appear)
     toast.slideAnim = toast:CreateAnimationGroup()
@@ -335,6 +338,7 @@ local function ShowToast(icon, name, quantity, quality, isCurrency, link)
 
     -- Reset highlight state
     toast.highlight:SetAlpha(0)
+
 
     -- Position & Animation
     table_insert(activeToasts, toast)
@@ -626,18 +630,35 @@ function Module:ResetPosition()
 end
 
 -- Test functions (only loaded, not executed unless called)
+-- Real item IDs for testing (with random quantity range)
+local TEST_ITEM_IDS = {
+    { id = 19019,  qtyMin = 1, qtyMax = 1 },  -- Thunderfury, Blessed Blade of the Windseeker
+    { id = 6948,   qtyMin = 1, qtyMax = 1 },  -- Hearthstone
+    { id = 2589,   qtyMin = 1, qtyMax = 20 }, -- Linen Cloth
+    { id = 13446,  qtyMin = 1, qtyMax = 5 },  -- Major Healing Potion
+    { id = 22449,  qtyMin = 1, qtyMax = 3 },  -- Large Prismatic Shard
+    { id = 22632,  qtyMin = 1, qtyMax = 1 },  -- Atiesh, Greatstaff of the Guardian
+    { id = 52078,  qtyMin = 1, qtyMax = 10 }, -- Chaos Orb
+    { id = 124124, qtyMin = 1, qtyMax = 5 },  -- Blood of Sargeras
+}
+
 function Module:TestToast()
-    local t = {
-        { "Interface\\Icons\\INV_Ingot_Eternium",      "Enchanted Thorium Bar", 1,  1 },
-        { "Interface\\Icons\\INV_Sword_39",            "Thunderfury",           1,  5 },
-        { "Interface\\Icons\\INV_Misc_Rune_01",        "Hearthstone",           1,  1 },
-        { "Interface\\Icons\\INV_Fabric_Linen_01",     "Linen Cloth",           20, 1 },
-        { "Interface\\Icons\\INV_Potion_51",           "Major Healing Potion",  5,  1 },
-        { "Interface\\Icons\\INV_Misc_Gem_Diamond_02", "Large Prismatic Shard", 3,  3 },
-        { "Interface\\Icons\\INV_Staff_30",            "Atiesh",                1,  5 }
-    }
-    local item = t[math_random(#t)]
-    ShowToast(item[1], item[2], item[3], item[4], false, "item:12640")
+    local entry = TEST_ITEM_IDS[math_random(#TEST_ITEM_IDS)]
+    local itemID = entry.id
+    local quantity = math_random(entry.qtyMin, entry.qtyMax)
+    local itemLink = "item:" .. itemID
+
+    local itemName, _, itemQuality, _, _, _, _, _, _, itemIcon = C_Item_GetItemInfo(itemID)
+    if itemName then
+        ShowToast(itemIcon, itemName, quantity, itemQuality, false, itemLink)
+    else
+        -- Item not cached yet, wait for it to load
+        local item = Item:CreateFromItemID(itemID)
+        item:ContinueOnItemLoad(function()
+            local name, _, quality, _, _, _, _, _, _, icon = C_Item_GetItemInfo(itemID)
+            ShowToast(icon, name, quantity, quality, false, itemLink)
+        end)
+    end
 end
 
 function Module:TestWaterfall()

@@ -251,6 +251,13 @@ local DefaultValues = {
     CombatFade_PlayerFrame_Opacity = 30,
 
     ----------------------------------------------
+    -- SPEED DISPLAY
+    -- OFF: Not everyone wants speed shown
+    ----------------------------------------------
+    SpeedDisplay = false,
+    SpeedDisplay_Decimals = false, -- OFF: Show 100% not 100.0%
+
+    ----------------------------------------------
     -- MINIMAP BUTTON
     ----------------------------------------------
     MinimapButtonAngle = 220,

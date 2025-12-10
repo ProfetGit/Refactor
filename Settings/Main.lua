@@ -774,6 +774,13 @@ local function SetupFramesContent(parent)
     layout:AddSubSlider("Player Frame Opacity", "CombatFade_PlayerFrame_Opacity", 0, 100, 5,
         L.TIP_COMBAT_FADE_PLAYER_FRAME_OPACITY, fadeToggle)
 
+    layout:AddSpacer(10)
+
+    -- Speed Display
+    layout:AddSection(L.MODULE_SPEED_DISPLAY or "Speed Display")
+    local speedToggle = layout:AddModule(L.MODULE_SPEED_DISPLAY or "Speed Display", "SpeedDisplay", L.TIP_SPEED_DISPLAY)
+    layout:AddSubCheckbox(L.SPEED_DECIMALS or "Show Decimals", "SpeedDisplay_Decimals", L.TIP_SPEED_DECIMALS, speedToggle)
+
     layout:AddDefaultsButton(container)
     content:SetHeight(layout:Finalize())
     container.layout = layout

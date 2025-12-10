@@ -35,6 +35,7 @@ Modules\LootToast.lua
 Modules\ChatPlus.lua
 Modules\ActionBars.lua
 Modules\ActionCam.lua
+Modules\SpeedDisplay.lua
 
 
 # Settings UI
