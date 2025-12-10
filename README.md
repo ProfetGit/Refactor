@@ -63,7 +63,7 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 
 ---
 
-### � Quest Nameplates
+### 📍 Quest Nameplates
 > See quest objectives at a glance
 
 - **Kill objectives** — Sword icon on mobs you need to kill for quests
@@ -72,7 +72,7 @@ Refactor streamlines your WoW experience by automating tedious tasks, letting yo
 
 ---
 
-### �🎬 Skip Cinematics
+### 🎬 Skip Cinematics
 > Seen it once? Skip it forever
 
 - **Auto-skip watched cutscenes** — Remembers which cinematics you've seen

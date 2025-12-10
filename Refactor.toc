@@ -8,6 +8,8 @@
 ## IconTexture: Interface\AddOns\Refactor\refactor.tga
 
 ## Category-enUS: Quality of Life
+## X-Website: https://github.com/ProfetGit/Refactor
+## X-License: MIT
 
 # Localization
 Locales.lua
