@@ -21,7 +21,7 @@ MinimapButton:RegisterForDrag("LeftButton")
 
 -- Icon
 MinimapButton.icon = MinimapButton:CreateTexture(nil, "ARTWORK")
-MinimapButton.icon:SetTexture("Interface\\AddOns\\Refactor\\Refactor.tga")
+MinimapButton.icon:SetTexture("Interface\\AddOns\\Refactor\\refactor.tga")
 MinimapButton.icon:SetSize(20, 20)
 MinimapButton.icon:SetPoint("CENTER", 1, -1)
 

@@ -5,7 +5,7 @@
 ## Version: 1.0.0
 ## SavedVariables: RefactorDB
 ## SavedVariablesPerCharacter: RefactorCharDB
-## IconTexture: Interface\AddOns\Refactor\Refactor.tga
+## IconTexture: Interface\AddOns\Refactor\refactor.tga
 
 ## Category-enUS: Quality of Life
 
