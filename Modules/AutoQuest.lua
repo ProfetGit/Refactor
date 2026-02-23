@@ -4,7 +4,11 @@
 local addonName, addon = ...
 local L = addon.L
 
-local Module = {}
+local Utils = addon.Utils
+
+local Module = addon:NewModule("AutoQuest", {
+    settingKey = "AutoQuest"
+})
 
 ----------------------------------------------
 -- Performance: Cache globals
@@ -17,11 +21,6 @@ local string_lower = string.lower
 local string_find = string.find
 
 ----------------------------------------------
--- Module State
-----------------------------------------------
-local isEnabled = false
-
-----------------------------------------------
 -- Cached Settings (updated on change)
 ----------------------------------------------
 local cachedModifierKey = "SHIFT"
@@ -31,7 +30,7 @@ local cachedSkipGossip = true
 local cachedSingleOption = true
 local cachedContinueDialogue = true
 
-local function UpdateCachedSettings()
+function Module:UpdateCachedSettings()
     cachedModifierKey = addon.GetDBValue("AutoQuest_ModifierKey") or "SHIFT"
     cachedAccept = addon.GetDBBool("AutoQuest_Accept")
     cachedTurnIn = addon.GetDBBool("AutoQuest_TurnIn")
@@ -81,20 +80,20 @@ local CONTINUE_PATTERNS = {
 -- Helper Functions
 ----------------------------------------------
 local function ShouldProcess()
-    if not isEnabled then return false end
-    
+    if not Module.isEnabled then return false end
+
     -- Use cached modifier key
-    if cachedModifierKey and cachedModifierKey ~= "NONE" and addon.IsModifierKeyDown(cachedModifierKey) then
+    if cachedModifierKey and cachedModifierKey ~= "NONE" and Utils.IsModifierKeyDown(cachedModifierKey) then
         return false
     end
-    
+
     return true
 end
 
 local function GetNPCCreatureID()
     local guid = UnitGUID("npc")
     if not guid then return nil end
-    
+
     local _, _, _, _, _, creatureID = strsplit("-", guid)
     return tonumber(creatureID)
 end
@@ -107,7 +106,7 @@ end
 local function IsContinueOption(optionText)
     if not optionText then return false end
     local lowerText = string_lower(optionText)
-    
+
     for i = 1, #CONTINUE_PATTERNS do
         if string_find(lowerText, CONTINUE_PATTERNS[i], 1, true) then
             return true
@@ -134,18 +133,19 @@ end
 ----------------------------------------------
 local function ProcessGossipOptions()
     if IsBlacklistedNPC() then return false end
-    
+
     local options = C_GossipInfo.GetOptions()
     if not options or #options == 0 then return false end
-    
+
     local validOptions = {}
     local continueOptions = {}
     local questOptions = {}
-    
+
     for i = 1, #options do
         local option = options[i]
+        ---@diagnostic disable-next-line: undefined-field
         local optionType = option.type or ""
-        
+
         if not ShouldSkipOptionType(optionType) then
             if IsQuestRelatedOption(option) then
                 table_insert(questOptions, option)
@@ -156,35 +156,36 @@ local function ProcessGossipOptions()
             end
         end
     end
-    
+
     -- Priority 1: Quest-related options
     if #questOptions > 0 then
         C_GossipInfo.SelectOption(questOptions[1].gossipOptionID)
         return true
     end
-    
+
     -- Priority 2: Continue dialogue (use cached setting)
     if cachedContinueDialogue and #continueOptions > 0 then
         C_GossipInfo.SelectOption(continueOptions[1].gossipOptionID)
         return true
     end
-    
+
     -- Priority 3: Single valid option (use cached setting)
     -- No need to re-check ShouldSkipOptionType - validOptions already filtered
     if cachedSingleOption and #validOptions == 1 then
         C_GossipInfo.SelectOption(validOptions[1].gossipOptionID)
         return true
     end
-    
+
     -- Priority 4: Only one option total
     if cachedSingleOption and #options == 1 then
         local option = options[1]
+        ---@diagnostic disable-next-line: undefined-field
         if not ShouldSkipOptionType(option.type) then
             C_GossipInfo.SelectOption(option.gossipOptionID)
             return true
         end
     end
-    
+
     return false
 end
 ----------------------------------------------
@@ -192,10 +193,10 @@ end
 ----------------------------------------------
 local function OnQuestDetail()
     if not ShouldProcess() or not cachedAccept then return end
-    
+
     -- Skip if Blizzard's auto-accept is already handling this quest
     if QuestGetAutoAccept() then return end
-    
+
     -- Accept immediately - no delay needed
     AcceptQuest()
 end
@@ -205,7 +206,7 @@ end
 ----------------------------------------------
 local function OnQuestProgress()
     if not ShouldProcess() or not cachedTurnIn then return end
-    
+
     -- Complete immediately if quest is ready
     if IsQuestCompletable() then
         CompleteQuest()
@@ -217,9 +218,9 @@ end
 ----------------------------------------------
 local function OnQuestComplete()
     if not ShouldProcess() or not cachedTurnIn then return end
-    
+
     local numChoices = GetNumQuestChoices()
-    
+
     -- Turn in immediately if no reward choice needed
     if numChoices <= 1 then
         GetQuestReward(numChoices)
@@ -231,10 +232,10 @@ end
 ----------------------------------------------
 local function OnGossipShow()
     if not ShouldProcess() or not cachedSkipGossip then return end
-    
+
     local availableQuests = C_GossipInfo.GetAvailableQuests()
     local activeQuests = C_GossipInfo.GetActiveQuests()
-    
+
     -- Priority 1: Turn in completed quests
     if cachedTurnIn then
         for i = 1, #activeQuests do
@@ -245,13 +246,13 @@ local function OnGossipShow()
             end
         end
     end
-    
+
     -- Priority 2: Accept available quests
     if cachedAccept and #availableQuests > 0 then
         C_GossipInfo.SelectAvailableQuest(availableQuests[1].questID)
         return
     end
-    
+
     -- Priority 3: Process gossip options
     ProcessGossipOptions()
 end
@@ -261,23 +262,25 @@ end
 ----------------------------------------------
 local function OnQuestGreeting()
     if not ShouldProcess() then return end
-    
+
     -- Priority 1: Turn in completed quests
     if cachedTurnIn then
         local numActiveQuests = GetNumActiveQuests()
         for i = 1, numActiveQuests do
             local _, isComplete = GetActiveTitle(i)
             if isComplete then
+                ---@diagnostic disable-next-line: redundant-parameter
                 SelectActiveQuest(i)
                 return
             end
         end
     end
-    
+
     -- Priority 2: Accept available quests
     if cachedAccept then
         local numAvailableQuests = GetNumAvailableQuests()
         if numAvailableQuests > 0 then
+            ---@diagnostic disable-next-line: redundant-parameter
             SelectAvailableQuest(1)
         end
     end
@@ -305,9 +308,8 @@ end)
 ----------------------------------------------
 -- Enable/Disable
 ----------------------------------------------
-function Module:Enable()
-    isEnabled = true
-    UpdateCachedSettings()
+function Module:OnEnable()
+    self:UpdateCachedSettings()
     eventFrame:RegisterEvent("QUEST_DETAIL")
     eventFrame:RegisterEvent("QUEST_PROGRESS")
     eventFrame:RegisterEvent("QUEST_COMPLETE")
@@ -315,8 +317,7 @@ function Module:Enable()
     eventFrame:RegisterEvent("QUEST_GREETING")
 end
 
-function Module:Disable()
-    isEnabled = false
+function Module:OnDisable()
     eventFrame:UnregisterAllEvents()
 end
 
@@ -324,22 +325,12 @@ end
 -- Initialization
 ----------------------------------------------
 function Module:OnInitialize()
-    UpdateCachedSettings()
-    
-    if addon.GetDBBool("AutoQuest") then
-        self:Enable()
-    end
-    
     -- Listen for setting changes
-    addon.CallbackRegistry:Register("SettingChanged.AutoQuest", function(value)
-        if value then Module:Enable() else Module:Disable() end
-    end)
-    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_ModifierKey", UpdateCachedSettings)
-    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_Accept", UpdateCachedSettings)
-    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_TurnIn", UpdateCachedSettings)
-    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_SkipGossip", UpdateCachedSettings)
-    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_SingleOption", UpdateCachedSettings)
-    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_ContinueDialogue", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_ModifierKey", function() self:UpdateCachedSettings() end)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_Accept", function() self:UpdateCachedSettings() end)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_TurnIn", function() self:UpdateCachedSettings() end)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_SkipGossip", function() self:UpdateCachedSettings() end)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_SingleOption", function() self:UpdateCachedSettings() end)
+    addon.CallbackRegistry:Register("SettingChanged.AutoQuest_ContinueDialogue",
+        function() self:UpdateCachedSettings() end)
 end
-
-addon.RegisterModule("AutoQuest", Module)

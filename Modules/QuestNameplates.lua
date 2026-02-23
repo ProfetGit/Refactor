@@ -16,11 +16,10 @@ local UnitIsDead = UnitIsDead
 
 -- Cache the critical APIs
 local C_NamePlate_GetNamePlateForUnit = C_NamePlate.GetNamePlateForUnit
-local C_NamePlate_GetNamePlates = C_NamePlate.GetNamePlates
 -- The KEY API: This is the authoritative source for quest-related units
 local C_QuestLog_UnitIsRelatedToActiveQuest = C_QuestLog.UnitIsRelatedToActiveQuest
 -- Modern tooltip API (Dragonflight+)
-local C_TooltipInfo_GetUnit = C_TooltipInfo and C_TooltipInfo.GetUnit
+local C_TooltipInfo_GetUnit = C_TooltipInfo and C_TooltipInfo.GetUnit or nil
 local GetQuestObjectiveInfo = GetQuestObjectiveInfo
 
 ----------------------------------------------
@@ -39,86 +38,138 @@ end
 ----------------------------------------------
 local isEnabled = false
 local nameplateFrames = {} -- Track our overlay frames per nameplate
+local unitQuestCache = {}  -- [unitToken] = { [questID] = true, ... } — cached quest IDs per unit
+local activeUnits = {}     -- [unitToken] = true — tracks all visible nameplate units
+local Enum_TooltipDataLineType_QuestTitle = Enum.TooltipDataLineType and Enum.TooltipDataLineType.QuestTitle or 17
 
 ----------------------------------------------
--- Quest Progress Detection (using proper APIs)
+-- Quest Progress: Shared objective parser
+-- Reads CURRENT data from GetQuestObjectiveInfo (quest log, not tooltip)
 ----------------------------------------------
-
--- Get quest progress for a unit using C_TooltipInfo (Dragonflight+ API)
--- Returns: progressText, objectiveType, objectiveCount, questID, isPercent
-local function GetQuestProgress(unitID)
-    -- CRITICAL: This is the ONLY reliable gate for quest-related mobs
-    -- If the game says this unit is NOT related to an active quest, do NOT show anything
-    if not C_QuestLog_UnitIsRelatedToActiveQuest(unitID) then
-        return nil
-    end
-
-    -- Use the modern tooltip API to get quest data
-    if not C_TooltipInfo_GetUnit then
-        -- Fallback for older clients (pre-Dragonflight)
-        return nil
-    end
-
-    local tooltipData = C_TooltipInfo_GetUnit(unitID)
-    if not tooltipData or not tooltipData.lines then
-        return nil
-    end
-
+local function ParseQuestObjectives(questIDs)
     local progressText = nil
-    local objectiveCount = 0
-    local questID = nil
-    local hasItemObjective = false
+    local maxLeft = 0
     local isPercent = false
+    local hasItemObjective = false
+    local foundAnyQuest = false
 
-    -- Scan tooltip lines for quest information
-    for i = 3, #tooltipData.lines do
-        local line = tooltipData.lines[i]
+    for questID in pairs(questIDs) do
+        for objIdx = 1, 10 do
+            local text, objectiveType, finished = GetQuestObjectiveInfo(questID, objIdx, false)
+            if not text then break end
 
-        -- Type 17 indicates a quest-related tooltip line
-        if line.type == 17 and line.id then
-            questID = line.id
-
-            -- Get objective info from the quest
-            local text, objectiveType, finished = GetQuestObjectiveInfo(line.id, 1, false)
-            if text and not finished then
-                -- Extract progress numbers
+            if not finished then
+                foundAnyQuest = true
                 local x, y = strmatch(text, "(%d+)/(%d+)")
                 if x and y then
                     local numLeft = tonumber(y) - tonumber(x)
-                    if numLeft > objectiveCount then
-                        objectiveCount = numLeft
+                    if numLeft > maxLeft then
+                        maxLeft = numLeft
+                        progressText = text
                     end
-                    progressText = text
                 else
-                    -- Check for percentage format
                     local progress = tonumber(strmatch(text, "([%d%.]+)%%"))
                     if progress and progress <= 100 then
-                        objectiveCount = ceil(100 - progress)
-                        progressText = text
-                        isPercent = true
+                        local numLeft = ceil(100 - progress)
+                        if numLeft > maxLeft then
+                            maxLeft = numLeft
+                            progressText = text
+                            isPercent = true
+                        end
                     end
                 end
 
-                -- Check if this quest has item objectives (for icon type)
-                for objIdx = 1, 10 do
-                    local objText, objType, objFinished = GetQuestObjectiveInfo(questID, objIdx, false)
-                    if not objText then break end
-                    if not objFinished and (objType == "item" or objType == "object") then
-                        hasItemObjective = true
-                        break
-                    end
+                if objectiveType == "item" or objectiveType == "object" then
+                    hasItemObjective = true
                 end
             end
         end
     end
 
     if progressText then
-        return progressText, hasItemObjective and "item" or "monster", objectiveCount, questID, isPercent
+        return progressText, hasItemObjective and "item" or "monster", maxLeft, next(questIDs), isPercent
+    end
+    if foundAnyQuest or next(questIDs) then
+        return "Quest Objective", "monster", 0, next(questIDs), false
+    end
+    return nil
+end
+
+----------------------------------------------
+-- Quest Progress: Full discovery via tooltip
+-- Used on NAME_PLATE_UNIT_ADDED for first-time quest ID discovery
+----------------------------------------------
+local function GetQuestProgress(unitID)
+    if not C_QuestLog_UnitIsRelatedToActiveQuest(unitID) then
+        unitQuestCache[unitID] = nil
+        return nil
     end
 
-    -- If we got here, the unit IS quest-related but we couldn't parse tooltip
-    -- Return minimal data
-    return "Quest Objective", "monster", 0, questID, false
+    if not C_TooltipInfo_GetUnit then return nil end
+    local tooltipData = C_TooltipInfo_GetUnit(unitID)
+    if not tooltipData or not tooltipData.lines or #tooltipData.lines < 3 then
+        return nil
+    end
+
+    local uniqueQuestIDs = {}
+    for i = 3, #tooltipData.lines do
+        local line = tooltipData.lines[i]
+        ---@diagnostic disable-next-line: undefined-field
+        if line.type == Enum_TooltipDataLineType_QuestTitle and line.id then
+            ---@diagnostic disable-next-line: undefined-field
+            uniqueQuestIDs[line.id] = true
+        end
+    end
+
+    if not next(uniqueQuestIDs) then
+        return "Quest Objective", "monster", 0, nil, false
+    end
+
+    -- Cache quest IDs so refresh cycles don't need stale tooltip data
+    unitQuestCache[unitID] = uniqueQuestIDs
+
+    return ParseQuestObjectives(uniqueQuestIDs)
+end
+
+----------------------------------------------
+-- Quest Progress: Fast refresh using cached quest IDs
+-- Bypasses tooltip cache — reads directly from quest log
+----------------------------------------------
+local function RefreshQuestProgress(unitID)
+    if not C_QuestLog_UnitIsRelatedToActiveQuest(unitID) then
+        unitQuestCache[unitID] = nil
+        return nil
+    end
+
+    local cachedQuestIDs = unitQuestCache[unitID]
+    if cachedQuestIDs then
+        return ParseQuestObjectives(cachedQuestIDs)
+    end
+
+    -- No cache yet — fall back to full tooltip discovery
+    return GetQuestProgress(unitID)
+end
+
+----------------------------------------------
+-- Helper: Find the visual Health Bar
+----------------------------------------------
+local function FindHealthBar(nameplate)
+    if nameplate.UnitFrame then
+        if nameplate.UnitFrame.healthBar then return nameplate.UnitFrame.healthBar end
+        if nameplate.UnitFrame.Health then return nameplate.UnitFrame.Health end
+    end
+    -- Fallback: aggressively search for a StatusBar to bypass invisible clicking frames
+    local framesToCheck = { nameplate, nameplate.UnitFrame }
+    for _, parent in pairs(framesToCheck) do
+        if parent and parent.GetChildren then
+            for _, child in pairs({ parent:GetChildren() }) do
+                if child:GetObjectType() == "StatusBar" then
+                    return child
+                end
+            end
+        end
+    end
+    return nameplate.UnitFrame or nameplate
 end
 
 ----------------------------------------------
@@ -126,45 +177,39 @@ end
 ----------------------------------------------
 local function CreateNameplateOverlay(nameplate)
     local frame = CreateFrame("Frame", nil, nameplate)
-    frame:SetSize(24, 24)
+    frame:SetSize(1, 1) -- 1x1 anchor point
 
-    -- Anchor to nameplate frame
-    local anchorFrame = nameplate.UnitFrame or nameplate
+    local healthBar = FindHealthBar(nameplate)
 
-    -- Position to the left of the nameplate (offset to center the visual)
-    frame:SetPoint("RIGHT", anchorFrame, "LEFT", 2, -2)
+    -- Anchor exactly to the top-right corner of the physical red bar.
+    -- X offset: 2 (pulls it slightly right), Y offset: -2 (pushes it slightly down to sit on the stroke)
+    frame:SetPoint("CENTER", healthBar, "TOPRIGHT", 12, 0)
+
     frame:SetFrameStrata("HIGH")
     frame:SetFrameLevel(10)
 
-    -- Modern button background (Dragonflight style)
-    frame.bg = frame:CreateTexture(nil, "BACKGROUND")
-    frame.bg:SetSize(24, 24)
-    frame.bg:SetPoint("CENTER")
-    frame.bg:SetAtlas("common-button-square-gray-down")
-    frame.bg:SetVertexColor(1, 0.85, 0.3, 1) -- Gold tint
-
-    -- Progress count text (centered on the atlas visual)
-    frame.text = frame:CreateFontString(nil, "OVERLAY")
-    frame.text:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
-    frame.text:SetPoint("CENTER", 0, 0)
-    frame.text:SetTextColor(1, 0.82, 0) -- WoW quest yellow
-    frame.text:SetShadowOffset(1, -1)
-    frame.text:SetShadowColor(0, 0, 0, 1)
-
     -- Kill indicator icon (sword, shown for kill objectives)
     frame.killIcon = frame:CreateTexture(nil, "OVERLAY")
-    frame.killIcon:SetSize(14, 14)
-    frame.killIcon:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", -4, -4)
+    frame.killIcon:SetSize(16, 16)
+    frame.killIcon:SetPoint("BOTTOMRIGHT", frame, "CENTER", 0, 0)
     frame.killIcon:SetTexture("Interface\\CURSOR\\Attack")
-    frame.killIcon:SetTexCoord(0, 1, 0, 1) -- Normal orientation (points right toward the atlas)
+    frame.killIcon:SetTexCoord(0, 1, 0, 1)
     frame.killIcon:Hide()
 
     -- Loot indicator icon (bag, shown for item objectives)
     frame.lootIcon = frame:CreateTexture(nil, "OVERLAY")
-    frame.lootIcon:SetSize(14, 14)
-    frame.lootIcon:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", -4, -4)
+    frame.lootIcon:SetSize(16, 16)
+    frame.lootIcon:SetPoint("BOTTOMRIGHT", frame, "CENTER", 0, 0)
     frame.lootIcon:SetAtlas("Banker")
     frame.lootIcon:Hide()
+
+    -- Progress count text (anchored to the right of whichever icon is shown)
+    frame.text = frame:CreateFontString(nil, "OVERLAY")
+    frame.text:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+    frame.text:SetPoint("LEFT", frame.killIcon, "RIGHT", 2, 0)
+    frame.text:SetTextColor(1, 0.82, 0) -- WoW quest yellow
+    frame.text:SetShadowOffset(1, -1)
+    frame.text:SetShadowColor(0, 0, 0, 1)
 
     frame:Hide()
     return frame
@@ -181,7 +226,50 @@ local function GetNameplateOverlay(nameplate)
 end
 
 ----------------------------------------------
--- Update nameplate overlay
+-- Shared display logic for overlays
+----------------------------------------------
+local function ApplyOverlay(overlay, progressText, objectiveType, objectiveCount, isPercent)
+    if not progressText then
+        overlay:Hide()
+        return
+    end
+
+    local isItemObjective = (objectiveType == "item" or objectiveType == "object")
+
+    if isItemObjective and not cachedShowLootIcon then
+        overlay:Hide()
+        return
+    elseif not isItemObjective and not cachedShowKillIcon then
+        overlay:Hide()
+        return
+    end
+
+    if isItemObjective then
+        overlay.lootIcon:Show()
+        overlay.killIcon:Hide()
+    else
+        overlay.killIcon:Show()
+        overlay.lootIcon:Hide()
+    end
+
+    if objectiveCount > 0 then
+        if isPercent then
+            overlay.text:SetFont("Fonts\\FRIZQT__.TTF", objectiveCount == 100 and 10 or 11, "OUTLINE")
+            overlay.text:SetText(objectiveCount .. "%")
+        else
+            overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+            overlay.text:SetText(objectiveCount)
+        end
+    else
+        overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+        overlay.text:SetText("!")
+    end
+
+    overlay:Show()
+end
+
+----------------------------------------------
+-- Update nameplate overlay (full tooltip discovery)
 ----------------------------------------------
 local function UpdateNameplate(unitId)
     if not isEnabled then return end
@@ -191,64 +279,33 @@ local function UpdateNameplate(unitId)
 
     local overlay = GetNameplateOverlay(nameplate)
 
-    -- Skip dead units
     if UnitIsDead(unitId) then
         overlay:Hide()
         return
     end
 
-    -- Get quest progress using the proper API
     local progressText, objectiveType, objectiveCount, questID, isPercent = GetQuestProgress(unitId)
+    ApplyOverlay(overlay, progressText, objectiveType, objectiveCount, isPercent)
+end
 
-    -- If no quest progress, hide overlay
-    if not progressText then
+----------------------------------------------
+-- Refresh nameplate overlay (fast path, no tooltip)
+----------------------------------------------
+local function RefreshNameplate(unitId)
+    if not isEnabled then return end
+
+    local nameplate = C_NamePlate_GetNamePlateForUnit(unitId)
+    if not nameplate then return end
+
+    local overlay = GetNameplateOverlay(nameplate)
+
+    if UnitIsDead(unitId) then
         overlay:Hide()
         return
     end
 
-    -- Determine if this is an item/loot objective
-    local isItemObjective = (objectiveType == "item" or objectiveType == "object")
-
-    -- Check settings
-    if isItemObjective and not cachedShowLootIcon then
-        overlay:Hide()
-        return
-    elseif not isItemObjective and not cachedShowKillIcon then
-        overlay:Hide()
-        return
-    end
-
-    -- Show appropriate indicator icon
-    if isItemObjective then
-        overlay.lootIcon:Show()
-        overlay.killIcon:Hide()
-    else
-        overlay.killIcon:Show()
-        overlay.lootIcon:Hide()
-    end
-
-    -- Set progress count text
-    if objectiveCount > 0 then
-        if isPercent then
-            -- For percentage objectives, show with % suffix
-            if objectiveCount == 100 then
-                -- Shrink font for "100%" to fit in frame
-                overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
-            else
-                overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-            end
-            overlay.text:SetText(objectiveCount .. "%")
-        else
-            -- Regular count objectives
-            overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
-            overlay.text:SetText(objectiveCount)
-        end
-    else
-        overlay.text:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
-        overlay.text:SetText("!")
-    end
-
-    overlay:Show()
+    local progressText, objectiveType, objectiveCount, questID, isPercent = RefreshQuestProgress(unitId)
+    ApplyOverlay(overlay, progressText, objectiveType, objectiveCount, isPercent)
 end
 
 ----------------------------------------------
@@ -259,46 +316,31 @@ local function ClearNameplate(unitId)
     if nameplate and nameplateFrames[nameplate] then
         nameplateFrames[nameplate]:Hide()
     end
+    unitQuestCache[unitId] = nil
 end
 
 ----------------------------------------------
--- Update all visible nameplates (with throttling)
+-- Update all visible nameplates
 ----------------------------------------------
 local pendingNameplateUpdate = false
-local lastNameplateUpdate = 0
-local NAMEPLATE_UPDATE_THROTTLE = 0.2
 
 local function UpdateAllNameplates()
     if not isEnabled then return end
 
-    local nameplates = C_NamePlate_GetNamePlates()
-    if nameplates then
-        for _, nameplate in ipairs(nameplates) do
-            local unitId = nameplate.namePlateUnitToken
-            if unitId then
-                UpdateNameplate(unitId)
-            end
-        end
+    for unitId in pairs(activeUnits) do
+        RefreshNameplate(unitId)
     end
 end
 
+-- A robust debouncer: guarantees we never drop events that fire in quick succession
 local function ScheduleNameplateUpdate()
     if pendingNameplateUpdate then return end
 
-    local now = GetTime()
-    local timeSince = now - lastNameplateUpdate
-
-    if timeSince < NAMEPLATE_UPDATE_THROTTLE then
-        pendingNameplateUpdate = true
-        C_Timer.After(NAMEPLATE_UPDATE_THROTTLE - timeSince + 0.05, function()
-            pendingNameplateUpdate = false
-            lastNameplateUpdate = GetTime()
-            UpdateAllNameplates()
-        end)
-    else
-        lastNameplateUpdate = now
-        C_Timer.After(0.1, UpdateAllNameplates)
-    end
+    pendingNameplateUpdate = true
+    C_Timer.After(0.15, function()
+        pendingNameplateUpdate = false
+        UpdateAllNameplates()
+    end)
 end
 
 ----------------------------------------------
@@ -309,16 +351,34 @@ local eventFrame = CreateFrame("Frame")
 local function OnEvent(self, event, ...)
     if event == "NAME_PLATE_UNIT_ADDED" then
         local unitId = ...
+        activeUnits[unitId] = true
+        unitQuestCache[unitId] = nil -- Clear stale cache from previous mob on this token
         UpdateNameplate(unitId)
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
         local unitId = ...
+        activeUnits[unitId] = nil
         ClearNameplate(unitId)
-    elseif event == "QUEST_LOG_UPDATE" or event == "QUEST_ACCEPTED" or
-        event == "QUEST_REMOVED" or event == "QUEST_POI_UPDATE" then
-        -- Quest data changed, update all nameplates (throttled)
-        ScheduleNameplateUpdate()
     elseif event == "UNIT_QUEST_LOG_CHANGED" then
-        -- Specific quest progress changed (throttled)
+        local unitId = ...
+        if unitId == "player" then
+            UpdateAllNameplates()
+        end
+    elseif event == "QUEST_LOG_UPDATE" then
+        ScheduleNameplateUpdate()
+    elseif event == "UI_INFO_MESSAGE" then
+        local messageType, text = ...
+        if messageType == LE_INFO_MESSAGE_TYPE_QUEST_OBJECTIVE then
+            ScheduleNameplateUpdate()
+        end
+    elseif event == "UNIT_HEALTH" then
+        local unitId = ...
+        if unitId and strmatch(unitId, "nameplate%d+") then
+            if UnitIsDead(unitId) then
+                ScheduleNameplateUpdate()
+            end
+        end
+    else
+        -- QUEST_ACCEPTED, QUEST_REMOVED, QUEST_POI_UPDATE, QUEST_WATCH_UPDATE
         ScheduleNameplateUpdate()
     end
 end
@@ -334,11 +394,18 @@ local function EnableModule()
 
     eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
     eventFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+
+    -- Quest Progress Events
     eventFrame:RegisterEvent("QUEST_LOG_UPDATE")
+    eventFrame:RegisterEvent("UNIT_QUEST_LOG_CHANGED")
     eventFrame:RegisterEvent("QUEST_ACCEPTED")
     eventFrame:RegisterEvent("QUEST_REMOVED")
     eventFrame:RegisterEvent("QUEST_POI_UPDATE")
-    eventFrame:RegisterEvent("UNIT_QUEST_LOG_CHANGED")
+    eventFrame:RegisterEvent("QUEST_WATCH_UPDATE")
+    eventFrame:RegisterEvent("UI_INFO_MESSAGE")
+
+    -- Fallback Combat Events
+    eventFrame:RegisterEvent("UNIT_HEALTH")
 
     -- Update any currently visible nameplates
     UpdateAllNameplates()

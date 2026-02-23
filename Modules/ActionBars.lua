@@ -1,8 +1,9 @@
 local addonName, addon = ...
 local L = addon.L
 
-local CombatFade = {}
-addon.RegisterModule("CombatFade", CombatFade)
+local Module = addon:NewModule("CombatFade", {
+    settingKey = "CombatFade"
+})
 
 -- Action Bar frame names
 local actionBarFrameNames = {
@@ -28,23 +29,23 @@ local playerFrameNames = {
 }
 
 local actionBarObjects = {}
-local actionBarGryphons = {}
 local playerFrameObjects = {}
 local initialized = false
 
-local f = CreateFrame("Frame")
+local eventFrame = CreateFrame("Frame")
+local updateFrame = CreateFrame("Frame")
 local FADE_IN_TIME = 0.2
-local FADE_OUT_TIME = 0.5
+local FADE_OUT_TIME = 0.2
+local MOUSE_OVER_CHECK_INTERVAL = 0.05 -- 20 FPS for bounds checking
 
--- Current alpha states
-local actionBarAlpha = 1
-local playerFrameAlpha = 1
+local targetBarAlpha = 1
+local targetPlayerAlpha = 1
+local currentBarAlpha = 1
+local currentPlayerAlpha = 1
 
+local inCombat = false
+local timeSinceLastMouseCheck = 0
 
-----------------------------------------------
--- PERFORMANCE OPTIMIZATION: Cached settings
--- Updated only when settings change, not every frame
-----------------------------------------------
 local cachedSettings = {
     moduleEnabled = false,
     actionBarsEnabled = false,
@@ -53,271 +54,185 @@ local cachedSettings = {
     playerFrameMinAlpha = 0,
 }
 
--- Throttle: only run expensive checks every N seconds
-local UPDATE_INTERVAL = 0.05 -- 20 times per second instead of 60+
-local timeSinceLastUpdate = 0
-
--- Track if alpha needs updating (dirty flag)
-local needsAlphaUpdate = true
-local lastInCombat = nil
-local lastMouseOver = nil
-
 local function UpdateCachedSettings()
     cachedSettings.moduleEnabled = addon.GetDBBool("CombatFade")
     cachedSettings.actionBarsEnabled = addon.GetDBBool("CombatFade_ActionBars")
     cachedSettings.playerFrameEnabled = addon.GetDBBool("CombatFade_PlayerFrame")
     cachedSettings.actionBarMinAlpha = (addon.GetDBValue("CombatFade_ActionBars_Opacity") or 0) / 100
     cachedSettings.playerFrameMinAlpha = (addon.GetDBValue("CombatFade_PlayerFrame_Opacity") or 0) / 100
-    needsAlphaUpdate = true
 end
 
-function CombatFade:OnInitialize()
-    UpdateCachedSettings()
-    C_Timer.After(1, function()
-        self:UpdateState()
-    end)
-end
-
-local function AddToList(list, obj)
-    if not obj then return end
-    if type(obj) ~= "table" then return end
-    if not (obj.SetAlpha and obj.GetAlpha) then return end
-
-    for _, o in ipairs(list) do
-        if o == obj then return end
-    end
-    table.insert(list, obj)
-end
-
-local function AddGryphon(obj)
-    if not obj then return end
-    if type(obj) ~= "table" then return end
-    if not (obj.Hide and obj.Show) then return end
-
-    for _, o in ipairs(actionBarGryphons) do
-        if o == obj then return end
-    end
-    table.insert(actionBarGryphons, obj)
-end
-
-local function SafeGetName(frame)
-    if frame and type(frame) == "table" and frame.GetName then
-        local success, name = pcall(function() return frame:GetName() end)
-        if success then return name end
-    end
-    return nil
-end
-
-local function SearchForArt(frame, depth)
-    depth = depth or 0
-    if depth > 5 then return end
-    if not frame then return end
-    if type(frame) ~= "table" then return end
-
-    local name = SafeGetName(frame)
-    if name then
-        local lowerName = name:lower()
-        if lowerName:find("endcap") or lowerName:find("gryphon") or lowerName:find("artframe") or lowerName:find("borderart") then
-            AddGryphon(frame)
-            AddToList(actionBarObjects, frame)
+local function IsAnyFrameMouseOver(frameList)
+    for _, frame in ipairs(frameList) do
+        -- Only bounds check frames that are actually shown and have proper bounding boxes
+        if frame and frame:IsShown() and frame.IsMouseOver and frame:IsMouseOver() then
+            return true
         end
     end
-
-    if frame.EndCaps then AddGryphon(frame.EndCaps) end
-    if frame.LeftEndCap then AddGryphon(frame.LeftEndCap) end
-    if frame.RightEndCap then AddGryphon(frame.RightEndCap) end
-    if frame.BorderArt then
-        AddGryphon(frame.BorderArt); AddToList(actionBarObjects, frame.BorderArt)
+    -- Also natively check flyouts if ActionBars is true
+    if frameList == actionBarObjects and SpellFlyout and SpellFlyout:IsShown() and SpellFlyout:IsMouseOver() then
+        return true
     end
-    if frame.ArtFrame then
-        AddGryphon(frame.ArtFrame); AddToList(actionBarObjects, frame.ArtFrame)
-    end
-
-    if frame.GetChildren then
-        local success, children = pcall(function() return { frame:GetChildren() } end)
-        if success and children then
-            for _, child in ipairs(children) do
-                SearchForArt(child, depth + 1)
-            end
-        end
-    end
+    return false
 end
 
 local function InitFrames()
     if initialized then return end
 
     actionBarObjects = {}
-    actionBarGryphons = {}
     playerFrameObjects = {}
 
-    -- Action bars
+    -- Only fetch what we know are safely sized parent frames (exclude tracking bar)
     for _, name in ipairs(actionBarFrameNames) do
-        local frame = _G[name]
-        if frame then
-            AddToList(actionBarObjects, frame)
-            SearchForArt(frame, 0)
+        if name ~= "StatusTrackingBarManager" then
+            local frame = _G[name]
+            if frame then table.insert(actionBarObjects, frame) end
         end
     end
 
-    if MainActionBar then
-        AddToList(actionBarObjects, MainActionBar)
-        SearchForArt(MainActionBar, 0)
-
-        if MainActionBar.EndCaps then
-            AddGryphon(MainActionBar.EndCaps)
-            if MainActionBar.EndCaps.LeftEndCap then AddGryphon(MainActionBar.EndCaps.LeftEndCap) end
-            if MainActionBar.EndCaps.RightEndCap then AddGryphon(MainActionBar.EndCaps.RightEndCap) end
-        end
-    end
-
-    -- Player frame
     for _, name in ipairs(playerFrameNames) do
         local frame = _G[name]
-        if frame then
-            AddToList(playerFrameObjects, frame)
-        end
+        if frame then table.insert(playerFrameObjects, frame) end
     end
 
     initialized = true
 end
 
-function CombatFade:UpdateState()
-    UpdateCachedSettings()
+function Module:UpdateFadeState()
+    if not initialized or not self.isEnabled then return end
 
-    if cachedSettings.moduleEnabled and (cachedSettings.actionBarsEnabled or cachedSettings.playerFrameEnabled) then
-        if not initialized then InitFrames() end
-        f:SetScript("OnUpdate", self.OnUpdate)
-    else
-        f:SetScript("OnUpdate", nil)
-        self:ForceShow()
-    end
-end
-
-function CombatFade:ForceShow()
-    if not initialized then InitFrames() end
-
-    for _, obj in ipairs(actionBarObjects) do
-        if obj.SetAlpha then obj:SetAlpha(1) end
-    end
-
-
-    for _, obj in ipairs(playerFrameObjects) do
-        if obj.SetAlpha then obj:SetAlpha(1) end
-    end
-
-    actionBarAlpha = 1
-    playerFrameAlpha = 1
-end
-
--- OPTIMIZED: Only check mouse over when needed
-local function IsMouseOverList(list)
-    for _, obj in ipairs(list) do
-        if obj.IsShown and obj:IsShown() and obj.IsMouseOver and obj:IsMouseOver() then
-            return true
-        end
-    end
-    return false
-end
-
-function CombatFade.OnUpdate(self, elapsed)
-    -- OPTIMIZATION: Throttle updates to 20/sec instead of 60+
-    timeSinceLastUpdate = timeSinceLastUpdate + elapsed
-    if timeSinceLastUpdate < UPDATE_INTERVAL then
-        return
-    end
-    local actualElapsed = timeSinceLastUpdate
-    timeSinceLastUpdate = 0
-
-    if not initialized then InitFrames() end
-
-    -- Use cached settings (updated only on setting change)
     local settings = cachedSettings
 
-    -- Check combat state (cheap)
-    local inCombat = InCombatLockdown()
-
-    -- Only check mouse over if we're not in combat (expensive)
     local mouseOverBars = false
     local mouseOverPlayer = false
 
+    -- Optimization: Only bounds check if we actually need to
     if not inCombat then
-        if settings.actionBarsEnabled then
-            mouseOverBars = IsMouseOverList(actionBarObjects) or
-                IsMouseOverList(actionBarGryphons) or
-                (SpellFlyout and SpellFlyout:IsShown() and SpellFlyout:IsMouseOver())
-        end
-        if settings.playerFrameEnabled then
-            mouseOverPlayer = IsMouseOverList(playerFrameObjects)
-        end
+        if settings.actionBarsEnabled then mouseOverBars = IsAnyFrameMouseOver(actionBarObjects) end
+        if settings.playerFrameEnabled then mouseOverPlayer = IsAnyFrameMouseOver(playerFrameObjects) end
     end
 
-    -- Calculate target alpha for action bars
-    local actionBarTarget = settings.actionBarMinAlpha
-    if not settings.actionBarsEnabled then
-        actionBarTarget = 1
-    elseif inCombat or mouseOverBars then
-        actionBarTarget = 1
+    -- Action Bar Target Alpha Calculations
+    targetBarAlpha = settings.actionBarMinAlpha
+    if not settings.actionBarsEnabled or inCombat or mouseOverBars then
+        targetBarAlpha = 1
     end
 
-    -- Calculate target alpha for player frame
-    local playerFrameTarget = settings.playerFrameMinAlpha
-    if not settings.playerFrameEnabled then
-        playerFrameTarget = 1
-    elseif inCombat or mouseOverPlayer then
-        playerFrameTarget = 1
-    end
-
-    -- OPTIMIZATION: Skip alpha updates if already at target
-    local actionBarNeedsUpdate = math.abs(actionBarAlpha - actionBarTarget) > 0.001
-    local playerFrameNeedsUpdate = math.abs(playerFrameAlpha - playerFrameTarget) > 0.001
-
-    if not actionBarNeedsUpdate and not playerFrameNeedsUpdate then
-        return -- Nothing to do, skip expensive iterations
-    end
-
-    -- Smooth transition for action bars
-    if actionBarNeedsUpdate then
-        local change = actualElapsed / (actionBarTarget > actionBarAlpha and FADE_IN_TIME or FADE_OUT_TIME)
-        if actionBarTarget > actionBarAlpha then
-            actionBarAlpha = math.min(actionBarTarget, actionBarAlpha + change)
-        else
-            actionBarAlpha = math.max(actionBarTarget, actionBarAlpha - change)
-        end
-
-        -- Apply action bar alpha
-        for _, obj in ipairs(actionBarObjects) do
-            if obj.SetAlpha then
-                obj:SetAlpha(actionBarAlpha)
-            end
-        end
-    end
-
-    -- Smooth transition for player frame
-    if playerFrameNeedsUpdate then
-        local change = actualElapsed / (playerFrameTarget > playerFrameAlpha and FADE_IN_TIME or FADE_OUT_TIME)
-        if playerFrameTarget > playerFrameAlpha then
-            playerFrameAlpha = math.min(playerFrameTarget, playerFrameAlpha + change)
-        else
-            playerFrameAlpha = math.max(playerFrameTarget, playerFrameAlpha - change)
-        end
-
-        -- Apply player frame alpha
-        for _, obj in ipairs(playerFrameObjects) do
-            if obj.SetAlpha then
-                obj:SetAlpha(playerFrameAlpha)
-            end
-        end
+    -- Player Frame Target Alpha Calculations
+    targetPlayerAlpha = settings.playerFrameMinAlpha
+    if not settings.playerFrameEnabled or inCombat or mouseOverPlayer then
+        targetPlayerAlpha = 1
     end
 end
 
--- Listen for setting changes - update cached values
-local function OnSettingChanged()
+updateFrame:SetScript("OnUpdate", function(_, elapsed)
+    if not initialized or not cachedSettings.moduleEnabled then return end
+
+    -- Throttled Mouse Check (Only query bounds 20 times a second max)
+    timeSinceLastMouseCheck = timeSinceLastMouseCheck + elapsed
+    if timeSinceLastMouseCheck > MOUSE_OVER_CHECK_INTERVAL then
+        timeSinceLastMouseCheck = 0
+        Module:UpdateFadeState()
+    end
+
+    -- Smooth Interpolation (Fader Engine)
+    local barDiff = targetBarAlpha - currentBarAlpha
+    local playerDiff = targetPlayerAlpha - currentPlayerAlpha
+
+    if math.abs(barDiff) > 0.001 then
+        local duration = barDiff > 0 and FADE_IN_TIME or FADE_OUT_TIME
+        currentBarAlpha = currentBarAlpha + (barDiff / duration * elapsed)
+
+        -- Clamp logic
+        if barDiff > 0 and currentBarAlpha > targetBarAlpha then currentBarAlpha = targetBarAlpha end
+        if barDiff < 0 and currentBarAlpha < targetBarAlpha then currentBarAlpha = targetBarAlpha end
+
+        for _, frame in ipairs(actionBarObjects) do
+            -- Safe check: NEVER Show(), only touch Alpha if it's strictly > 0 via engine
+            if currentBarAlpha > 0 or frame:GetAlpha() ~= currentBarAlpha then
+                frame:SetAlpha(currentBarAlpha)
+            end
+        end
+    end
+
+    if math.abs(playerDiff) > 0.001 then
+        local duration = playerDiff > 0 and FADE_IN_TIME or FADE_OUT_TIME
+        currentPlayerAlpha = currentPlayerAlpha + (playerDiff / duration * elapsed)
+
+        -- Clamp logic
+        if playerDiff > 0 and currentPlayerAlpha > targetPlayerAlpha then currentPlayerAlpha = targetPlayerAlpha end
+        if playerDiff < 0 and currentPlayerAlpha < targetPlayerAlpha then currentPlayerAlpha = targetPlayerAlpha end
+
+        for _, frame in ipairs(playerFrameObjects) do
+            if currentPlayerAlpha > 0 or frame:GetAlpha() ~= currentPlayerAlpha then
+                frame:SetAlpha(currentPlayerAlpha)
+            end
+        end
+    end
+end)
+
+function Module:ForceShow()
+    if not initialized then InitFrames() end
+
+    for _, frame in ipairs(actionBarObjects) do
+        if frame.SetAlpha then frame:SetAlpha(1) end
+    end
+
+    for _, frame in ipairs(playerFrameObjects) do
+        if frame.SetAlpha then frame:SetAlpha(1) end
+    end
+
+    currentBarAlpha = 1
+    currentPlayerAlpha = 1
+    targetBarAlpha = 1
+    targetPlayerAlpha = 1
+end
+
+eventFrame:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_REGEN_DISABLED" then
+        inCombat = true
+        Module:UpdateFadeState()
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        inCombat = false
+        Module:UpdateFadeState()
+    end
+end)
+
+function Module:OnEnable()
     UpdateCachedSettings()
-    CombatFade:UpdateState()
+
+    eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+    eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+
+    inCombat = InCombatLockdown and InCombatLockdown() or false
+
+    C_Timer.After(1, function()
+        if self.isEnabled then
+            if not initialized then InitFrames() end
+            Module:UpdateFadeState()
+            updateFrame:Show()
+        end
+    end)
 end
 
-addon.CallbackRegistry:Register("SettingChanged.CombatFade", OnSettingChanged)
-addon.CallbackRegistry:Register("SettingChanged.CombatFade_ActionBars", OnSettingChanged)
-addon.CallbackRegistry:Register("SettingChanged.CombatFade_PlayerFrame", OnSettingChanged)
-addon.CallbackRegistry:Register("SettingChanged.CombatFade_ActionBars_Opacity", OnSettingChanged)
-addon.CallbackRegistry:Register("SettingChanged.CombatFade_PlayerFrame_Opacity", OnSettingChanged)
+function Module:OnDisable()
+    eventFrame:UnregisterAllEvents()
+    updateFrame:Hide()
+    self:ForceShow()
+end
+
+function Module:OnSettingChanged()
+    if self.isEnabled then
+        UpdateCachedSettings()
+        Module:UpdateFadeState()
+    end
+end
+
+function Module:OnInitialize()
+    addon.CallbackRegistry:Register("SettingChanged.CombatFade_ActionBars", function() self:OnSettingChanged() end)
+    addon.CallbackRegistry:Register("SettingChanged.CombatFade_PlayerFrame", function() self:OnSettingChanged() end)
+    addon.CallbackRegistry:Register("SettingChanged.CombatFade_ActionBars_Opacity",
+        function() self:OnSettingChanged() end)
+    addon.CallbackRegistry:Register("SettingChanged.CombatFade_PlayerFrame_Opacity",
+        function() self:OnSettingChanged() end)
+end

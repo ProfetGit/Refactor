@@ -3,6 +3,7 @@
 
 local addonName, addon = ...
 local L = addon.L
+local Utils = addon.Utils
 
 local Module = {}
 
@@ -50,7 +51,7 @@ function Module:Repair()
             repaired = true
         else
             addon.PrintIfEnabled("AutoRepair_ShowNotify",
-                L.REPAIR_FAILED:format(addon.FormatMoney(repairCost)))
+                L.REPAIR_FAILED:format(Utils.FormatMoney(repairCost)))
             return
         end
     end
@@ -59,10 +60,10 @@ function Module:Repair()
     if repaired then
         if usedGuild then
             addon.PrintIfEnabled("AutoRepair_ShowNotify",
-                L.REPAIRED_GUILD:format(addon.FormatMoney(repairCost)))
+                L.REPAIRED_GUILD:format(Utils.FormatMoney(repairCost)))
         else
             addon.PrintIfEnabled("AutoRepair_ShowNotify",
-                L.REPAIRED_SELF:format(addon.FormatMoney(repairCost)))
+                L.REPAIRED_SELF:format(Utils.FormatMoney(repairCost)))
         end
     end
 end

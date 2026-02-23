@@ -7,7 +7,7 @@ local Module = {}
 ----------------------------------------------
 local pairs, ipairs, type, pcall = pairs, ipairs, type, pcall
 local tremove, tinsert, wipe = tremove, tinsert, wipe
-local GetItemInfo, GetItemInfoInstant = GetItemInfo, GetItemInfoInstant
+local GetItemInfo, GetItemInfoInstant = C_Item.GetItemInfo, C_Item.GetItemInfoInstant
 local UnitIsPlayer, UnitClass, UnitReaction, GetGuildInfo = UnitIsPlayer, UnitClass, UnitReaction, GetGuildInfo
 local C_Container_GetContainerNumSlots = C_Container.GetContainerNumSlots
 local C_Container_GetContainerItemLink = C_Container.GetContainerItemLink
@@ -90,7 +90,7 @@ local overlayPool, activeOverlays = {}, {}
 ----------------------------------------------
 local TRANSMOG_ICON_TEXTURE = "Interface/Common/CommonIcons"
 local TRANSMOG_CHECKMARK_COORDS = { 0.126465, 0.251465, 0.000976562, 0.250977 }
-local TRANSMOG_X_COORDS = { 0.252441, 0.377441, 0.25293, 0.50293 }
+local TRANSMOG_X_COORDS = { 0.252441, 0.377441, 0.504883, 0.754883 }
 local TRANSMOG_COLLECTED_COLOR = { 0.3, 0.7, 1 }
 local TRANSMOG_UNCOLLECTED_COLOR = { 1, 1, 1 }
 
@@ -770,7 +770,6 @@ end
 -- Overlay Event Handler
 ----------------------------------------------
 local overlayFrame = CreateFrame("Frame")
-overlayFrame:RegisterEvent("BAG_UPDATE")
 overlayFrame:RegisterEvent("BAG_UPDATE_DELAYED")
 overlayFrame:RegisterEvent("MERCHANT_SHOW")
 overlayFrame:RegisterEvent("MERCHANT_UPDATE")
@@ -778,11 +777,9 @@ overlayFrame:RegisterEvent("LOOT_OPENED")
 overlayFrame:RegisterEvent("LOOT_SLOT_CLEARED")
 overlayFrame:RegisterEvent("LOOT_CLOSED")
 overlayFrame:RegisterEvent("MERCHANT_CLOSED")
-overlayFrame:RegisterEvent("BAG_OPEN")
-overlayFrame:RegisterEvent("BAG_CLOSED")
 
 overlayFrame:SetScript("OnEvent", function(self, event)
-    if event == "BAG_UPDATE" or event == "BAG_UPDATE_DELAYED" or event == "BAG_OPEN" then
+    if event == "BAG_UPDATE_DELAYED" then
         ScheduleContainerUpdate() -- Now debounced
     elseif event == "MERCHANT_SHOW" or event == "MERCHANT_UPDATE" then
         if not InCombatLockdown() then
@@ -790,7 +787,7 @@ overlayFrame:SetScript("OnEvent", function(self, event)
         end
     elseif event == "LOOT_OPENED" or event == "LOOT_SLOT_CLEARED" then
         C_Timer.After(0.1, UpdateLootButtons)
-    elseif event == "LOOT_CLOSED" or event == "MERCHANT_CLOSED" or event == "BAG_CLOSED" then
+    elseif event == "LOOT_CLOSED" or event == "MERCHANT_CLOSED" then
         ClearAllOverlays()
         pendingContainerUpdate = false -- Cancel pending updates
     end
@@ -982,27 +979,26 @@ local function OnTooltipSetItem(tooltip)
                 statusText = "Not Collected"
             end
 
+            local texPath = "Interface/Common/CommonIcons"
+            -- Convert RGB percentage to 0-255 range for the color string
+            local colorStr = string.format(":%d:%d:%d", r * 255, g * 255, b * 255)
+
+            local iconStr
+            if isCollected then
+                -- Checkmark icon with coords
+                iconStr = string.format("|T%s:14:14:0:0:512:512:65:128:0:128:255:255:255|t ", texPath)
+            else
+                -- X icon with coords
+                iconStr = string.format("|T%s:14:14:0:0:512:512:129:193:258:386:255:255:255|t ", texPath)
+            end
+
             -- Add spacing and the status text line (right-aligned)
             tooltip:AddLine(" ") -- Spacing line
-            tooltip:AddDoubleLine(" ", statusText, 1, 1, 1, r, g, b)
+            tooltip:AddDoubleLine(" ", iconStr .. statusText, 1, 1, 1, r, g, b)
             tooltip:Show()       -- Force tooltip to recalculate size
 
-            -- Position the icon next to the text on the last line
-            local icon = GetTooltipTransmogIcon(tooltip)
-            ApplyTransmogIconStyle(icon, isCollected)
-
-            -- Find the last right-side text line and position icon to the left of the actual text
-            local tooltipName = tooltip:GetName()
-            local lastRightLine = _G[tooltipName .. "TextRight" .. tooltip:NumLines()]
-
-            if lastRightLine and lastRightLine:GetText() then
-                -- Get the text width to position icon immediately to its left
-                local textWidth = lastRightLine:GetStringWidth()
-                icon:ClearAllPoints()
-                -- Anchor to RIGHT of the text line, offset by text width + small gap + icon width
-                icon:SetPoint("RIGHT", lastRightLine, "RIGHT", -(textWidth + 4), 0)
-                icon:Show()
-            end
+            -- Hide standalone icon if it was previously used
+            HideTooltipTransmogIcon(tooltip)
         else
             HideTooltipTransmogIcon(tooltip)
         end
@@ -1030,27 +1026,23 @@ local function OnTooltipSetItem(tooltip)
                 statusText = "Not Collected"
             end
 
+            local texPath = "Interface/Common/CommonIcons"
+            local iconStr
+            if isCollected then
+                iconStr = string.format("|T%s:14:14:0:0:512:512:65:128:0:128:255:255:255|t ", texPath)
+            elseif ensembleStatus.isUnknown or ensembleStatus.collected > 0 then
+                iconStr = string.format("|T%s:14:14:0:0:512:512:256:320:256:320:255:255:255|t ", texPath)
+            else
+                iconStr = string.format("|T%s:14:14:0:0:512:512:129:193:258:386:255:255:255|t ", texPath)
+            end
+
             -- Add spacing and the status text line (right-aligned)
             tooltip:AddLine(" ") -- Spacing line
-            tooltip:AddDoubleLine(" ", statusText, 1, 1, 1, r, g, b)
+            tooltip:AddDoubleLine(" ", iconStr .. statusText, 1, 1, 1, r, g, b)
             tooltip:Show()       -- Force tooltip to recalculate size
 
-            -- Position the icon next to the text on the last line
-            local icon = GetTooltipTransmogIcon(tooltip)
-            ApplyTransmogIconStyle(icon, isCollected)
-
-            -- Find the last right-side text line and position icon to the left of the actual text
-            local tooltipName = tooltip:GetName()
-            local lastRightLine = _G[tooltipName .. "TextRight" .. tooltip:NumLines()]
-
-            if lastRightLine and lastRightLine:GetText() then
-                -- Get the text width to position icon immediately to its left
-                local textWidth = lastRightLine:GetStringWidth()
-                icon:ClearAllPoints()
-                -- Anchor to RIGHT of the text line, offset by text width + small gap + icon width
-                icon:SetPoint("RIGHT", lastRightLine, "RIGHT", -(textWidth + 4), 0)
-                icon:Show()
-            end
+            -- Hide standalone icon if it was previously used
+            HideTooltipTransmogIcon(tooltip)
         else
             HideTooltipTransmogIcon(tooltip)
         end
@@ -1080,9 +1072,11 @@ end
 -- Healthbar, Scale, and Positioning
 ----------------------------------------------
 local function HookHealthbar()
+    ---@diagnostic disable-next-line: undefined-field
     if healthbarHooked or not GameTooltip.StatusBar then return end
     healthbarHooked = true
 
+    ---@diagnostic disable-next-line: undefined-field
     GameTooltip.StatusBar:HookScript("OnShow", function(self)
         if isEnabled and cachedHideHealthbar then
             self:Hide()
@@ -1151,7 +1145,9 @@ function Module:Disable()
     isEnabled = false
     GameTooltip:SetScale(1)
     ResetTooltipBorderColor(GameTooltip)
+    ---@diagnostic disable-next-line: undefined-field
     if GameTooltip.StatusBar then
+        ---@diagnostic disable-next-line: undefined-field
         GameTooltip.StatusBar:Show()
     end
 end

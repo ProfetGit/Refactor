@@ -313,15 +313,7 @@ local function CreateScrollableContent(parent)
     thumb:EnableMouse(true)
     thumb:RegisterForDrag("LeftButton")
 
-    thumb:SetScript("OnDragStart", function(self)
-        self.isDragging = true
-        self.startY = select(2, GetCursorPosition()) / UIParent:GetEffectiveScale()
-        self.startScroll = scrollFrame:GetVerticalScroll()
-    end)
-
-    thumb:SetScript("OnDragStop", function(self) self.isDragging = false end)
-
-    thumb:SetScript("OnUpdate", function(self)
+    local function thumbOnUpdate(self)
         if not self.isDragging then return end
         local currentY = select(2, GetCursorPosition()) / UIParent:GetEffectiveScale()
         local deltaY = self.startY - currentY
@@ -333,6 +325,18 @@ local function CreateScrollableContent(parent)
             scrollFrame:SetVerticalScroll(newScroll)
             UpdateScrollBar()
         end
+    end
+
+    thumb:SetScript("OnDragStart", function(self)
+        self.isDragging = true
+        self.startY = select(2, GetCursorPosition()) / UIParent:GetEffectiveScale()
+        self.startScroll = scrollFrame:GetVerticalScroll()
+        self:SetScript("OnUpdate", thumbOnUpdate)
+    end)
+
+    thumb:SetScript("OnDragStop", function(self) 
+        self.isDragging = false 
+        self:SetScript("OnUpdate", nil)
     end)
 
     upButton:SetScript("OnClick", function()

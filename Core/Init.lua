@@ -316,36 +316,8 @@ function addon.PrintIfEnabled(settingKey, msg)
 end
 
 ----------------------------------------------
--- Utility Functions
+-- Utility Functions moved to Core/Utils.lua
 ----------------------------------------------
-function addon.FormatMoney(copper)
-    local gold = math.floor(copper / 10000)
-    local silver = math.floor((copper % 10000) / 100)
-    local copperLeft = copper % 100
-
-    local str = ""
-    if gold > 0 then
-        str = str .. "|cffffd700" .. gold .. "g|r "
-    end
-    if silver > 0 or gold > 0 then
-        str = str .. "|cffc7c7cf" .. silver .. "s|r "
-    end
-    str = str .. "|cffeda55f" .. copperLeft .. "c|r"
-
-    return str
-end
-
-function addon.IsModifierKeyDown(modifierKey)
-    if modifierKey == "SHIFT" then
-        return IsShiftKeyDown()
-    elseif modifierKey == "CTRL" then
-        return IsControlKeyDown()
-    elseif modifierKey == "ALT" then
-        return IsAltKeyDown()
-    else
-        return false
-    end
-end
 
 ----------------------------------------------
 -- Event Listener
@@ -374,7 +346,9 @@ addon.Modules = {}
 
 function addon.RegisterModule(name, module)
     addon.Modules[name] = module
-    if module.OnInitialize then
+    if module.Initialize then
+        CallbackRegistry:Register("AddonLoaded", module.Initialize, module)
+    elseif module.OnInitialize then
         CallbackRegistry:Register("AddonLoaded", module.OnInitialize, module)
     end
 end

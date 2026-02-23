@@ -1,9 +1,20 @@
 {
-    "Lua.diagnostics.globals": [
-        "CreateFrame"
-    ],
-    "Lua.diagnostics.disable": [
-        "undefined-global",
-        "deprecated"
-    ]
+  "Lua.diagnostics.globals": [],
+  "Lua.diagnostics.disable": ["undefined-global", "deprecated"],
+  "Lua.runtime.version": "Lua 5.1",
+  "Lua.runtime.builtin": {
+    "basic": "disable",
+    "debug": "disable",
+    "io": "disable",
+    "math": "disable",
+    "os": "disable",
+    "package": "disable",
+    "string": "disable",
+    "table": "disable",
+    "utf8": "disable"
+  },
+  "Lua.workspace.library": [
+    "c:\\Users\\Emppu\\.antigravity\\extensions\\ketho.wow-api-0.22.2\\Annotations\\Core"
+  ],
+  "Lua.type.weakUnionCheck": true
 }

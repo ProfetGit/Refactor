@@ -4,7 +4,9 @@
 local addonName, addon = ...
 local L = addon.L
 
-local Module = {}
+local Module = addon:NewModule("SpeedDisplay", {
+    settingKey = "SpeedDisplay"
+})
 
 ----------------------------------------------
 -- Constants
@@ -15,9 +17,8 @@ local UPDATE_INTERVAL = 0.1 -- Update every 0.1 seconds
 ----------------------------------------------
 -- Module State
 ----------------------------------------------
-local isEnabled = false
 local speedFrame = nil
-local timeSinceLastUpdate = 0
+local speedTicker = nil
 
 ----------------------------------------------
 -- Speed Calculation
@@ -54,25 +55,13 @@ local function CreateSpeedFrame()
     speedFrame.text:SetShadowOffset(1, -1)
     speedFrame.text:SetShadowColor(0, 0, 0, 1)
 
-    -- Update handler with throttle
-    speedFrame:SetScript("OnUpdate", function(self, elapsed)
-        timeSinceLastUpdate = timeSinceLastUpdate + elapsed
-        if timeSinceLastUpdate < UPDATE_INTERVAL then return end
-        timeSinceLastUpdate = 0
-
-        local percent = GetSpeedPercent()
-        self.text:SetText(FormatSpeed(percent))
-    end)
-
     return speedFrame
 end
 
 ----------------------------------------------
--- Enable/Disable
+-- Lifecycle
 ----------------------------------------------
-function Module:Enable()
-    isEnabled = true
-
+function Module:OnEnable()
     -- Ensure frame exists
     speedFrame = CreateSpeedFrame()
 
@@ -80,11 +69,24 @@ function Module:Enable()
     local percent = GetSpeedPercent()
     speedFrame.text:SetText(FormatSpeed(percent))
 
+    -- Start ticker
+    if not speedTicker then
+        speedTicker = C_Timer.NewTicker(UPDATE_INTERVAL, function()
+            if speedFrame and speedFrame:IsShown() then
+                local pct = GetSpeedPercent()
+                speedFrame.text:SetText(FormatSpeed(pct))
+            end
+        end)
+    end
+
     speedFrame:Show()
 end
 
-function Module:Disable()
-    isEnabled = false
+function Module:OnDisable()
+    if speedTicker then
+        speedTicker:Cancel()
+        speedTicker = nil
+    end
 
     if speedFrame then
         speedFrame:Hide()
@@ -95,26 +97,11 @@ end
 -- Initialization
 ----------------------------------------------
 function Module:OnInitialize()
-    if addon.GetDBBool("SpeedDisplay") then
-        self:Enable()
-    end
-
-    addon.CallbackRegistry:Register("SettingChanged.SpeedDisplay", function(value)
-        if value then
-            Module:Enable()
-        else
-            Module:Disable()
-        end
-    end)
-
     -- Refresh display when decimals setting changes
     addon.CallbackRegistry:Register("SettingChanged.SpeedDisplay_Decimals", function()
-        if isEnabled and speedFrame then
+        if self.isEnabled and speedFrame then
             local percent = GetSpeedPercent()
             speedFrame.text:SetText(FormatSpeed(percent))
         end
     end)
 end
-
--- Register the module
-addon.RegisterModule("SpeedDisplay", Module)

@@ -2,9 +2,28 @@
 -- Displays looted items in elegant stacking toasts on the bottom-left
 
 local addonName, addon = ...
+local Utils = addon.Utils
 
+-- Forward declarations for events
+local OnLootReceived, OnCurrencyReceived
 
-local Module = {}
+local Module = addon:NewModule("LootToast", {
+    settingKey = "LootToast",
+    eventMap = {
+        ["CHAT_MSG_LOOT"] = function(self, event, msg, _, _, _, msgPlayerName)
+            if not self.playerName then self.playerName = UnitName("player") end
+            if not msgPlayerName or msgPlayerName == "" or msgPlayerName == self.playerName or string.find(msgPlayerName, self.playerName, 1, true) then
+                OnLootReceived(msg)
+            end
+        end,
+        ["CHAT_MSG_CURRENCY"] = function(self, event, ...)
+            OnCurrencyReceived(...)
+        end,
+        ["CHAT_MSG_MONEY"] = function(self, event, ...)
+            OnCurrencyReceived(...)
+        end
+    }
+})
 
 ----------------------------------------------
 -- Performance: Cache globals
@@ -21,7 +40,6 @@ local UnitName = UnitName
 ----------------------------------------------
 -- Module State
 ----------------------------------------------
-local isEnabled = false
 local activeToasts = {}
 local toastPool = {}
 local previewToasts = {} -- Separate pool for edit mode previews
@@ -103,7 +121,7 @@ end
 local function IsUncollectedTransmog(itemLink)
     if not itemLink or not C_TransmogCollection then return nil end
 
-    local itemID, _, _, _, _, classID, subClassID = GetItemInfoInstant(itemLink)
+    local itemID, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
     if not itemID then return nil end
 
     -- Only check armor (4) and weapons (2)
@@ -126,6 +144,7 @@ local function IsUncollectedTransmog(itemLink)
         local sources = C_TransmogCollection.GetAllAppearanceSources(appearanceID)
         if sources then
             for _, source in ipairs(sources) do
+                ---@diagnostic disable-next-line: undefined-field
                 if source.isCollected then return false end
             end
         end
@@ -349,7 +368,7 @@ function Module:RepositionToasts()
 end
 
 local function ShowToast(icon, name, quantity, quality, isCurrency, link)
-    if not isEnabled or not containerFrame then return end
+    if not Module.isEnabled or not containerFrame then return end
 
     -- Maintain Max Visible limit (use cached value)
     while #activeToasts >= cachedMaxVisible do
@@ -423,8 +442,8 @@ end
 ----------------------------------------------
 -- Event Handlers
 ----------------------------------------------
-local function OnLootReceived(msg)
-    if not isEnabled then return end
+OnLootReceived = function(msg)
+    if not Module.isEnabled then return end
 
     local itemLink = string_match(msg, "(|c%x+|Hitem:.-|h%[.-%]|h|r)") or string_match(msg, "(|Hitem:.-|h%[.-%]|h)")
     if not itemLink then return end
@@ -447,8 +466,8 @@ local function OnLootReceived(msg)
     end
 end
 
-local function OnCurrencyReceived(msg)
-    if not isEnabled or not cachedShowCurrency then return end
+OnCurrencyReceived = function(msg)
+    if not Module.isEnabled or not cachedShowCurrency then return end
 
     local currencyLink = string_match(msg, "|c%x+|Hcurrency:.-|h%[.-%]|h|r")
     if currencyLink then
@@ -467,7 +486,7 @@ local function OnCurrencyReceived(msg)
         local c = tonumber(string_match(msg, "(%d+) Copper") or string_match(msg, "(%d+)c") or 0)
         local total = (g * 10000) + (s * 100) + c
         if total > 0 then
-            ShowToast("Interface\\Icons\\INV_Misc_Coin_01", addon.FormatMoney(total), nil, 1, true, nil)
+            ShowToast("Interface\\Icons\\INV_Misc_Coin_01", Utils.FormatMoney(total), nil, 1, true, nil)
         end
     end
 end
@@ -499,25 +518,8 @@ local function CreateContainerFrame()
     return containerFrame
 end
 
-local eventFrame = CreateFrame("Frame")
-local playerName = nil
-
-eventFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "CHAT_MSG_LOOT" then
-        local msg, _, _, _, msgPlayerName = ...
-        -- Cache player name on first use
-        if not playerName then playerName = UnitName("player") end
-        if not msgPlayerName or msgPlayerName == "" or msgPlayerName == playerName or string.find(msgPlayerName, playerName, 1, true) then
-            OnLootReceived(msg)
-        end
-    elseif event == "CHAT_MSG_CURRENCY" or event == "CHAT_MSG_MONEY" then
-        OnCurrencyReceived(...)
-    end
-end)
-
-
 ----------------------------------------------
--- Edit Mode Preview Toasts
+-- Container Creation (using EditMode framework)
 ----------------------------------------------
 local function CreatePreviewToast(index, icon, name, quantity, quality)
     local toast = table_remove(previewPool)
@@ -656,23 +658,16 @@ end
 ----------------------------------------------
 -- Module Interface
 ----------------------------------------------
-function Module:Enable()
-    isEnabled = true
+function Module:OnEnable()
     UpdateCachedSettings()
     CreateContainerFrame()
+    ---@diagnostic disable-next-line: need-check-nil, undefined-field
     containerFrame:Show()
 
     -- Edit mode is handled by the EditMode framework via callbacks
-
-    eventFrame:RegisterEvent("CHAT_MSG_LOOT")
-    eventFrame:RegisterEvent("CHAT_MSG_CURRENCY")
-    eventFrame:RegisterEvent("CHAT_MSG_MONEY")
 end
 
-function Module:Disable()
-    isEnabled = false
-    eventFrame:UnregisterAllEvents()
-
+function Module:OnDisable()
     while #activeToasts > 0 do KillToast(activeToasts[1]) end
     HidePreviewToasts()
 
@@ -745,9 +740,6 @@ function Module:TestCurrency()
 end
 
 function Module:OnInitialize()
-    if addon.GetDBBool("LootToast") then self:Enable() end
-    addon.CallbackRegistry:Register("SettingChanged.LootToast",
-        function(v) if v then self:Enable() else self:Disable() end end)
     addon.CallbackRegistry:Register("SettingChanged.LootToast_Duration", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.LootToast_MaxVisible", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.LootToast_ShowCurrency", UpdateCachedSettings)
@@ -755,5 +747,3 @@ function Module:OnInitialize()
     addon.CallbackRegistry:Register("SettingChanged.LootToast_MinQuality", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.LootToast_AlwaysShowUncollected", UpdateCachedSettings)
 end
-
-addon.RegisterModule("LootToast", Module)

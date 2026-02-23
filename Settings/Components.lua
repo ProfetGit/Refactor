@@ -87,43 +87,43 @@ function Components.CreateTab(parent, text)
     r.Text = t
 
     -- Left edge texture
-    t = b:CreateTexture(nil, "BACKGROUND")
-    t:SetPoint("BOTTOMLEFT")
-    r.Left = t
+    local tex = b:CreateTexture(nil, "BACKGROUND")
+    tex:SetPoint("BOTTOMLEFT")
+    r.Left = tex
 
     -- Right edge texture
-    t = b:CreateTexture(nil, "BACKGROUND")
-    t:SetPoint("BOTTOMRIGHT")
-    r.Right = t
+    tex = b:CreateTexture(nil, "BACKGROUND")
+    tex:SetPoint("BOTTOMRIGHT")
+    r.Right = tex
 
     -- Middle texture
-    t = b:CreateTexture(nil, "BACKGROUND", nil, -2)
-    t:SetPoint("TOPLEFT", r.Left, "TOPRIGHT", 0, 0)
-    t:SetPoint("TOPRIGHT", r.Right, "TOPLEFT", 0, 0)
-    r.Middle = t
+    tex = b:CreateTexture(nil, "BACKGROUND", nil, -2)
+    tex:SetPoint("TOPLEFT", r.Left, "TOPRIGHT", 0, 0)
+    tex:SetPoint("TOPRIGHT", r.Right, "TOPLEFT", 0, 0)
+    r.Middle = tex
 
     -- Normal background (dark gradient)
-    t = b:CreateTexture(nil, "BACKGROUND", nil, -3)
-    t:SetPoint("BOTTOMLEFT", 2, 0)
-    t:SetPoint("TOPRIGHT", -2, -15)
-    t:SetColorTexture(1, 1, 1, 1)
-    t:SetGradient("VERTICAL", CreateColor(0.1, 0.1, 0.1, 0.85), CreateColor(0.15, 0.15, 0.15, 0.85))
-    r.NormalBG = t
+    tex = b:CreateTexture(nil, "BACKGROUND", nil, -3)
+    tex:SetPoint("BOTTOMLEFT", 2, 0)
+    tex:SetPoint("TOPRIGHT", -2, -15)
+    tex:SetColorTexture(1, 1, 1, 1)
+    tex:SetGradient("VERTICAL", CreateColor(0.1, 0.1, 0.1, 0.85), CreateColor(0.15, 0.15, 0.15, 0.85))
+    r.NormalBG = tex
 
     -- Highlight background
-    t = b:CreateTexture(nil, "HIGHLIGHT")
-    t:SetPoint("BOTTOMLEFT", 2, 0)
-    t:SetPoint("TOPRIGHT", b, "BOTTOMRIGHT", -2, 12)
-    t:SetColorTexture(1, 1, 1, 1)
-    t:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0.15), CreateColor(0, 0, 0, 0))
-    r.HighlightBG = t
+    tex = b:CreateTexture(nil, "HIGHLIGHT")
+    tex:SetPoint("BOTTOMLEFT", 2, 0)
+    tex:SetPoint("TOPRIGHT", b, "BOTTOMRIGHT", -2, 12)
+    tex:SetColorTexture(1, 1, 1, 1)
+    tex:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0.15), CreateColor(0, 0, 0, 0))
+    r.HighlightBG = tex
 
     -- Selected background
-    t = b:CreateTexture(nil, "BACKGROUND", nil, -1)
-    t:SetPoint("BOTTOMLEFT", 2, 0)
-    t:SetPoint("TOPRIGHT", b, "BOTTOMRIGHT", -2, 16)
-    t:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0.15), CreateColor(0, 0, 0, 0))
-    r.SelectedBG = t
+    tex = b:CreateTexture(nil, "BACKGROUND", nil, -1)
+    tex:SetPoint("BOTTOMLEFT", 2, 0)
+    tex:SetPoint("TOPRIGHT", b, "BOTTOMRIGHT", -2, 16)
+    tex:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0.15), CreateColor(0, 0, 0, 0))
+    r.SelectedBG = tex
 
     -- Size based on text width
     b:SetSize(r.Text:GetStringWidth() + 40, 37)

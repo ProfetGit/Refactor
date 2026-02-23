@@ -4,22 +4,21 @@
 local addonName, addon = ...
 local L = addon.L
 
-local Module = {}
+local Utils = addon.Utils
 
-----------------------------------------------
--- Module State
-----------------------------------------------
-local isEnabled = false
+local Module = addon:NewModule("SkipCinematics", {
+    settingKey = "SkipCinematics"
+})
 
 ----------------------------------------------
 -- Helper Functions
 ----------------------------------------------
 local function ShouldSkip()
-    if not isEnabled then return false end
+    if not Module.isEnabled then return false end
 
     -- Check if modifier key is held to watch instead
     local modKey = addon.GetDBValue("SkipCinematics_ModifierKey")
-    if modKey and modKey ~= "NONE" and addon.IsModifierKeyDown(modKey) then
+    if modKey and modKey ~= "NONE" and Utils.IsModifierKeyDown(modKey) then
         return false
     end
 
@@ -96,38 +95,14 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 end)
 
 ----------------------------------------------
--- Enable/Disable
+-- Initialization
 ----------------------------------------------
-function Module:Enable()
-    isEnabled = true
+function Module:OnEnable()
     eventFrame:RegisterEvent("CINEMATIC_START")
     eventFrame:RegisterEvent("PLAY_MOVIE")
 end
 
-function Module:Disable()
-    isEnabled = false
+function Module:OnDisable()
     eventFrame:UnregisterEvent("CINEMATIC_START")
     eventFrame:UnregisterEvent("PLAY_MOVIE")
 end
-
-----------------------------------------------
--- Initialization
-----------------------------------------------
-function Module:OnInitialize()
-    -- Initial state
-    if addon.GetDBBool("SkipCinematics") then
-        self:Enable()
-    end
-
-    -- Listen for setting changes
-    addon.CallbackRegistry:Register("SettingChanged.SkipCinematics", function(value)
-        if value then
-            Module:Enable()
-        else
-            Module:Disable()
-        end
-    end)
-end
-
--- Register the module
-addon.RegisterModule("SkipCinematics", Module)
