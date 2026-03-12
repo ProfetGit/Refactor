@@ -21,147 +21,66 @@ local Module = addon:NewModule("AutoSellJunk", {
 -- Module State
 ----------------------------------------------
 local isSelling = false
-
-----------------------------------------------
--- Helper: Get lowest equipped item level
-----------------------------------------------
-local equipSlots = {
-    "HeadSlot", "NeckSlot", "ShoulderSlot", "BackSlot", "ChestSlot",
-    "WristSlot", "HandsSlot", "WaistSlot", "LegsSlot", "FeetSlot",
-    "Finger0Slot", "Finger1Slot", "Trinket0Slot", "Trinket1Slot",
-    "MainHandSlot", "SecondaryHandSlot"
-}
-
-local function GetLowestEquippedILvl()
-    local lowestILvl = 9999
-
-    for _, slotName in ipairs(equipSlots) do
-        ---@diagnostic disable-next-line: param-type-mismatch
-        local slotID = GetInventorySlotInfo(slotName)
-        local itemLink = GetInventoryItemLink("player", slotID)
-        if itemLink then
-            local _, _, _, itemLevel = C_Item.GetItemInfo(itemLink)
-            if itemLevel and itemLevel > 0 and itemLevel < lowestILvl then
-                lowestILvl = itemLevel
-            end
-        end
-    end
-
-    return lowestILvl < 9999 and lowestILvl or 0
-end
+local sellQueue = {}
+local sellTimer = nil
 
 ----------------------------------------------
 -- Helper: Should sell this item?
 ----------------------------------------------
 local function ShouldSellItem(bag, slot, itemInfo)
-    local itemID = itemInfo.itemID
-    local itemQuality = itemInfo.quality
-    local stackCount = itemInfo.stackCount
-
-    -- Grey items handling
-    if itemQuality == Enum.ItemQuality.Poor then
-        -- Grey EQUIPMENT can have transmog value - check if it's equipment
-        if Utils.IsEquipment(itemID) then
-            -- Only sell grey equipment if it's soulbound (can't be sold on AH anyway)
-            local isBound = Utils.IsSoulbound(bag, slot)
-            if isBound then
-                return true, "junk"
-            else
-                -- Grey BoE equipment - keep for AH/transmog
-                return false
-            end
-        else
-            -- Grey non-equipment (vendor trash like "Broken Blade", food, etc.) - always sell
-            return true, "junk"
-        end
+    -- Only sell grey ("Poor") items unconditionally
+    if itemInfo.quality == Enum.ItemQuality.Poor then
+        return true, "junk"
     end
-
-    -- NEVER sell heirlooms - they're valuable even if "bound"
-    if itemQuality == Enum.ItemQuality.Heirloom then
-        return false
-    end
-
-    -- Use reliable soulbound check (NOT itemInfo.isBound which can be unreliable)
-    local isBound = Utils.IsSoulbound(bag, slot)
-
-    -- NEVER sell BoE items (not yet bound) - they may have AH value
-    if not isBound then
-        return false
-    end
-
-    -- From here on, we only deal with SOULBOUND equipment
-    if not Utils.IsEquipment(itemID) then
-        return false
-    end
-
-    local _, _, _, itemLevel = C_Item.GetItemInfo(itemID)
-    if not itemLevel then return false end
-
-    -- Check for low item level selling (soulbound only)
-    if addon.GetDBBool("AutoSellJunk_SellLowILvl") then
-        local maxILvl = addon.GetDBValue("AutoSellJunk_MaxILvl") or 400
-
-        -- Safety: Never sell items at or above the max threshold
-        if itemLevel >= maxILvl then
-            return false
-        end
-
-        -- Safety: Never sell items that could be an upgrade (equal or higher than lowest equipped)
-        local lowestEquipped = GetLowestEquippedILvl()
-        if lowestEquipped > 0 and itemLevel >= lowestEquipped then
-            return false
-        end
-
-        -- Item is below max threshold and below our lowest equipped - safe to consider
-        -- Check if we should keep for transmog
-        if addon.GetDBBool("AutoSellJunk_KeepTransmog") then
-            local itemLink = C_Container.GetContainerItemLink(bag, slot)
-            if itemLink and not Utils.IsTransmogKnown(itemLink) then
-                return false, "transmog_needed"
-            end
-        end
-
-        return true, "low_ilvl"
-    end
-
-    -- Check for already-known transmog selling (soulbound only)
-    if addon.GetDBBool("AutoSellJunk_SellKnownTransmog") then
-        local maxILvl = addon.GetDBValue("AutoSellJunk_MaxILvl") or 400
-
-        -- Safety: Still respect the max iLvl limit for transmog selling
-        if itemLevel >= maxILvl then
-            return false
-        end
-
-        local itemLink = C_Container.GetContainerItemLink(bag, slot)
-
-        if itemLink then
-            if itemQuality and itemQuality >= Enum.ItemQuality.Common then
-                if Utils.IsTransmogKnown(itemLink) then
-                    return true, "known_transmog"
-                end
-            end
-        end
-    end
-
     return false
+end
+
+----------------------------------------------
+-- Queue Processor
+----------------------------------------------
+local function ProcessSellQueue()
+    if not MerchantFrame or not MerchantFrame:IsShown() then
+        -- Vendor closed early
+        Module:StopSelling()
+        return
+    end
+
+    if #sellQueue == 0 then
+        -- Finished
+        Module:StopSelling()
+        return
+    end
+
+    local item = table.remove(sellQueue, 1)
+    
+    -- Verify item is still there before selling
+    local currentInfo = C_Container.GetContainerItemInfo(item.bag, item.slot)
+    if currentInfo and currentInfo.itemID == item.itemID then
+        C_Container.UseContainerItem(item.bag, item.slot)
+    end
 end
 
 ----------------------------------------------
 -- Sell Items Implementation
 ----------------------------------------------
+function Module:StopSelling()
+    if sellTimer then
+        sellTimer:Cancel()
+        sellTimer = nil
+    end
+    
+    isSelling = false
+    wipe(sellQueue)
+end
+
 function Module:SellJunk()
     if isSelling then return end
     if not MerchantFrame or not MerchantFrame:IsShown() then return end
 
     isSelling = true
+    wipe(sellQueue)
 
-    local totalPrice = 0
-    local junkCount = 0
-    local ilvlCount = 0
-    local transmogCount = 0
-
-    -- Iterate through all bags
+    -- Iterate through all bags and build queue
     for bag = 0, 4 do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
@@ -170,42 +89,27 @@ function Module:SellJunk()
                 local shouldSell, reason = ShouldSellItem(bag, slot, itemInfo)
 
                 if shouldSell then
-                    local itemName, itemLink, _, _, _, _, _, _, _, _, sellPrice = C_Item.GetItemInfo(itemInfo.itemID)
+                    local _, _, _, _, _, _, _, _, _, _, sellPrice = C_Item.GetItemInfo(itemInfo.itemID)
                     if sellPrice and sellPrice > 0 then
-                        totalPrice = totalPrice + (sellPrice * itemInfo.stackCount)
-
-                        if reason == "junk" then
-                            junkCount = junkCount + 1
-                        elseif reason == "low_ilvl" then
-                            ilvlCount = ilvlCount + 1
-                        elseif reason == "known_transmog" then
-                            transmogCount = transmogCount + 1
-                        end
-
-                        C_Container.UseContainerItem(bag, slot)
+                        table.insert(sellQueue, {
+                            bag = bag,
+                            slot = slot,
+                            itemID = itemInfo.itemID,
+                            sellPrice = sellPrice,
+                            stackCount = itemInfo.stackCount,
+                            reason = reason
+                        })
                     end
                 end
             end
         end
     end
 
-    -- Show notification
-    local totalCount = junkCount + ilvlCount + transmogCount
-    if totalCount > 0 and addon.GetDBBool("AutoSellJunk_ShowNotify") then
-        local msg = L.SOLD_JUNK:format(totalCount, Utils.FormatMoney(totalPrice))
-
-        -- Add breakdown if selling more than just junk
-        local details = {}
-        if junkCount > 0 then table.insert(details, junkCount .. " junk") end
-        if ilvlCount > 0 then table.insert(details, ilvlCount .. " low iLvl") end
-        if transmogCount > 0 then table.insert(details, transmogCount .. " known transmog") end
-
-        if #details > 1 then
-            msg = msg .. " (" .. table.concat(details, ", ") .. ")"
-        end
-
-        addon.Print(msg)
+    -- Start queue processing if we have items
+    if #sellQueue > 0 then
+        -- 0.15s interval is the sweet spot for avoiding merchant throttling
+        sellTimer = C_Timer.NewTicker(0.15, ProcessSellQueue)
+    else
+        isSelling = false
     end
-
-    isSelling = false
 end

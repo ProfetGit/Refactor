@@ -40,7 +40,12 @@ local isEnabled = false
 local nameplateFrames = {} -- Track our overlay frames per nameplate
 local unitQuestCache = {}  -- [unitToken] = { [questID] = true, ... } — cached quest IDs per unit
 local activeUnits = {}     -- [unitToken] = true — tracks all visible nameplate units
+local tooltipRetries = {}  -- [unitToken] = retryCount — tracks tooltip data async loading
 local Enum_TooltipDataLineType_QuestTitle = Enum.TooltipDataLineType and Enum.TooltipDataLineType.QuestTitle or 17
+
+local ScheduleNameplateUpdate
+local RefreshNameplate
+local InvalidateQuestCache
 
 ----------------------------------------------
 -- Quest Progress: Shared objective parser
@@ -51,7 +56,8 @@ local function ParseQuestObjectives(questIDs)
     local maxLeft = 0
     local isPercent = false
     local hasItemObjective = false
-    local foundAnyQuest = false
+    local foundAnyUnfinished = false
+    local foundAnyFinished = false
 
     for questID in pairs(questIDs) do
         for objIdx = 1, 10 do
@@ -59,7 +65,7 @@ local function ParseQuestObjectives(questIDs)
             if not text then break end
 
             if not finished then
-                foundAnyQuest = true
+                foundAnyUnfinished = true
                 local x, y = strmatch(text, "(%d+)/(%d+)")
                 if x and y then
                     local numLeft = tonumber(y) - tonumber(x)
@@ -82,6 +88,8 @@ local function ParseQuestObjectives(questIDs)
                 if objectiveType == "item" or objectiveType == "object" then
                     hasItemObjective = true
                 end
+            else
+                foundAnyFinished = true
             end
         end
     end
@@ -89,7 +97,16 @@ local function ParseQuestObjectives(questIDs)
     if progressText then
         return progressText, hasItemObjective and "item" or "monster", maxLeft, next(questIDs), isPercent
     end
-    if foundAnyQuest or next(questIDs) then
+
+    if foundAnyUnfinished then
+        return "Quest Objective", hasItemObjective and "item" or "monster", 0, next(questIDs), false
+    end
+
+    if foundAnyFinished then
+        return nil
+    end
+
+    if next(questIDs) then
         return "Quest Objective", "monster", 0, next(questIDs), false
     end
     return nil
@@ -100,32 +117,52 @@ end
 -- Used on NAME_PLATE_UNIT_ADDED for first-time quest ID discovery
 ----------------------------------------------
 local function GetQuestProgress(unitID)
-    if not C_QuestLog_UnitIsRelatedToActiveQuest(unitID) then
-        unitQuestCache[unitID] = nil
-        return nil
-    end
-
     if not C_TooltipInfo_GetUnit then return nil end
     local tooltipData = C_TooltipInfo_GetUnit(unitID)
-    if not tooltipData or not tooltipData.lines or #tooltipData.lines < 3 then
-        return nil
-    end
 
     local uniqueQuestIDs = {}
-    for i = 3, #tooltipData.lines do
-        local line = tooltipData.lines[i]
-        ---@diagnostic disable-next-line: undefined-field
-        if line.type == Enum_TooltipDataLineType_QuestTitle and line.id then
+    local foundAny = false
+
+    if tooltipData and tooltipData.lines and #tooltipData.lines >= 2 then
+        if TooltipUtil and TooltipUtil.SurfaceArgs then
+            TooltipUtil.SurfaceArgs(tooltipData)
+        end
+        for i = 2, #tooltipData.lines do
+            local line = tooltipData.lines[i]
+            if TooltipUtil and TooltipUtil.SurfaceArgs then
+                TooltipUtil.SurfaceArgs(line)
+            end
             ---@diagnostic disable-next-line: undefined-field
-            uniqueQuestIDs[line.id] = true
+            if line.type == Enum_TooltipDataLineType_QuestTitle and line.id then
+                ---@diagnostic disable-next-line: undefined-field
+                uniqueQuestIDs[line.id] = true
+                foundAny = true
+            end
         end
     end
 
-    if not next(uniqueQuestIDs) then
-        return "Quest Objective", "monster", 0, nil, false
+    if not foundAny then
+        -- Only retry if the game strongly hints it's a quest mob, but the tooltip is missing data
+        if C_QuestLog_UnitIsRelatedToActiveQuest(unitID) then
+            if not tooltipRetries[unitID] then
+                tooltipRetries[unitID] = 0
+            end
+            if tooltipRetries[unitID] < 4 then
+                tooltipRetries[unitID] = tooltipRetries[unitID] + 1
+                C_Timer.After(0.2 * tooltipRetries[unitID], function()
+                    if activeUnits[unitID] and not unitQuestCache[unitID] then
+                        UpdateNameplate(unitID) -- Re-run the full update flow
+                    end
+                end)
+            end
+        else
+            tooltipRetries[unitID] = nil
+        end
+        return nil -- Return nil so we don't show a false positive '!'
     end
 
-    -- Cache quest IDs so refresh cycles don't need stale tooltip data
+    -- Success
+    tooltipRetries[unitID] = nil
     unitQuestCache[unitID] = uniqueQuestIDs
 
     return ParseQuestObjectives(uniqueQuestIDs)
@@ -136,10 +173,8 @@ end
 -- Bypasses tooltip cache — reads directly from quest log
 ----------------------------------------------
 local function RefreshQuestProgress(unitID)
-    if not C_QuestLog_UnitIsRelatedToActiveQuest(unitID) then
-        unitQuestCache[unitID] = nil
-        return nil
-    end
+    -- We bypass C_QuestLog.UnitIsRelatedToActiveQuest check here to support World Quests
+    -- and other tracked objectives that the API sometimes misses.
 
     local cachedQuestIDs = unitQuestCache[unitID]
     if cachedQuestIDs then
@@ -154,22 +189,23 @@ end
 -- Helper: Find the visual Health Bar
 ----------------------------------------------
 local function FindHealthBar(nameplate)
-    if nameplate.UnitFrame then
-        if nameplate.UnitFrame.healthBar then return nameplate.UnitFrame.healthBar end
-        if nameplate.UnitFrame.Health then return nameplate.UnitFrame.Health end
+    local unitFrame = nameplate.UnitFrame or nameplate.unitFrame
+    if unitFrame then
+        if unitFrame.healthBar then return unitFrame.healthBar end
+        if unitFrame.Health then return unitFrame.Health end
     end
     -- Fallback: aggressively search for a StatusBar to bypass invisible clicking frames
-    local framesToCheck = { nameplate, nameplate.UnitFrame }
+    local framesToCheck = { nameplate, unitFrame }
     for _, parent in pairs(framesToCheck) do
         if parent and parent.GetChildren then
             for _, child in pairs({ parent:GetChildren() }) do
-                if child:GetObjectType() == "StatusBar" then
+                if child.GetObjectType and child:GetObjectType() == "StatusBar" then
                     return child
                 end
             end
         end
     end
-    return nameplate.UnitFrame or nameplate
+    return unitFrame or nameplate
 end
 
 ----------------------------------------------
@@ -279,19 +315,20 @@ local function UpdateNameplate(unitId)
 
     local overlay = GetNameplateOverlay(nameplate)
 
-    if UnitIsDead(unitId) then
+    local progressText, objectiveType, objectiveCount, questID, isPercent = GetQuestProgress(unitId)
+
+    if UnitIsDead(unitId) and objectiveType ~= "item" then
         overlay:Hide()
         return
     end
 
-    local progressText, objectiveType, objectiveCount, questID, isPercent = GetQuestProgress(unitId)
     ApplyOverlay(overlay, progressText, objectiveType, objectiveCount, isPercent)
 end
 
 ----------------------------------------------
 -- Refresh nameplate overlay (fast path, no tooltip)
 ----------------------------------------------
-local function RefreshNameplate(unitId)
+RefreshNameplate = function(unitId)
     if not isEnabled then return end
 
     local nameplate = C_NamePlate_GetNamePlateForUnit(unitId)
@@ -299,12 +336,13 @@ local function RefreshNameplate(unitId)
 
     local overlay = GetNameplateOverlay(nameplate)
 
-    if UnitIsDead(unitId) then
+    local progressText, objectiveType, objectiveCount, questID, isPercent = RefreshQuestProgress(unitId)
+
+    if UnitIsDead(unitId) and objectiveType ~= "item" then
         overlay:Hide()
         return
     end
 
-    local progressText, objectiveType, objectiveCount, questID, isPercent = RefreshQuestProgress(unitId)
     ApplyOverlay(overlay, progressText, objectiveType, objectiveCount, isPercent)
 end
 
@@ -333,7 +371,7 @@ local function UpdateAllNameplates()
 end
 
 -- A robust debouncer: guarantees we never drop events that fire in quick succession
-local function ScheduleNameplateUpdate()
+ScheduleNameplateUpdate = function()
     if pendingNameplateUpdate then return end
 
     pendingNameplateUpdate = true
@@ -341,6 +379,11 @@ local function ScheduleNameplateUpdate()
         pendingNameplateUpdate = false
         UpdateAllNameplates()
     end)
+end
+
+InvalidateQuestCache = function()
+    table.wipe(unitQuestCache)
+    ScheduleNameplateUpdate()
 end
 
 ----------------------------------------------
@@ -353,15 +396,19 @@ local function OnEvent(self, event, ...)
         local unitId = ...
         activeUnits[unitId] = true
         unitQuestCache[unitId] = nil -- Clear stale cache from previous mob on this token
+        tooltipRetries[unitId] = nil
         UpdateNameplate(unitId)
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
         local unitId = ...
         activeUnits[unitId] = nil
+        tooltipRetries[unitId] = nil
         ClearNameplate(unitId)
+    elseif event == "QUEST_ACCEPTED" or event == "QUEST_REMOVED" then
+        InvalidateQuestCache()
     elseif event == "UNIT_QUEST_LOG_CHANGED" then
         local unitId = ...
         if unitId == "player" then
-            UpdateAllNameplates()
+            InvalidateQuestCache()
         end
     elseif event == "QUEST_LOG_UPDATE" then
         ScheduleNameplateUpdate()
@@ -378,7 +425,7 @@ local function OnEvent(self, event, ...)
             end
         end
     else
-        -- QUEST_ACCEPTED, QUEST_REMOVED, QUEST_POI_UPDATE, QUEST_WATCH_UPDATE
+        -- QUEST_POI_UPDATE, QUEST_WATCH_UPDATE
         ScheduleNameplateUpdate()
     end
 end

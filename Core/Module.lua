@@ -51,14 +51,14 @@ function ModuleMixin:Enable()
     if self.eventMap then
         if not self.eventFrame then
             self.eventFrame = CreateFrame("Frame")
-            self.eventFrame:SetScript("OnEvent", function(frame, event, ...)
-                if self.eventMap[event] then
-                    self.eventMap[event](self, event, ...)
-                elseif type(self.OnEvent) == "function" then
-                    self:OnEvent(event, ...)
-                end
-            end)
         end
+        self.eventFrame:SetScript("OnEvent", function(frame, event, ...)
+            if self.eventMap[event] then
+                self.eventMap[event](self, event, ...)
+            elseif type(self.OnEvent) == "function" then
+                self:OnEvent(event, ...)
+            end
+        end)
         for event, handler in pairs(self.eventMap) do
             if type(event) == "string" then
                 self.eventFrame:RegisterEvent(event)
@@ -77,6 +77,7 @@ function ModuleMixin:Disable()
 
     if self.eventFrame then
         self.eventFrame:UnregisterAllEvents()
+        self.eventFrame:SetScript("OnEvent", nil)
     end
 
     if self.OnDisable then

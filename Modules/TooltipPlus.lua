@@ -27,8 +27,6 @@ local healthbarHooked = false
 local cachedClassColors = true
 local cachedRarityBorder = true
 local cachedShowTransmog = true
-local cachedTransmogOverlay = true
-local cachedTransmogCorner = "TOPRIGHT"
 local cachedHideGuild = false
 local cachedHidePvP = false
 local cachedHideRealm = false
@@ -36,6 +34,7 @@ local cachedHideFaction = false
 local cachedHideHealthbar = false
 local cachedShowItemID = false
 local cachedShowSpellID = false
+local cachedAutoCompare = false
 local cachedAnchor = "DEFAULT"
 local cachedMouseSide = "RIGHT"
 local cachedMouseOffset = 20
@@ -45,8 +44,6 @@ local function UpdateCachedSettings()
     cachedClassColors = addon.GetDBBool("TooltipPlus_ClassColors")
     cachedRarityBorder = addon.GetDBBool("TooltipPlus_RarityBorder")
     cachedShowTransmog = addon.GetDBBool("TooltipPlus_ShowTransmog")
-    cachedTransmogOverlay = addon.GetDBBool("TooltipPlus_TransmogOverlay")
-    cachedTransmogCorner = addon.GetDBValue("TooltipPlus_TransmogCorner") or "TOPRIGHT"
     cachedHideGuild = addon.GetDBBool("TooltipPlus_HideGuild")
     cachedHidePvP = addon.GetDBBool("TooltipPlus_HidePvP")
     cachedHideRealm = addon.GetDBBool("TooltipPlus_HideRealm")
@@ -54,6 +51,7 @@ local function UpdateCachedSettings()
     cachedHideHealthbar = addon.GetDBBool("TooltipPlus_HideHealthbar")
     cachedShowItemID = addon.GetDBBool("TooltipPlus_ShowItemID")
     cachedShowSpellID = addon.GetDBBool("TooltipPlus_ShowSpellID")
+    cachedAutoCompare = addon.GetDBBool("TooltipPlus_AutoCompare")
     cachedAnchor = addon.GetDBValue("TooltipPlus_Anchor") or "DEFAULT"
     cachedMouseSide = addon.GetDBValue("TooltipPlus_MouseSide") or "RIGHT"
     cachedMouseOffset = addon.GetDBValue("TooltipPlus_MouseOffset") or 20
@@ -68,58 +66,7 @@ local NINESLICE_PIECES = {
     "TopEdge", "BottomEdge", "LeftEdge", "RightEdge"
 }
 
-local CORNER_OFFSETS = {
-    TOPLEFT = { "TOPLEFT", 2, -2 },
-    TOPRIGHT = { "TOPRIGHT", -2, -2 },
-    BOTTOMLEFT = { "BOTTOMLEFT", 2, 2 },
-    BOTTOMRIGHT = { "BOTTOMRIGHT", -2, 2 }
-}
-
-local ANCHOR_POSITIONS = {
-    TOPLEFT = { "TOPLEFT", UIParent, "TOPLEFT", 20, -20 },
-    TOPRIGHT = { "TOPRIGHT", UIParent, "TOPRIGHT", -20, -20 },
-    BOTTOMLEFT = { "BOTTOMLEFT", UIParent, "BOTTOMLEFT", 20, 20 },
-    BOTTOMRIGHT = { "BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -20, 20 }
-}
-
--- Transmog Overlay Pool
-local overlayPool, activeOverlays = {}, {}
-
-----------------------------------------------
--- Transmog Icon Styling (centralized)
-----------------------------------------------
-local TRANSMOG_ICON_TEXTURE = "Interface/Common/CommonIcons"
-local TRANSMOG_CHECKMARK_COORDS = { 0.126465, 0.251465, 0.000976562, 0.250977 }
-local TRANSMOG_X_COORDS = { 0.252441, 0.377441, 0.504883, 0.754883 }
-local TRANSMOG_COLLECTED_COLOR = { 0.3, 0.7, 1 }
-local TRANSMOG_UNCOLLECTED_COLOR = { 1, 1, 1 }
-
-local function ApplyTransmogIconStyle(texture, isCollected)
-    texture:SetTexture(TRANSMOG_ICON_TEXTURE)
-    if isCollected then
-        texture:SetTexCoord(unpack(TRANSMOG_CHECKMARK_COORDS))
-        texture:SetDesaturated(true)
-        texture:SetVertexColor(unpack(TRANSMOG_COLLECTED_COLOR))
-    else
-        texture:SetTexCoord(unpack(TRANSMOG_X_COORDS))
-        texture:SetDesaturated(false)
-        texture:SetVertexColor(unpack(TRANSMOG_UNCOLLECTED_COLOR))
-    end
-end
-
--- For shadow textures (always black)
-local function ApplyTransmogShadowStyle(texture, isCollected)
-    texture:SetTexture(TRANSMOG_ICON_TEXTURE)
-    if isCollected then
-        texture:SetTexCoord(unpack(TRANSMOG_CHECKMARK_COORDS))
-        texture:SetDesaturated(true)
-    else
-        texture:SetTexCoord(unpack(TRANSMOG_X_COORDS))
-        texture:SetDesaturated(false)
-    end
-    texture:SetBlendMode("BLEND")
-    texture:SetVertexColor(0, 0, 0, 1)
-end
+-- Transmog Functions
 
 ----------------------------------------------
 -- Border Color Helpers
@@ -230,7 +177,9 @@ local function ModifyTooltipText(tooltip, unit)
             end
         end
     end
-    tooltip:Show()
+    if tooltip:IsShown() then
+        tooltip:Show()
+    end
 end
 
 local function ApplyClassColorToName(tooltip, unit)
@@ -588,304 +537,7 @@ local function GetOverlayFrame(parent)
     return overlay
 end
 
-local function ReleaseOverlay(overlay)
-    overlay:Hide()
-    overlay:ClearAllPoints()
-    if overlay.shadows then
-        for _, shadow in ipairs(overlay.shadows) do
-            shadow:Hide()
-        end
-    end
-    if overlay.icon then
-        overlay.icon:Hide()
-    end
-    tinsert(overlayPool, overlay)
-end
 
-local function ClearAllOverlays()
-    for _, overlay in pairs(activeOverlays) do
-        ReleaseOverlay(overlay)
-    end
-    wipe(activeOverlays)
-end
-
-local function UpdateButtonOverlay(button, itemLink)
-    if not button then return end
-
-    local key = tostring(button)
-
-    if activeOverlays[key] then
-        ReleaseOverlay(activeOverlays[key])
-        activeOverlays[key] = nil
-    end
-
-    if not cachedTransmogOverlay or not itemLink then return end
-
-    -- Check for regular transmog items first
-    local isCollected = nil
-    if CanItemBeTransmogged(itemLink) then
-        isCollected = IsTransmogCollected(itemLink)
-    else
-        -- Check for Ensemble items
-        isCollected = GetEnsembleOverlayStatus(itemLink)
-    end
-
-    if isCollected == nil then return end
-
-    local overlay = GetOverlayFrame(button)
-    activeOverlays[key] = overlay
-
-    local corner = cachedTransmogCorner
-    local offsets = CORNER_OFFSETS[corner] or CORNER_OFFSETS.BOTTOMRIGHT
-    overlay:ClearAllPoints()
-    overlay:SetPoint(offsets[1], button, offsets[1], offsets[2], offsets[3])
-
-    -- Apply shadow styling (always black)
-    for _, shadow in ipairs(overlay.shadows) do
-        ApplyTransmogShadowStyle(shadow, isCollected)
-        shadow:Show()
-    end
-
-    -- Apply main icon styling
-    ApplyTransmogIconStyle(overlay.icon, isCollected)
-    overlay.icon:SetBlendMode("BLEND")
-    overlay.icon:Show()
-end
-
-----------------------------------------------
--- Container/Merchant/Loot Button Updates
-----------------------------------------------
-local function UpdateAllContainerButtons()
-    if not cachedTransmogOverlay then
-        ClearAllOverlays()
-        return
-    end
-
-    for bagID = 0, 4 do
-        for slotIndex = 1, C_Container.GetContainerNumSlots(bagID) do
-            local itemLink = C_Container.GetContainerItemLink(bagID, slotIndex)
-            local button = nil
-
-            -- Combined bags frame
-            if ContainerFrameCombinedBags and ContainerFrameCombinedBags:IsShown() then
-                local items = ContainerFrameCombinedBags.Items
-                if items then
-                    for _, btn in pairs(items) do
-                        if btn and btn:IsShown() then
-                            local btnBag = btn.GetBagID and btn:GetBagID()
-                            if btnBag == bagID and btn:GetID() == slotIndex then
-                                button = btn
-                                break
-                            end
-                        end
-                    end
-                end
-            end
-
-            -- Individual container frames
-            if not button then
-                local containerFrame = _G["ContainerFrame" .. (bagID + 1)]
-                if containerFrame and containerFrame:IsShown() then
-                    if containerFrame.Items then
-                        for _, btn in pairs(containerFrame.Items) do
-                            if btn and btn:GetID() == slotIndex then
-                                button = btn
-                                break
-                            end
-                        end
-                    end
-                    button = button or containerFrame["Item" .. slotIndex]
-                end
-            end
-
-            -- Global button names (older UI)
-            button = button or _G["ContainerFrame" .. (bagID + 1) .. "Item" .. slotIndex]
-
-            if button and button:IsShown() then
-                UpdateButtonOverlay(button, itemLink)
-            end
-        end
-    end
-end
-
-local function UpdateMerchantButtons()
-    if not MerchantFrame or not MerchantFrame:IsShown() then return end
-    if not cachedTransmogOverlay then return end
-
-    local numItems, perPage = GetMerchantNumItems(), MERCHANT_ITEMS_PER_PAGE or 10
-    for i = 1, perPage do
-        local button = _G["MerchantItem" .. i .. "ItemButton"]
-        if button and button:IsShown() then
-            local index = (MerchantFrame.page - 1) * perPage + i
-            if index <= numItems then
-                UpdateButtonOverlay(button, GetMerchantItemLink(index))
-            end
-        end
-    end
-end
-
-local function UpdateLootButtons()
-    if not LootFrame or not LootFrame:IsShown() then return end
-    if not cachedTransmogOverlay then return end
-
-    for i = 1, GetNumLootItems() do
-        local button = _G["LootButton" .. i]
-        if button and button:IsShown() then
-            UpdateButtonOverlay(button, GetLootSlotLink(i))
-        end
-    end
-end
-
--- Debounce state for performance
-local pendingContainerUpdate = false
-local lastContainerUpdate = 0
-local CONTAINER_UPDATE_THROTTLE = 0.3 -- Max once per 0.3 seconds
-
-local function ScheduleContainerUpdate()
-    -- Skip during combat for performance
-    if InCombatLockdown() then return end
-
-    -- Debounce: if already pending, skip
-    if pendingContainerUpdate then return end
-
-    local now = GetTime()
-    local timeSince = now - lastContainerUpdate
-
-    if timeSince < CONTAINER_UPDATE_THROTTLE then
-        -- Too soon, schedule for later
-        pendingContainerUpdate = true
-        C_Timer.After(CONTAINER_UPDATE_THROTTLE - timeSince, function()
-            pendingContainerUpdate = false
-            lastContainerUpdate = GetTime()
-            UpdateAllContainerButtons()
-        end)
-    else
-        -- Run immediately
-        lastContainerUpdate = now
-        UpdateAllContainerButtons()
-    end
-end
-
-----------------------------------------------
--- Overlay Event Handler
-----------------------------------------------
-local overlayFrame = CreateFrame("Frame")
-overlayFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-overlayFrame:RegisterEvent("MERCHANT_SHOW")
-overlayFrame:RegisterEvent("MERCHANT_UPDATE")
-overlayFrame:RegisterEvent("LOOT_OPENED")
-overlayFrame:RegisterEvent("LOOT_SLOT_CLEARED")
-overlayFrame:RegisterEvent("LOOT_CLOSED")
-overlayFrame:RegisterEvent("MERCHANT_CLOSED")
-
-overlayFrame:SetScript("OnEvent", function(self, event)
-    if event == "BAG_UPDATE_DELAYED" then
-        ScheduleContainerUpdate() -- Now debounced
-    elseif event == "MERCHANT_SHOW" or event == "MERCHANT_UPDATE" then
-        if not InCombatLockdown() then
-            C_Timer.After(0.1, UpdateMerchantButtons)
-        end
-    elseif event == "LOOT_OPENED" or event == "LOOT_SLOT_CLEARED" then
-        C_Timer.After(0.1, UpdateLootButtons)
-    elseif event == "LOOT_CLOSED" or event == "MERCHANT_CLOSED" then
-        ClearAllOverlays()
-        pendingContainerUpdate = false -- Cancel pending updates
-    end
-end)
-
--- Hook container frames
-if ContainerFrameCombinedBags then
-    ContainerFrameCombinedBags:HookScript("OnShow", ScheduleContainerUpdate)
-end
-
-for i = 1, 13 do
-    local frame = _G["ContainerFrame" .. i]
-    if frame then
-        frame:HookScript("OnShow", ScheduleContainerUpdate)
-    end
-end
-
-----------------------------------------------
--- Baganator Integration
-----------------------------------------------
-local function RegisterBaganatorWidget()
-    if not (Baganator and Baganator.API and Baganator.API.RegisterCornerWidget) then return end
-
-    Baganator.API.RegisterCornerWidget(
-        "Transmog Status", "refactor_transmog",
-        function(widget, details)
-            if not cachedTransmogOverlay then
-                widget:Hide()
-                return false
-            end
-            if not details.itemLink then
-                widget:Hide()
-                return false
-            end
-
-            -- Check for regular transmog items first, then Ensemble items
-            local collected = nil
-            if CanItemBeTransmogged(details.itemLink) then
-                collected = IsTransmogCollected(details.itemLink)
-            else
-                collected = GetEnsembleOverlayStatus(details.itemLink)
-            end
-
-            if collected == nil then
-                widget:Hide()
-                return false
-            end
-
-            -- Apply shadow styling
-            for _, shadow in ipairs(widget.shadows) do
-                ApplyTransmogShadowStyle(shadow, collected)
-                shadow:Show()
-            end
-
-            -- Apply main icon styling
-            ApplyTransmogIconStyle(widget.icon, collected)
-            widget.icon:Show()
-            widget:Show()
-            return true
-        end,
-        function(itemButton)
-            -- Create a frame with shadows (matching our overlay system)
-            local frame = CreateFrame("Frame", nil, itemButton)
-            frame:SetSize(ICON_SIZE + SHADOW_OFFSET * 2, ICON_SIZE + SHADOW_OFFSET * 2)
-            frame:SetFrameLevel(itemButton:GetFrameLevel() + 10)
-
-            -- Create 8 shadow textures
-            frame.shadows = {}
-            for i, offset in ipairs(SHADOW_OFFSETS) do
-                local shadow = frame:CreateTexture(nil, "ARTWORK", nil, 1)
-                shadow:SetSize(ICON_SIZE, ICON_SIZE)
-                shadow:SetPoint("CENTER", frame, "CENTER", offset[1], offset[2])
-                frame.shadows[i] = shadow
-            end
-
-            -- Create main icon on top of shadows
-            frame.icon = frame:CreateTexture(nil, "ARTWORK", nil, 7)
-            frame.icon:SetSize(ICON_SIZE, ICON_SIZE)
-            frame.icon:SetPoint("CENTER", frame, "CENTER", 0, 0)
-
-            return frame
-        end,
-        { corner = "top_right", priority = 5 }
-    )
-end
-
-if C_AddOns and C_AddOns.IsAddOnLoaded("Baganator") then
-    RegisterBaganatorWidget()
-else
-    local bagWaitFrame = CreateFrame("Frame")
-    bagWaitFrame:RegisterEvent("ADDON_LOADED")
-    bagWaitFrame:SetScript("OnEvent", function(self, event, loadedAddon)
-        if loadedAddon == "Baganator" then
-            self:UnregisterAllEvents()
-            C_Timer.After(0.5, RegisterBaganatorWidget)
-        end
-    end)
-end
 
 ----------------------------------------------
 -- Tooltip Transmog Icon (positioned next to text line)
@@ -917,6 +569,9 @@ local function OnTooltipSetUnit(tooltip)
 
     local _, unit = tooltip:GetUnit()
     if not unit then return end
+
+    -- Safely check if the unit token is restricted (throws "Secret values are only allowed...")
+    if not pcall(UnitIsPlayer, unit) then return end
 
     ApplyClassColorToName(tooltip, unit)
     ApplyBorderColor(tooltip, unit)
@@ -995,7 +650,7 @@ local function OnTooltipSetItem(tooltip)
             -- Add spacing and the status text line (right-aligned)
             tooltip:AddLine(" ") -- Spacing line
             tooltip:AddDoubleLine(" ", iconStr .. statusText, 1, 1, 1, r, g, b)
-            tooltip:Show()       -- Force tooltip to recalculate size
+            if tooltip:IsShown() then tooltip:Show() end -- Force tooltip to recalculate size
 
             -- Hide standalone icon if it was previously used
             HideTooltipTransmogIcon(tooltip)
@@ -1039,7 +694,7 @@ local function OnTooltipSetItem(tooltip)
             -- Add spacing and the status text line (right-aligned)
             tooltip:AddLine(" ") -- Spacing line
             tooltip:AddDoubleLine(" ", iconStr .. statusText, 1, 1, 1, r, g, b)
-            tooltip:Show()       -- Force tooltip to recalculate size
+            if tooltip:IsShown() then tooltip:Show() end -- Force tooltip to recalculate size
 
             -- Hide standalone icon if it was previously used
             HideTooltipTransmogIcon(tooltip)
@@ -1086,6 +741,15 @@ end
 
 local function ApplyScale()
     GameTooltip:SetScale(cachedScale / 100)
+end
+
+local function ApplyAutoCompareCVar()
+    local value = cachedAutoCompare and "1" or "0"
+    if C_CVar and C_CVar.SetCVar then
+        C_CVar.SetCVar("alwaysCompareItems", value)
+    else
+        SetCVar("alwaysCompareItems", value)
+    end
 end
 
 local function SetupMousePositioning()
@@ -1139,6 +803,7 @@ function Module:Enable()
     isEnabled = true
     InitializeHooks()
     ApplyScale()
+    ApplyAutoCompareCVar()
 end
 
 function Module:Disable()
@@ -1181,6 +846,10 @@ function Module:OnInitialize()
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_HideHealthbar", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_ShowItemID", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_ShowSpellID", UpdateCachedSettings)
+    addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_AutoCompare", function()
+        UpdateCachedSettings()
+        if isEnabled then ApplyAutoCompareCVar() end
+    end)
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_Anchor", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_MouseSide", UpdateCachedSettings)
     addon.CallbackRegistry:Register("SettingChanged.TooltipPlus_MouseOffset", UpdateCachedSettings)

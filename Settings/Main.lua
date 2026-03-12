@@ -65,6 +65,7 @@ local CATEGORIES = {
         name = "Interface",
         subcategories = {
             { key = "tooltips",   name = "Tooltips" },   -- Tooltip+
+            { key = "collection", name = "Collections" },
             { key = "nameplates", name = "Nameplates" }, -- Quest Nameplates
             { key = "frames",     name = "Frames" },     -- Combat Fade
         }
@@ -623,15 +624,7 @@ local function SetupVendorsContent(parent)
     -- Auto Sell
     layout:AddSection(L.MODULE_AUTO_SELL or "Auto Sell Junk")
     local sellToggle = layout:AddModule(L.MODULE_AUTO_SELL or "Auto Sell Junk", "AutoSellJunk", L.TIP_SELL_NOTIFY)
-    layout:AddSubCheckbox(L.SHOW_NOTIFICATIONS or "Show Notifications", "AutoSellJunk_ShowNotify", L.TIP_SELL_NOTIFY,
-        sellToggle)
-    layout:AddSubCheckbox(L.SELL_KNOWN_TRANSMOG or "Sell Known Transmog", "AutoSellJunk_SellKnownTransmog",
-        L.TIP_SELL_KNOWN_TRANSMOG, sellToggle)
-    layout:AddSubCheckbox(L.KEEP_TRANSMOG or "Keep Uncollected Transmog", "AutoSellJunk_KeepTransmog",
-        L.TIP_KEEP_TRANSMOG, sellToggle)
-    layout:AddSubCheckbox(L.SELL_LOW_ILVL or "Sell Low iLvl Gear", "AutoSellJunk_SellLowILvl", L.TIP_SELL_LOW_ILVL,
-        sellToggle)
-    layout:AddSubSlider("Max iLvl", "AutoSellJunk_MaxILvl", 0, 700, 10, L.TIP_MAX_ILVL, sellToggle)
+    -- No sub-options needed for Auto Sell Junk anymore
 
     layout:AddSpacer(10)
 
@@ -642,6 +635,13 @@ local function SetupVendorsContent(parent)
         repairToggle)
     layout:AddSubCheckbox(L.SHOW_NOTIFICATIONS or "Show Notifications", "AutoRepair_ShowNotify", L.TIP_REPAIR_NOTIFY,
         repairToggle)
+
+    layout:AddSpacer(10)
+
+    -- Extended Vendor
+    layout:AddSection("Vendor Window")
+    layout:AddModule("Extended Vendor (5×4)", "ExtendedVendor",
+        "Expand the merchant window to show 20 items per page instead of 10.")
 
     layout:AddDefaultsButton(container)
     content:SetHeight(layout:Finalize())
@@ -695,6 +695,8 @@ local function SetupTooltipsContent(parent)
 
     -- Appearance
     layout:AddSection("Appearance")
+    layout:AddSubCheckbox(L.TOOLTIP_AUTO_COMPARE or "Auto Compare Gear", "TooltipPlus_AutoCompare",
+        "Automatically show equipped gear without pressing Shift.", tooltipToggle)
     layout:AddSubCheckbox(L.TOOLTIP_CLASS_COLORS or "Class Color Border", "TooltipPlus_ClassColors",
         "Color border based on class/reaction.", tooltipToggle)
     layout:AddSubCheckbox(L.TOOLTIP_RARITY_BORDER or "Rarity Border", "TooltipPlus_RarityBorder",
@@ -704,14 +706,7 @@ local function SetupTooltipsContent(parent)
 
     layout:AddSpacer(5)
 
-    -- Transmog Overlay
-    layout:AddSection("Transmog Overlay")
-    layout:AddSubCheckbox(L.TOOLTIP_TRANSMOG_OVERLAY or "Show Overlay Icons", "TooltipPlus_TransmogOverlay",
-        "Show icons on item buttons.", tooltipToggle)
-    layout:AddSubDropdown(L.TOOLTIP_TRANSMOG_CORNER or "Icon Corner", "TooltipPlus_TransmogCorner", C.CORNER_OPTIONS, nil,
-        tooltipToggle)
 
-    layout:AddSpacer(5)
 
     -- Hide Elements
     layout:AddSection("Hide Elements")
@@ -733,6 +728,36 @@ local function SetupTooltipsContent(parent)
         tooltipToggle)
     layout:AddSubCheckbox(L.TOOLTIP_SHOW_SPELL_ID or "Show Spell ID", "TooltipPlus_ShowSpellID",
         "Display spell database ID.", tooltipToggle)
+
+    layout:AddDefaultsButton(container)
+    content:SetHeight(layout:Finalize())
+    container.layout = layout
+    container:SetScript("OnShow", function() layout:RefreshAll() end)
+    return container
+end
+
+-- COLLECTION OVERLAY
+local function SetupCollectionContent(parent)
+    local container = CreateScrollableContent(parent)
+    local content = container.content
+    local layout = CreateContentLayout(content)
+
+    layout:AddSection("Collection Overlay")
+    local collToggle = layout:AddModule("Enable Collection Overlay", "CollectionOverlay", "Show collection status icons on items.")
+
+    layout:AddSpacer(5)
+
+    layout:AddSection("Tracked Collections")
+    layout:AddSubCheckbox("Transmogs", "CollectionOverlay_Transmog", "Show overlay for uncollected armor and weapon appearances.", collToggle)
+    layout:AddSubCheckbox("Housing Decor", "CollectionOverlay_Housing", "Show overlay for uncollected housing decor.", collToggle)
+    layout:AddSubCheckbox("Mounts", "CollectionOverlay_Mounts", "Show overlay for uncollected mounts.", collToggle)
+    layout:AddSubCheckbox("Toys", "CollectionOverlay_Toys", "Show overlay for uncollected toys.", collToggle)
+    layout:AddSubCheckbox("Pets", "CollectionOverlay_Pets", "Show overlay for uncollected companion battle pets.", collToggle)
+
+    layout:AddSpacer(5)
+
+    layout:AddSection("Positioning")
+    layout:AddSubDropdown("Icon Corner", "CollectionOverlay_Corner", C.CORNER_OPTIONS, nil, collToggle)
 
     layout:AddDefaultsButton(container)
     content:SetHeight(layout:Finalize())
@@ -858,6 +883,7 @@ local CONTENT_SETUP = {
     social = SetupSocialContent,
     -- Interface
     tooltips = SetupTooltipsContent,
+    collection = SetupCollectionContent,
     nameplates = SetupNameplatesContent,
     frames = SetupFramesContent,
 }

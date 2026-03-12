@@ -105,11 +105,6 @@ local DefaultValues = {
     -- ON: Everyone hates grey items cluttering bags
     ----------------------------------------------
     AutoSellJunk = true,
-    AutoSellJunk_ShowNotify = true,         -- ON: Transparency - show what was sold
-    AutoSellJunk_SellKnownTransmog = false, -- OFF: Risky - might regret selling
-    AutoSellJunk_KeepTransmog = true,       -- ON: Protect uncollected appearances
-    AutoSellJunk_SellLowILvl = false,       -- OFF: Risky - could sell sentimental gear
-    AutoSellJunk_MaxILvl = 400,             -- Safe threshold (old expansion gear)
 
     ----------------------------------------------
     -- AUTO-REPAIR
@@ -191,8 +186,6 @@ local DefaultValues = {
     TooltipPlus_ClassColors = true,     -- ON: Visually nice, expected
     TooltipPlus_RarityBorder = true,    -- ON: Visually nice, expected
     TooltipPlus_ShowTransmog = true,    -- ON: Key useful feature
-    TooltipPlus_TransmogOverlay = true, -- ON: Visual QoL for transmog hunters
-    TooltipPlus_TransmogCorner = "TOPRIGHT",
     -- Hide options - OFF: Don't remove info by default
     TooltipPlus_HideHealthbar = false,
     TooltipPlus_HideGuild = false,
@@ -203,6 +196,25 @@ local DefaultValues = {
     TooltipPlus_ShowItemID = false,
     TooltipPlus_ShowSpellID = false,
     TooltipPlus_Compact = false,
+    TooltipPlus_AutoCompare = false, -- OFF: Requires explicit shift press
+
+    ----------------------------------------------
+    -- EXTENDED VENDOR
+    -- ON: Pure QoL, shows more items per page
+    ----------------------------------------------
+    ExtendedVendor = true,
+
+    ----------------------------------------------
+    -- COLLECTION OVERLAY
+    -- ON: Visual QoL for transmog and collection hunters
+    ----------------------------------------------
+    CollectionOverlay = true,
+    CollectionOverlay_Transmog = true,
+    CollectionOverlay_Housing = true,
+    CollectionOverlay_Mounts = true,
+    CollectionOverlay_Toys = true,
+    CollectionOverlay_Pets = true,
+    CollectionOverlay_Corner = "TOPRIGHT",
 
     ----------------------------------------------
     -- QUEST NAMEPLATES

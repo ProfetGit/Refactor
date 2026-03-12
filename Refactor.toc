@@ -27,6 +27,7 @@ Core\MinimapButton.lua
 # Modules
 Modules\AutoSellJunk.lua
 Modules\AutoRepair.lua
+Modules\ExtendedVendor.lua
 Modules\AutoQuest.lua
 Modules\FastLoot.lua
 Modules\SkipCinematics.lua
@@ -34,6 +35,7 @@ Modules\AutoConfirm.lua
 Modules\AutoInvite.lua
 Modules\AutoRelease.lua
 Modules\TooltipPlus.lua
+Modules\CollectionOverlay.lua
 Modules\QuestNameplates.lua
 Modules\LootToast.lua
 Modules\ActionBars.lua

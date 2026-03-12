@@ -287,38 +287,25 @@ local function OnQuestGreeting()
 end
 
 ----------------------------------------------
--- Event Frame
+-- Event Map
 ----------------------------------------------
-local eventFrame = CreateFrame("Frame")
-
-eventFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "QUEST_DETAIL" then
-        OnQuestDetail()
-    elseif event == "QUEST_PROGRESS" then
-        OnQuestProgress()
-    elseif event == "QUEST_COMPLETE" then
-        OnQuestComplete()
-    elseif event == "GOSSIP_SHOW" then
-        OnGossipShow()
-    elseif event == "QUEST_GREETING" then
-        OnQuestGreeting()
-    end
-end)
+Module.eventMap = {
+    ["QUEST_DETAIL"] = function() OnQuestDetail() end,
+    ["QUEST_PROGRESS"] = function() OnQuestProgress() end,
+    ["QUEST_COMPLETE"] = function() OnQuestComplete() end,
+    ["GOSSIP_SHOW"] = function() OnGossipShow() end,
+    ["QUEST_GREETING"] = function() OnQuestGreeting() end,
+}
 
 ----------------------------------------------
 -- Enable/Disable
 ----------------------------------------------
 function Module:OnEnable()
     self:UpdateCachedSettings()
-    eventFrame:RegisterEvent("QUEST_DETAIL")
-    eventFrame:RegisterEvent("QUEST_PROGRESS")
-    eventFrame:RegisterEvent("QUEST_COMPLETE")
-    eventFrame:RegisterEvent("GOSSIP_SHOW")
-    eventFrame:RegisterEvent("QUEST_GREETING")
 end
 
 function Module:OnDisable()
-    eventFrame:UnregisterAllEvents()
+    -- Base module handles unregistering events automatically
 end
 
 ----------------------------------------------

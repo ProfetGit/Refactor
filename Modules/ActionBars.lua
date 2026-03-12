@@ -32,19 +32,10 @@ local actionBarObjects = {}
 local playerFrameObjects = {}
 local initialized = false
 
-local eventFrame = CreateFrame("Frame")
-local updateFrame = CreateFrame("Frame")
-local FADE_IN_TIME = 0.2
-local FADE_OUT_TIME = 0.2
 local MOUSE_OVER_CHECK_INTERVAL = 0.05 -- 20 FPS for bounds checking
 
-local targetBarAlpha = 1
-local targetPlayerAlpha = 1
-local currentBarAlpha = 1
-local currentPlayerAlpha = 1
-
 local inCombat = false
-local timeSinceLastMouseCheck = 0
+local mouseCheckTimer = nil
 
 local cachedSettings = {
     moduleEnabled = false,
@@ -86,13 +77,19 @@ local function InitFrames()
     for _, name in ipairs(actionBarFrameNames) do
         if name ~= "StatusTrackingBarManager" then
             local frame = _G[name]
-            if frame then table.insert(actionBarObjects, frame) end
+            if frame then
+                addon.Utils.MakeFadingObject(frame)
+                table.insert(actionBarObjects, frame)
+            end
         end
     end
 
     for _, name in ipairs(playerFrameNames) do
         local frame = _G[name]
-        if frame then table.insert(playerFrameObjects, frame) end
+        if frame then
+            addon.Utils.MakeFadingObject(frame)
+            table.insert(playerFrameObjects, frame)
+        end
     end
 
     initialized = true
@@ -113,63 +110,47 @@ function Module:UpdateFadeState()
     end
 
     -- Action Bar Target Alpha Calculations
-    targetBarAlpha = settings.actionBarMinAlpha
     if not settings.actionBarsEnabled or inCombat or mouseOverBars then
-        targetBarAlpha = 1
+        for _, frame in ipairs(actionBarObjects) do
+            if frame.FadeIn then frame:FadeIn() end
+        end
+    else
+        for _, frame in ipairs(actionBarObjects) do
+            if frame.FadeOut then
+                frame:SetFadeOutAlpha(settings.actionBarMinAlpha)
+                frame:FadeOut()
+            end
+        end
     end
 
     -- Player Frame Target Alpha Calculations
-    targetPlayerAlpha = settings.playerFrameMinAlpha
     if not settings.playerFrameEnabled or inCombat or mouseOverPlayer then
-        targetPlayerAlpha = 1
+        for _, frame in ipairs(playerFrameObjects) do
+            if frame.FadeIn then frame:FadeIn() end
+        end
+    else
+        for _, frame in ipairs(playerFrameObjects) do
+            if frame.FadeOut then
+                frame:SetFadeOutAlpha(settings.playerFrameMinAlpha)
+                frame:FadeOut()
+            end
+        end
     end
 end
 
-updateFrame:SetScript("OnUpdate", function(_, elapsed)
-    if not initialized or not cachedSettings.moduleEnabled then return end
-
-    -- Throttled Mouse Check (Only query bounds 20 times a second max)
-    timeSinceLastMouseCheck = timeSinceLastMouseCheck + elapsed
-    if timeSinceLastMouseCheck > MOUSE_OVER_CHECK_INTERVAL then
-        timeSinceLastMouseCheck = 0
+function Module:StartMouseCheck()
+    if mouseCheckTimer then return end
+    mouseCheckTimer = C_Timer.NewTicker(MOUSE_OVER_CHECK_INTERVAL, function()
         Module:UpdateFadeState()
+    end)
+end
+
+function Module:StopMouseCheck()
+    if mouseCheckTimer then
+        mouseCheckTimer:Cancel()
+        mouseCheckTimer = nil
     end
-
-    -- Smooth Interpolation (Fader Engine)
-    local barDiff = targetBarAlpha - currentBarAlpha
-    local playerDiff = targetPlayerAlpha - currentPlayerAlpha
-
-    if math.abs(barDiff) > 0.001 then
-        local duration = barDiff > 0 and FADE_IN_TIME or FADE_OUT_TIME
-        currentBarAlpha = currentBarAlpha + (barDiff / duration * elapsed)
-
-        -- Clamp logic
-        if barDiff > 0 and currentBarAlpha > targetBarAlpha then currentBarAlpha = targetBarAlpha end
-        if barDiff < 0 and currentBarAlpha < targetBarAlpha then currentBarAlpha = targetBarAlpha end
-
-        for _, frame in ipairs(actionBarObjects) do
-            -- Safe check: NEVER Show(), only touch Alpha if it's strictly > 0 via engine
-            if currentBarAlpha > 0 or frame:GetAlpha() ~= currentBarAlpha then
-                frame:SetAlpha(currentBarAlpha)
-            end
-        end
-    end
-
-    if math.abs(playerDiff) > 0.001 then
-        local duration = playerDiff > 0 and FADE_IN_TIME or FADE_OUT_TIME
-        currentPlayerAlpha = currentPlayerAlpha + (playerDiff / duration * elapsed)
-
-        -- Clamp logic
-        if playerDiff > 0 and currentPlayerAlpha > targetPlayerAlpha then currentPlayerAlpha = targetPlayerAlpha end
-        if playerDiff < 0 and currentPlayerAlpha < targetPlayerAlpha then currentPlayerAlpha = targetPlayerAlpha end
-
-        for _, frame in ipairs(playerFrameObjects) do
-            if currentPlayerAlpha > 0 or frame:GetAlpha() ~= currentPlayerAlpha then
-                frame:SetAlpha(currentPlayerAlpha)
-            end
-        end
-    end
-end)
+end
 
 function Module:ForceShow()
     if not initialized then InitFrames() end
@@ -182,42 +163,35 @@ function Module:ForceShow()
         if frame.SetAlpha then frame:SetAlpha(1) end
     end
 
-    currentBarAlpha = 1
-    currentPlayerAlpha = 1
-    targetBarAlpha = 1
-    targetPlayerAlpha = 1
 end
 
-eventFrame:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_REGEN_DISABLED" then
+Module.eventMap = {
+    ["PLAYER_REGEN_DISABLED"] = function(self)
         inCombat = true
-        Module:UpdateFadeState()
-    elseif event == "PLAYER_REGEN_ENABLED" then
+        self:UpdateFadeState()
+    end,
+    ["PLAYER_REGEN_ENABLED"] = function(self)
         inCombat = false
-        Module:UpdateFadeState()
+        self:UpdateFadeState()
     end
-end)
+}
 
 function Module:OnEnable()
     UpdateCachedSettings()
-
-    eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-    eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
     inCombat = InCombatLockdown and InCombatLockdown() or false
 
     C_Timer.After(1, function()
         if self.isEnabled then
             if not initialized then InitFrames() end
-            Module:UpdateFadeState()
-            updateFrame:Show()
+            self:StartMouseCheck()
+            self:UpdateFadeState()
         end
     end)
 end
 
 function Module:OnDisable()
-    eventFrame:UnregisterAllEvents()
-    updateFrame:Hide()
+    self:StopMouseCheck()
     self:ForceShow()
 end
 

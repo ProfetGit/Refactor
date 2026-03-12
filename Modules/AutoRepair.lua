@@ -5,12 +5,9 @@ local addonName, addon = ...
 local L = addon.L
 local Utils = addon.Utils
 
-local Module = {}
-
-----------------------------------------------
--- Module State
-----------------------------------------------
-local isEnabled = false
+local Module = addon:NewModule("AutoRepair", {
+    settingKey = "AutoRepair"
+})
 
 ----------------------------------------------
 -- Repair Implementation
@@ -68,57 +65,13 @@ function Module:Repair()
     end
 end
 
-----------------------------------------------
--- Event Handlers
-----------------------------------------------
-local eventFrame = CreateFrame("Frame")
-
 local function OnMerchantShow()
-    if not isEnabled then return end
-
     -- Small delay to ensure merchant frame is ready and after junk selling
     C_Timer.After(0.3, function()
         Module:Repair()
     end)
 end
 
-eventFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "MERCHANT_SHOW" then
-        OnMerchantShow()
-    end
-end)
-
-----------------------------------------------
--- Enable/Disable
-----------------------------------------------
-function Module:Enable()
-    isEnabled = true
-    eventFrame:RegisterEvent("MERCHANT_SHOW")
-end
-
-function Module:Disable()
-    isEnabled = false
-    eventFrame:UnregisterEvent("MERCHANT_SHOW")
-end
-
-----------------------------------------------
--- Initialization
-----------------------------------------------
-function Module:OnInitialize()
-    -- Initial state
-    if addon.GetDBBool("AutoRepair") then
-        self:Enable()
-    end
-
-    -- Listen for setting changes
-    addon.CallbackRegistry:Register("SettingChanged.AutoRepair", function(value)
-        if value then
-            Module:Enable()
-        else
-            Module:Disable()
-        end
-    end)
-end
-
--- Register the module
-addon.RegisterModule("AutoRepair", Module)
+Module.eventMap = {
+    ["MERCHANT_SHOW"] = function() OnMerchantShow() end
+}
