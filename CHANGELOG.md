@@ -4,6 +4,11 @@ All notable changes to Refactor will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Added `.gitignore` to exclude `docs/` folder from being tracked.
+
 ## [1.0.0] - 2025-12-10
 
 ### Added
