@@ -58,7 +58,16 @@ describe("slash dispatch", function()
         local env = base()
         local lines = env.R.Commands:Dispatch("wat")
         assert.equal(env.R.L.CMD_HELP_HEADER, lines[1])
-        assert.equal(5, #lines)
+        assert.equal(6, #lines)
+    end)
+
+    it("says so when nothing is listening for the loot feed test", function()
+        local env = base()
+        assert.same({ env.R.L.CMD_LOOT_TEST_OFF }, env.R.Commands:Dispatch("loottest"))
+        local fired = 0
+        env.R.Broker:Subscribe("REFACTOR_LOOT_TEST", function() fired = fired + 1 end, {})
+        assert.is_nil(env.R.Commands:Dispatch("loottest"))
+        assert.equal(1, fired)
     end)
 end)
 

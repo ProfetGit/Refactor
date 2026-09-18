@@ -7,9 +7,25 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
 - Tooltips: sell price per unit and per stack, labelled by source and hidden at merchants;
   rarity-coloured border on the main, linked and comparison tooltips, reset on clear;
   anchor mode (game default, cursor, fixed screen point with offsets).
-- Loot toasts: own loot only, parsed from the item link so no locale string is needed,
-  repeated drops bump one toast, minimum quality, optional price line, gold and currency
-  toasts. Fades only, animated by the client, five pooled frames.
+- Loot feed: one anchored rolling list instead of floating toasts. Own loot only, parsed
+  from the item link so no locale string is needed, newest row at the bottom, repeated
+  drops bump one row, rows fade out one at a time and the rest slide up. A multi-slot loot
+  collapses into one row with a chevron that expands it and pauses its timer. Minimum
+  quality, optional price line and source tag, gold and currency rows without an icon
+  frame, opacity, row lifetime and row cap are settings. Rows are Buttons, so Gear
+  Refactor has an anchor for its badge later. Custom row art in Media, tinted in code.
+  Fades and slides only, animated by the client, sixteen pooled frames.
+- Loot feed prices use the client's coin icons instead of the letters g, s and c, and drop
+  denominations that are zero: a grey reads "8c" with a copper coin, not "0g 0s 8c".
+- Right click a loot feed row to dismiss it; the rows below slide up. On a group it takes
+  the whole group. Left click stays reserved for Gear Refactor.
+- Loot feed rows hold while hovered, show the item's own tooltip, and start their life
+  again when the cursor leaves. Selecting the feed in Edit Mode opens a Blizzard-style
+  dialog with size, row count and lifetime on minimal sliders, each with its own undo
+  button. The dialog sits in screen space and is dragged on its own, so resizing the feed
+  never moves it; its position is saved per character.
+- `/refactor loottest` pushes fake rows through the feed and names any feed texture the
+  client would not load.
 - Vendor: bag junk value readout under the merchant window; extended vendor list beside
   it with search, usable filter, click to buy one, Shift click for a stack, and buyback.
 - Quest automation: auto accept (skips PvP, repeatable and game-auto-accepted quests,

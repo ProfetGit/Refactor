@@ -10,18 +10,23 @@ local noops = {
     "SetFrameStrata", "SetFrameLevel", "SetClampedToScreen", "SetMovable", "SetResizable",
     "SetResizeBounds", "EnableMouse", "EnableMouseWheel", "RegisterForDrag",
     "StartMoving", "StopMovingOrSizing", "StartSizing",
-    "SetHighlightTexture", "SetNormalTexture", "SetPushedTexture", "SetEnabled", "SetStartDelay", "SetScale",
+    "SetHighlightTexture", "SetNormalTexture", "SetPushedTexture", "SetStartDelay", "SetScale",
     "SetDuration", "SetOrder", "SetFromAlpha", "SetToAlpha", "Play", "Stop",
     "SetAutoFocus", "SetMultiLine", "SetFontObject", "SetTextInsets", "SetMaxLetters",
     "ClearFocus", "SetFocus", "SetScrollChild", "SetVerticalScroll",
-    "SetOrientation", "SetMinMaxValues", "SetValueStep", "SetThumbTexture",
+    "SetOrientation", "SetValueStep", "SetThumbTexture",
     "RegisterForClicks", "SetRadialProgressBarStartOffset", "SetRadialProgressBarFeather",
     "SetRadialProgressBarReverse", "SetSmoothing", "SetSmoothScaling", "SetCheckedTexture",
     "SetDisabledCheckedTexture", "SetHitRectInsets", "SetToFinalAlpha",
+    "SetTexelSnappingBias", "SetSnapToPixelGrid",
+    -- Loot feed rows: a text shadow, and the Translation the slide plays. The Edit Mode
+    -- dialog's sliders are Blizzard's minimal slider, which steps on drag.
+    "SetShadowColor", "SetOffset", "SetObeyStepOnDrag",
 }
 
 local values = {
-    GetWidth = 920, GetHeight = 660, GetFrameLevel = 1, IsEnabled = true, HasFocus = false,
+    GetWidth = 920, GetHeight = 660, GetFrameLevel = 1, HasFocus = false,
+    GetEffectiveScale = 1,
     -- A headless animation never runs, so it always reports itself parked at the start.
     IsPlaying = false, GetSmoothProgress = 0, GetAlpha = 1, IsMouseOver = false,
 }
@@ -51,7 +56,10 @@ function Widgets.install(env)
     function Frame:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
     function Frame:GetValue() return self.value or 0 end
     function Frame:SetValue(value) self.value = value end
-    function Frame:GetMinMaxValues() return 0, self.maximum or 0 end
+    -- Real bounds, not a stub returning zero: a stepper that clamps against them would
+    -- otherwise be tested against a range that does not exist.
+    function Frame:SetMinMaxValues(minimum, maximum) self.minimum, self.maximum = minimum, maximum end
+    function Frame:GetMinMaxValues() return self.minimum or 0, self.maximum or 0 end
 
     local function region(env_, kind)
         local object = setmetatable({ kind = kind, events = {}, scripts = {} }, Frame)
@@ -67,6 +75,9 @@ function Widgets.install(env)
     function Frame:GetText() return self.text or "" end
     function Frame:GetStringWidth() return #(self.text or "") * 8 end
     function Frame:SetTexture(texture) self.texture = texture end
+    -- The loot feed asks whether the client accepted a custom file path, and a mock that
+    -- answered nil would report every one of them missing.
+    function Frame:GetTexture() return self.texture end
     function Frame:GetFont() return rawget(self, "fontFile") or "mock-font", 12, "" end
     function Frame:SetFont(file, size, flags) self.fontFile, self.fontSize, self.fontFlags = file, size, flags end
     function Frame:SetShadowOffset() end
@@ -74,6 +85,14 @@ function Widgets.install(env)
         self.gradient = { orientation = orientation, bottom = bottom, top = top }
     end
     function Frame:SetAtlas(atlas) self.atlas = atlas end
+    -- Headless frames have no screen rect, so pixel alignment has nothing to measure and
+    -- the code under test must fall back rather than guess.
+    function Frame:GetTop() return nil end
+    function Frame:GetLeft() return nil end
+    -- Recorded, not dropped: a row refuses a click while its toggle is disabled, and that
+    -- is only testable if the mock remembers being disabled.
+    function Frame:SetEnabled(enabled) self.enabled = enabled ~= false end
+    function Frame:IsEnabled() return rawget(self, "enabled") ~= false end
     function Frame:SetChecked(checked) self.checked = checked == true end
     function Frame:GetChecked() return rawget(self, "checked") == true end
     function Frame:SetBlendMode() end

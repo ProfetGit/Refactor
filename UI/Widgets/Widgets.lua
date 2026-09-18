@@ -4,23 +4,32 @@ local Widgets = {}
 R.UI.Widgets = Widgets
 
 local INPUT_HEIGHT, INFO_SIZE, CHECK_SIZE = 26, 18, 26
-Widgets.ROW_HEIGHT = 58
+Widgets.ROW_HEIGHT = 34
 
 -- Exponential catch-up rather than a fixed tween: a new wheel tick moves the target at
 -- once and the view is always chasing it, so input never waits for an animation to end.
 -- TAU is the time to close 63% of the gap, which reads as immediate but not instant.
 local SCROLL_TAU, SCROLL_SNAP = 0.055, 0.5
 
+-- Scrolled to a fraction of a pixel, every hairline in the list lands between pixels and
+-- some of them stop being drawn. The glide keeps its own exact offset and only what the
+-- frame is told is rounded to whole pixels.
+local function toPixels(frame, value)
+    local pixel = frame.pixel
+    if not pixel or pixel <= 0 then return value end
+    return math.floor(value / pixel + 0.5) * pixel
+end
+
 local function scrollStep(frame, elapsed)
     local delta = frame.target - frame.offset
     if delta > -SCROLL_SNAP and delta < SCROLL_SNAP then
         frame.offset = frame.target
-        frame:SetVerticalScroll(frame.offset)
+        frame:SetVerticalScroll(toPixels(frame, frame.offset))
         frame:SetScript("OnUpdate", nil)
         return
     end
     frame.offset = frame.offset + delta * (1 - math.exp(-elapsed / SCROLL_TAU))
-    frame:SetVerticalScroll(frame.offset)
+    frame:SetVerticalScroll(toPixels(frame, frame.offset))
 end
 
 function Widgets:Input(parent, width, height, multiline)
@@ -126,9 +135,10 @@ function Widgets:Scroll(parent)
     scroll.offset, scroll.target = 0, 0
     function scroll:ScrollTo(value, instant)
         self.target = value
+        self.pixel = Theme:PixelSize(self)
         if instant then
             self.offset = value
-            self:SetVerticalScroll(value)
+            self:SetVerticalScroll(toPixels(self, value))
             self:SetScript("OnUpdate", nil)
         else
             self:SetScript("OnUpdate", scrollStep)
@@ -155,35 +165,44 @@ function Widgets:Scroll(parent)
     return scroll
 end
 
--- One feature: toggle, name, breadcrumb, one-line description, a rule underneath. No box
--- around it. The breadcrumb slot doubles as the place a warning state is reported.
+-- One feature on one line: toggle, name, the slot that reports a warning state, and undo.
+-- The whole row is the click target, so the checkbox takes no mouse of its own and the
+-- pointer never falls into a gap. Hovering the row is what shows the detail, so there is
+-- neither a description line nor an info icon to hunt for.
 function Widgets:ModuleRow(parent, module)
-    local row = CreateFrame("Frame", nil, parent)
+    local row = CreateFrame("Button", nil, parent)
     row:SetHeight(Widgets.ROW_HEIGHT)
     row.module = module
+    row.hover = Theme:RowHighlight(row)
     row.toggle = Theme:Checkbox(row, CHECK_SIZE, "", function(widget)
         R.UI:SetModuleEnabled(module, widget:GetChecked() == true)
     end)
-    row.toggle:SetPoint("TOPLEFT", 6, -8)
+    row.toggle:EnableMouse(false)
+    row.toggle:SetPoint("LEFT", 6, 0)
     row.undo = Theme:UndoButton(row, INFO_SIZE + 2, function() R.UI:ResetModule(module) end)
-    row.undo:SetPoint("TOPRIGHT", -10, -11)
+    row.undo:SetPoint("RIGHT", -10, 0)
+    -- Undo sits inside the row, so entering it must not read as leaving the row.
+    row.undo:SetScript("OnEnter", function() row.hover:To(1) end)
+    row.undo:SetScript("OnLeave", function()
+        if not row:IsMouseOver() then row.hover:To(0) end
+    end)
     row.meta = Theme:Text(row, "", "small", "TEXT_MUTED")
     row.meta:SetPoint("RIGHT", row.undo, "LEFT", -10, 0)
     row.meta:SetWidth(180)
     row.meta:SetJustifyH("RIGHT")
     row.name = Theme:Text(row, "", "body", "TEXT_BODY")
     row.name:SetPoint("LEFT", row.toggle, "RIGHT", 8, 0)
-    row.info = Theme:InfoIcon(row, INFO_SIZE)
-    row.info:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
-    row.info.onEnter = function(icon) R.UI:ShowDetails(module, icon) end
-    row.info.onLeave = function() R.UI:HideDetails() end
-    row.description = Theme:Text(row, "", "small", "TEXT_MUTED")
-    row.description:SetPoint("TOPLEFT", 40, -36)
-    row.description:SetPoint("RIGHT", -40, 0)
-    row.description:SetHeight(16)
-    row.description:SetJustifyV("TOP")
-    row.divider = Theme:Divider(row)
-    row.divider:SetPoint("BOTTOMLEFT")
-    row.divider:SetPoint("BOTTOMRIGHT")
+    row:SetScript("OnEnter", function(widget)
+        widget.hover:To(1)
+        R.UI:ShowDetails(module, widget)
+    end)
+    row:SetScript("OnLeave", function(widget)
+        widget.hover:To(0)
+        R.UI:HideDetails()
+    end)
+    row:SetScript("OnClick", function(widget)
+        if not widget.toggle:IsEnabled() then return end
+        R.UI:SetModuleEnabled(module, not widget.toggle:GetChecked())
+    end)
     return row
 end

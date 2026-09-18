@@ -178,8 +178,12 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
 - Tooltip sell price line appears away from a merchant, not at one, with money icons
 - Rarity border tints and returns to white when the tooltip clears; comparison tooltips too
 - Tooltip anchor cursor and fixed-point modes; bag slots keep their own anchor as documented
-- Loot toast on a kill, bumped count on a second drop of the same item, gold toast on loot,
-  no gold toast when selling or taking mail, five-toast burst drops the sixth
+- Loot feed on a kill, bumped count on a second drop of the same item, gold row on loot,
+  no gold row when selling or taking mail, a burst past the row cap drops the oldest
+- Right click dismisses a feed row, and a group row takes its children with it
+- Loot feed textures load after a full client restart, checked with `/refactor loottest`
+  over both a dark and a snow-bright zone; a multi-slot loot collapses into one row that
+  expands and pauses its timer
 - Vendor list search, usable filter, buy one, Shift buy stack, buyback row, junk readout
 - Auto accept and auto turn in on an ordinary quest; a reward-choice quest stays open
 - Chat link click opens the copy box; duel declined; resurrection accepted out of combat

@@ -3,38 +3,70 @@ local UI, L, Settings = R.UI, R.L, R.Settings
 local Theme = LibStub("LibRefactorTheme-1.0")
 local unpack = unpack
 
--- One sidebar entry per group of categories, not per category: a category stays on every
--- row as its breadcrumb (PRD 8.2), so the sidebar only has to be a short way in. Panels
--- are the tool pages. Every module category must appear in exactly one group; a spec
--- checks that so a new category cannot silently vanish from the sidebar.
-local SIDEBAR = {
-    { key = "All", labelKey = "UI_ALL" },
-    { key = "Quests", labelKey = "UI_GROUP_QUESTS", categories = { "Quest", "Loot", "Toasts" } },
-    { key = "Vendor", labelKey = "UI_GROUP_VENDOR", categories = { "Vendor", "Items" } },
-    { key = "Interface", labelKey = "UI_GROUP_INTERFACE",
-        categories = { "Interface", "Chat", "Social", "Nameplates" } },
-    { key = "Tooltips", labelKey = "UI_Tooltips", categories = { "Tooltips" } },
-    { key = "Automation", labelKey = "UI_Automation", categories = { "Automation" }, tone = "TEXT_WARNING" },
+-- One sidebar entry per category, in a fixed order, and only for categories that own a
+-- module: a stacked group ("Quests & loot") hid which category a row belonged to and left
+-- the list with no structure of its own. Panels are the tool pages. Automation is its own
+-- category (PRD 6.3), so a module that decides for the player is never listed under the
+-- category it would otherwise sit in.
+local CATEGORY_ORDER = {
+    "Quest", "Loot", "Vendor", "Items", "Interface", "Chat", "Social",
+    "Nameplates", "Tooltips", "Toasts", "Automation",
+}
+local TOOL_ENTRIES = {
     { key = "Options", labelKey = "UI_OPTIONS", tools = true },
     { key = "Profiles", labelKey = "UI_Profiles", tools = true },
     { key = "Conflicts", labelKey = "UI_Conflicts", tools = true },
     { key = "Diagnostics", labelKey = "UI_Diagnostics", tools = true },
 }
-for _, entry in ipairs(SIDEBAR) do
-    if entry.categories then
-        entry.set = {}
-        for _, category in ipairs(entry.categories) do entry.set[category] = true end
+UI.categoryOrder = CATEGORY_ORDER
+UI.sidebar = { { key = "All", labelKey = "UI_ALL" } }
+
+-- Every category that owns a module, in display order. A category the order list has not
+-- heard of still gets listed, after the known ones, so registering one cannot make its
+-- modules unreachable.
+function UI:CategoriesInOrder()
+    local present, ordered, known = {}, {}, {}
+    for _, module in ipairs(R.modules) do present[self:Category(module)] = true end
+    for _, category in ipairs(CATEGORY_ORDER) do
+        known[category] = true
+        if present[category] then ordered[#ordered + 1] = category end
     end
+    local extra = {}
+    for category in pairs(present) do
+        if not known[category] then extra[#extra + 1] = category end
+    end
+    table.sort(extra)
+    for _, category in ipairs(extra) do ordered[#ordered + 1] = category end
+    return ordered
 end
-UI.sidebar = SIDEBAR
+
+-- Built from the modules that actually registered, so a category with nothing in it never
+-- becomes a dead row and a new category needs no edit here.
+function UI:BuildSidebar()
+    local list = { { key = "All", labelKey = "UI_ALL" } }
+    for _, category in ipairs(self:CategoriesInOrder()) do
+        list[#list + 1] = {
+            key = category,
+            labelKey = "UI_" .. category,
+            categories = { category },
+            set = { [category] = true },
+            tone = category == "Automation" and "TEXT_WARNING" or nil,
+        }
+    end
+    for _, entry in ipairs(TOOL_ENTRIES) do list[#list + 1] = entry end
+    self.sidebar = list
+    return list
+end
 
 local PAD, SIDEBAR_WIDTH, SIDEBAR_ROW, SIDEBAR_TOP = 24, 148, 24, -64
 local CONTENT_X = PAD + SIDEBAR_WIDTH + 22
 local SEARCH_TOP, SEARCH_HEIGHT = -22, 26
 local TAB_BASELINE, HELP_Y = -72, -80
 local SECTION_GAP = 24
-UI.layout = { x = CONTENT_X, top = -102, right = -36, bottom = 48 }
-local ROW_HEIGHT = 58
+-- Space above a heading, and between a heading and the first row under it.
+local LIST_SECTION_GAP, HEADER_GAP = 18, 4
+UI.layout = { x = CONTENT_X, top = -102, right = -36, bottom = 24 }
+local ROW_HEIGHT = UI.Widgets.ROW_HEIGHT
 local modifiers = { "CTRL", "SHIFT", "ALT" }
 
 local function accountValue(module)
@@ -67,7 +99,8 @@ function UI:IsModified(module)
         local value = Settings.account and Settings.account.modules[module.id]
         return value ~= nil and value ~= Settings.defaults[module.id]
     end
-    return Settings:GetOverride(module.id) ~= nil
+    local override = Settings:GetOverride(module.id)
+    return override ~= nil and override ~= Settings:GetInherited(module.id)
 end
 
 function UI:ResetModule(module)
@@ -78,6 +111,16 @@ end
 
 function UI:Cycle(module)
     self:SetModuleEnabled(module, not Settings:Get(module.id))
+end
+
+-- Dropped between two pixels, the window puts every rule inside it between two pixels too.
+function UI:SnapPosition()
+    local point, _, relativePoint, x, y = self.frame:GetPoint(1)
+    if type(x) ~= "number" or type(y) ~= "number" then return end
+    self.frame:ClearAllPoints()
+    self.frame:SetPoint(point, UIParent, relativePoint,
+        Theme:Snap(self.frame, x), Theme:Snap(self.frame, y))
+    if self.frame:IsShown() then self:Refresh() end
 end
 
 function UI:SavePosition()
@@ -95,27 +138,28 @@ function UI:RestorePosition()
     if validPoints[saved.point] and validPoints[saved.relativePoint]
         and type(saved.x) == "number" and type(saved.y) == "number" then
         self.frame:ClearAllPoints()
-        self.frame:SetPoint(saved.point, UIParent, saved.relativePoint, saved.x, saved.y)
+        self.frame:SetPoint(saved.point, UIParent, saved.relativePoint,
+            Theme:Snap(self.frame, saved.x), Theme:Snap(self.frame, saved.y))
     end
 end
 
 function UI:Toggle()
     if not self.frame then return end
     if self.frame:IsShown() then self.frame:Hide()
-    else self:Refresh(); self.frame:Show() end
+    else self:OnPixelsChanged(); self:Refresh(); self.frame:Show() end
 end
 
+-- What the feature does, and nothing else. Overlaps with other addons have their own
+-- panel, and the recovery advice was the same sentence on all twenty rows.
 function UI:DetailText(module)
     local title = self:ModuleText(module, "name")
-    local overlaps = L.UI_NO_CONFLICTS
-    if module.conflicts and #module.conflicts > 0 then overlaps = table.concat(module.conflicts, ", ") end
     local reason = self:StatusReason(module)
-    local body = self:ModuleText(module, "detail") .. "\n\n" .. L.UI_CONFLICTS .. "\n" .. overlaps
-        .. "\n\n" .. L.UI_RECOVERY .. (reason and "\n\n" .. reason or "")
+    local body = self:ModuleText(module, "description") .. "\n\n" .. self:ModuleText(module, "detail")
+        .. (reason and "\n\n" .. reason or "")
     return title, body
 end
 
--- The detail is a tooltip on the row's "i", so it needs no click and no dialog to dismiss.
+-- The detail is a tooltip on the row itself, so it needs no click and no dialog to dismiss.
 function UI:ShowDetails(module, owner)
     if not GameTooltip then return end
     local title, body = self:DetailText(module)
@@ -183,37 +227,51 @@ function UI:Refresh()
     if panel then
         self.panelTitle:SetText(L[panel.countKey or "UI_OPTIONS"])
         if panel.Update then panel:Update() end
-        self.count:SetText(L[panel.countKey or "UI_OPTIONS"])
         self.empty:Hide()
         self.scroll.slider:Hide(); self.scroll.up:Hide(); self.scroll.down:Hide()
         return
     end
     local filter = entry and entry.set or nil
-    local count = 0
-    for _, row in ipairs(self.rows) do
-        local module = row.module
-        local visible = self:Matches(module, query, filter)
-        row:SetShown(visible)
-        if visible then
-            row:ClearAllPoints()
-            row:SetPoint("TOPLEFT", 0, -count * ROW_HEIGHT)
-            row:SetPoint("RIGHT", self.scroll.child, "RIGHT")
-            count = count + 1
-            row.name:SetText(self:ModuleText(module, "name"))
-            row.description:SetText(self:ModuleText(module, "description"))
-            local value = self.mode == "account" and accountValue(module) or Settings:Get(module.id)
-            row.toggle:SetChecked(value == true)
-            local reason = self:StatusReason(module)
-            row.meta:SetText(reason and (module.state == "failed" and L.UI_FAILED_SHORT or L.UI_UNAVAILABLE_SHORT)
-                or module.state == "unconfirmed" and L.UI_STATE_UNCONFIRMED or "")
-            Theme:Color(row.meta, reason and "TEXT_WARNING" or "TEXT_MUTED", true)
-            row.toggle:SetEnabled(Settings.account ~= nil and not module.unavailableReasonKey)
-            row.undo:SetShown(self:IsModified(module))
+    -- One block per category, headed by its name: the list carries the same structure as
+    -- the sidebar, and a search result says which category each row came from.
+    local count, offset = 0, 0
+    for _, category in ipairs(self.categories) do
+        local header, shown = self.sections[category], 0
+        for _, row in ipairs(self.sectionRows[category]) do
+            local module = row.module
+            local visible = self:Matches(module, query, filter)
+            row:SetShown(visible)
+            if visible then
+                if shown == 0 then
+                    if count > 0 then offset = offset + LIST_SECTION_GAP end
+                    header:ClearAllPoints()
+                    header:SetPoint("TOPLEFT", 0, -offset)
+                    header:SetPoint("RIGHT", self.scroll.child, "RIGHT")
+                    -- Anchored first, then measured: the rule can only be put on a whole
+                    -- pixel once its heading knows where it sits.
+                    Theme:AlignHairline(header.line, header, header.lineY)
+                    offset = offset + header.height + HEADER_GAP
+                end
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", 0, -offset)
+                row:SetPoint("RIGHT", self.scroll.child, "RIGHT")
+                offset = offset + ROW_HEIGHT
+                count, shown = count + 1, shown + 1
+                row.name:SetText(self:ModuleText(module, "name"))
+                local value = self.mode == "account" and accountValue(module) or Settings:Get(module.id)
+                row.toggle:SetChecked(value == true)
+                local reason = self:StatusReason(module)
+                row.meta:SetText(reason and (module.state == "failed" and L.UI_FAILED_SHORT or L.UI_UNAVAILABLE_SHORT)
+                    or module.state == "unconfirmed" and L.UI_STATE_UNCONFIRMED or "")
+                Theme:Color(row.meta, reason and "TEXT_WARNING" or "TEXT_MUTED", true)
+                row.toggle:SetEnabled(Settings.account ~= nil and not module.unavailableReasonKey)
+                row.undo:SetShown(self:IsModified(module))
+            end
         end
+        header:SetShown(shown > 0)
     end
-    self.count:SetText(string.format(query ~= "" and L.UI_MATCHES or L.UI_COUNT, count))
     self.empty:SetShown(count == 0)
-    self.scroll:UpdateExtent(count * ROW_HEIGHT)
+    self.scroll:UpdateExtent(offset)
 end
 
 function UI:LoadOptions()
@@ -359,6 +417,13 @@ function UI:RefreshNameplateOptions()
     self:RefreshMinimapButton()
 end
 
+function UI:OnPixelsChanged()
+    Theme:RefreshHairlines()
+    if self.scroll then self.scroll.pixel = Theme:PixelSize(self.scroll) end
+    -- Every rule in the list is anchored from Refresh, so re-running it re-aligns them.
+    if self.frame and self.frame:IsShown() then self:Refresh() end
+end
+
 function UI:Initialize()
     if self.frame then return end
     self.mode, self.category = "character", "All"
@@ -373,7 +438,11 @@ function UI:Initialize()
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function(widget) widget:StartMoving() end)
-    frame:SetScript("OnDragStop", function(widget) widget:StopMovingOrSizing(); self:SavePosition() end)
+    frame:SetScript("OnDragStop", function(widget)
+        widget:StopMovingOrSizing()
+        self:SnapPosition()
+        self:SavePosition()
+    end)
     frame:SetScript("OnHide", function()
         self:SavePosition()
         self:HideDetails()
@@ -392,7 +461,7 @@ function UI:Initialize()
     end)
     self.categoryButtons = {}
     local y = SIDEBAR_TOP
-    for _, entry in ipairs(SIDEBAR) do
+    for _, entry in ipairs(self:BuildSidebar()) do
         if entry.tools and not self.toolsHeader then
             local rule = Theme:Divider(frame)
             rule:SetPoint("TOPLEFT", PAD + 4, y - 6)
@@ -429,17 +498,26 @@ function UI:Initialize()
     self.scroll = self.Widgets:Scroll(frame)
     self.scroll:SetPoint("TOPLEFT", CONTENT_X, self.layout.top)
     self.scroll:SetPoint("BOTTOMRIGHT", -48, self.layout.bottom)
-    self.rows = {}
-    for _, module in ipairs(R.modules) do
-        self.rows[#self.rows + 1] = self.Widgets:ModuleRow(self.scroll.child, module)
+    -- Rows are created once, grouped by the category they will be listed under; Refresh
+    -- only ever re-anchors them.
+    self.rows, self.sectionRows, self.sections = {}, {}, {}
+    self.categories = self:CategoriesInOrder()
+    for _, category in ipairs(self.categories) do
+        self.sectionRows[category] = {}
+        local header = Theme:SectionHeader(self.scroll.child, L["UI_" .. category] or category)
+        header:SetPoint("RIGHT", self.scroll.child, "RIGHT")
+        header:Hide()
+        self.sections[category] = header
     end
-    self.count = Theme:Text(frame, "", "small", "TEXT_MUTED")
-    self.count:SetPoint("BOTTOMLEFT", CONTENT_X, 24)
+    for _, module in ipairs(R.modules) do
+        local row = self.Widgets:ModuleRow(self.scroll.child, module)
+        self.rows[#self.rows + 1] = row
+        local group = self.sectionRows[self:Category(module)]
+        group[#group + 1] = row
+    end
     self.empty = Theme:Text(self.scroll.child, L.UI_EMPTY, "body", "TEXT_MUTED")
     self.empty:SetPoint("TOPLEFT", 12, -24)
     self.empty:SetPoint("RIGHT", -12, 0)
-    local edition = Theme:Text(frame, L.UI_RETAIL, "small", "TEXT_MUTED")
-    edition:SetPoint("LEFT", self.count, "RIGHT", 16, 0)
     self.panels = {}
     self:BuildOptions(frame)
     self:BuildProfiles(frame)
@@ -448,6 +526,10 @@ function UI:Initialize()
     self:BuildConfirm(frame)
     R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.Refresh, self)
     R.Broker:Subscribe("REFACTOR_MODULE_CHANGED", self.Refresh, self)
+    -- The two events that change how many pixels a UI unit is worth, and so how tall a
+    -- hairline has to be to survive rounding.
+    R.Broker:Subscribe("UI_SCALE_CHANGED", self.OnPixelsChanged, self)
+    R.Broker:Subscribe("DISPLAY_SIZE_CHANGED", self.OnPixelsChanged, self)
     frame:Hide()
     self:CreateMinimapButton()
     self:RegisterSettings()

@@ -56,10 +56,19 @@ function Commands:Dispatch(input)
         end
         return self:ErrorLines()
     end
+    -- The feed belongs to a module, so the command asks the broker rather than reaching
+    -- into the module itself. No subscriber means the module is off.
+    if command == "loottest" then
+        if not R.Broker.events.REFACTOR_LOOT_TEST then
+            return { R.L.CMD_LOOT_TEST_OFF }
+        end
+        R.Broker:Emit("REFACTOR_LOOT_TEST")
+        return nil
+    end
     if command == "bench" and R.Bench then
         R.Bench:Start(function(line) R:Print(line) end)
         return nil
     end
     return { R.L.CMD_HELP_HEADER, R.L.CMD_HELP_OPEN, R.L.CMD_HELP_ERRORS, R.L.CMD_HELP_ERRORS_CLEAR,
-        R.L.CMD_HELP_BENCH }
+        R.L.CMD_HELP_BENCH, R.L.CMD_HELP_LOOT_TEST }
 end

@@ -1,4 +1,4 @@
-local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 9)
+local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 13)
 if not Theme then return end
 
 local unpack = unpack
@@ -21,6 +21,10 @@ Theme.colors = {
     RING_FILL = { 0.85, 0.70, 0.42, 1 },
     RING_LAST = { 1, 0.86, 0.36, 1 },
     RING_DONE = { 0.43, 0.82, 0.40, 1 },
+    -- The loot feed art is white with an alpha channel and carries no colour of its own.
+    -- LOOT_ROW is the smudge behind a row, its alpha replaced by the opacity setting.
+    LOOT_ROW = { 0.07, 0.05, 0.04, 0.85 },
+    LOOT_UNDERLINE = { 0.48, 0.34, 0.20, 0.30 },
     QUEST_VALUE = { 1, 1, 1, 1 },
     QUEST_TOTAL = { 0.90, 0.90, 0.86, 1 },
     TEXT_LAST = { 1, 0.86, 0.36, 1 },
@@ -116,9 +120,22 @@ Theme.assets = {
     minimapBorder = { file = 136430 },
     minimapHighlight = { file = 136477 },
     addonIcon = { file = "Interface\\AddOns\\Refactor\\Media\\RefactorIcon.tga" },
-    -- Verified in the installed client's atlas list and file index (Tools MCP, 12.1.0).
-    toastBorder = { atlas = "loottoast-itemborder-white", fallback = "BORDER_BRONZE" },
-    toastGold = { file = 237618 },
+    -- MinimalSliderTemplate and MinimalSliderWithSteppersTemplate, the slider Blizzard's own
+    -- Edit Mode dialog uses for every numeric system setting (12.1.0 MinimalSlider.xml).
+    sliderLeft = { atlas = "Minimal_SliderBar_Left", fallback = "SURFACE" },
+    sliderMiddle = { atlas = "_Minimal_SliderBar_Middle", fallback = "SURFACE" },
+    sliderRight = { atlas = "Minimal_SliderBar_Right", fallback = "SURFACE" },
+    sliderThumb = { atlas = "Minimal_SliderBar_Button", fallback = "ACCENT_COPPER" },
+    sliderBack = { atlas = "Minimal_SliderBar_Button_Left", fallback = "ACCENT_COPPER" },
+    sliderForward = { atlas = "Minimal_SliderBar_Button_Right", fallback = "ACCENT_COPPER" },
+    -- Refactor's own loot feed art, white with an alpha channel: every colour comes from
+    -- SetVertexColor at the call site, so these are never drawn untinted.
+    lootRow = { file = "Interface\\AddOns\\Refactor\\Media\\LootRow.tga", fallback = "LOOT_ROW" },
+    lootRowHover = { file = "Interface\\AddOns\\Refactor\\Media\\LootRowHover.tga", fallback = "LOOT_ROW" },
+    lootIconFrame = { file = "Interface\\AddOns\\Refactor\\Media\\LootIconFrame.tga",
+        fallback = "BORDER_BRONZE" },
+    lootUnderline = { file = "Interface\\AddOns\\Refactor\\Media\\LootUnderline.tga",
+        fallback = "LOOT_UNDERLINE" },
 }
 
 -- Blizzard's Edit Mode selection nine-slice. EditModeSystemSelectionLayout is a local in
@@ -137,6 +154,8 @@ Theme.editModeLayout = {
 }
 Theme.editModeKits = { highlight = "editmode-actionbar-highlight", selected = "editmode-actionbar-selected" }
 Theme.missingAtlases = {}
+-- Custom files the client refused. Populated by the loot feed, read by /refactor loottest.
+Theme.missingFiles = {}
 
 function Theme:SetAsset(key, asset)
     assert(self.assets[key], "Unknown theme asset")
@@ -418,6 +437,14 @@ function Theme:ListButton(parent, width, height, text, callback)
     return button
 end
 
+-- The same hover wash the sidebar uses, for a row that is its own click target. The fade
+-- is an Alpha animation, so nothing runs while the pointer sits still.
+function Theme:RowHighlight(frame)
+    local wash = self:Texture(frame, "listHover", "BACKGROUND")
+    wash:SetAllPoints()
+    return self:Fader(wash, HOVER_IN, HOVER_OUT)
+end
+
 function Theme:ListButtonState(button, selected, tone)
     button.selected = selected == true
     button.selection:SetShown(button.selected)
@@ -483,23 +510,82 @@ function Theme:InputBorder(frame, height)
     middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
 end
 
--- The one-pixel rule Blizzard's SettingsList draws between rows.
+-- One UI unit is less than one physical pixel at most UI scales, so a rule of height 1
+-- lands between pixels and vanishes on some rows and not others. Hairlines are sized in
+-- real pixels instead, and re-sized when the scale or the resolution changes.
+local hairlines = setmetatable({}, { __mode = "k" })
+
+function Theme:PixelSize(frame)
+    if not GetPhysicalScreenSize then return 1 end
+    local _, physical = GetPhysicalScreenSize()
+    local scale = frame and frame.GetEffectiveScale and frame:GetEffectiveScale() or 1
+    if type(physical) ~= "number" or physical <= 0 or type(scale) ~= "number" or scale <= 0 then
+        return 1
+    end
+    return 768 / physical / scale
+end
+
+function Theme:Snap(frame, value)
+    local pixel = self:PixelSize(frame)
+    if pixel <= 0 then return value end
+    return math.floor(value / pixel + 0.5) * pixel
+end
+
+-- The one-pixel rule Blizzard's SettingsList draws between rows. Its atlas really is one
+-- pixel tall (options_horizontaldivider, 630x1), and the texel snapping the client applies
+-- by default drops a source row that thin whenever it lands off the grid, which is what
+-- made these rules blink while the list scrolled. NineSliceUtil.DisableSharpening turns
+-- the same two switches off for the same reason.
 function Theme:Divider(parent, layer)
     local line = self:Texture(parent, "rowDivider", layer or "ARTWORK")
-    line:SetHeight(1)
+    if line.SetTexelSnappingBias then line:SetTexelSnappingBias(0) end
+    if line.SetSnapToPixelGrid then line:SetSnapToPixelGrid(false) end
+    line:SetHeight(self:PixelSize(parent))
     line:SetAlpha(0.6)
+    hairlines[line] = parent
     return line
 end
 
-local HEADER_TITLE_HEIGHT, HEADER_HELP_HEIGHT = 26, 32
+-- Invalidated by UI_SCALE_CHANGED and DISPLAY_SIZE_CHANGED, the only two events that can
+-- change how many pixels a UI unit is worth.
+function Theme:RefreshHairlines()
+    for line, parent in pairs(hairlines) do
+        line:SetHeight(self:PixelSize(parent))
+    end
+end
+
+-- A one pixel rule is only drawn as one pixel if its top edge lands on a whole pixel. The
+-- offset that decides that is the sum of every anchor above it, and an integer offset in
+-- UI units is not a whole number of pixels at any normal UI scale, so rules at different
+-- offsets straddle by different amounts and some round away to nothing. Stretching the
+-- line between two points on the same edge, rather than a top corner and a side, keeps it
+-- from being over-constrained; measuring where it actually landed puts it on the grid.
+function Theme:AlignHairline(line, parent, y)
+    local pixel = self:PixelSize(parent)
+    local function place(offset)
+        line:ClearAllPoints()
+        line:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -offset)
+        line:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -offset)
+    end
+    place(y)
+    line:SetHeight(pixel)
+    if pixel <= 0 or not line.GetTop then return end
+    local top = line:GetTop()
+    if type(top) ~= "number" then return end
+    local drift = top / pixel
+    drift = drift - math.floor(drift)
+    if drift > 0 then place(y + drift * pixel) end
+end
+
+local HEADER_TITLE_HEIGHT, HEADER_HELP_HEIGHT, HEADER_LINE_Y = 26, 32, 20
 
 function Theme:SectionHeader(parent, title, help)
     local header = CreateFrame("Frame", nil, parent)
     header.title = self:Text(header, title, "body", "TEXT_TITLE")
     header.title:SetPoint("TOPLEFT")
     header.line = self:Divider(header)
-    header.line:SetPoint("TOPLEFT", 0, -20)
-    header.line:SetPoint("RIGHT")
+    header.lineY = HEADER_LINE_Y
+    self:AlignHairline(header.line, header, HEADER_LINE_Y)
     header.height = HEADER_TITLE_HEIGHT
     if help then
         header.help = self:Text(header, help, "small", "TEXT_MUTED")
@@ -798,60 +884,311 @@ function Theme:Checkbox(parent, width, text, callback)
     return box
 end
 
-local TOAST_WIDTH, TOAST_HEIGHT, TOAST_ICON = 272, 52, 38
-local TOAST_FADE, TOAST_HOLD = 0.15, 3
+local SLIDER_TRACK, SLIDER_CAP, SLIDER_THUMB = 17, 11, 20
+local SLIDER_ROW_HEIGHT, SLIDER_STEPPER_GAP, SLIDER_UNDO = 44, 4, 16
+Theme.sliderRowHeight = SLIDER_ROW_HEIGHT
 
--- A loot toast: icon with a quality-tinted frame, name, count, and one muted line for the
--- price and its source. Fades only, 150 ms, no bounce (PRD 8.3). The hold is an animation
--- delay, so nothing runs in Lua while a toast is on screen.
-function Theme:Toast(parent)
-    local toast = CreateFrame("Frame", nil, parent)
-    toast:SetSize(TOAST_WIDTH, TOAST_HEIGHT)
-    toast:SetFrameStrata("HIGH")
-    self:Panel(toast, true)
-    toast.icon = toast:CreateTexture(nil, "ARTWORK")
-    toast.icon:SetSize(TOAST_ICON, TOAST_ICON)
-    toast.icon:SetPoint("LEFT", 8, 0)
-    toast.border = self:Texture(toast, "toastBorder", "OVERLAY")
-    toast.border:SetPoint("TOPLEFT", toast.icon, "TOPLEFT", -4, 4)
-    toast.border:SetPoint("BOTTOMRIGHT", toast.icon, "BOTTOMRIGHT", 4, -4)
-    toast.name = self:Text(toast, "", "body", "TEXT_BODY")
-    toast.name:SetPoint("TOPLEFT", toast.icon, "TOPRIGHT", 10, -1)
-    toast.name:SetPoint("RIGHT", -12, 0)
-    toast.detail = self:Text(toast, "", "small", "TEXT_MUTED")
-    toast.detail:SetPoint("BOTTOMLEFT", toast.icon, "BOTTOMRIGHT", 10, 1)
-    toast.detail:SetPoint("RIGHT", -12, 0)
-    local show = toast:CreateAnimationGroup()
+-- The slider Blizzard's own Edit Mode dialog puts on every numeric system setting: a
+-- three-slice minimal bar, a stepper button at each end, the label left and the value
+-- right (MinimalSlider.xml, 12.1.0). Sizes come from the atlas pieces themselves.
+function Theme:Slider(parent, width, minimum, maximum, step, onChange)
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetSize(width, SLIDER_ROW_HEIGHT)
+    holder.label = self:Text(holder, "", "body", "TEXT_BODY")
+    holder.label:SetPoint("TOPLEFT")
+    -- Shown only while the value differs from its default, the same rule the module rows
+    -- follow, so a row at its default reads clean.
+    holder.undo = self:UndoButton(holder, SLIDER_UNDO, function()
+        if holder.onUndo then holder.onUndo() end
+    end)
+    holder.undo:SetPoint("TOPRIGHT", 0, -2)
+    holder.valueText = self:Text(holder, "", "small", "TEXT_TITLE")
+    holder.valueText:SetPoint("TOPRIGHT", holder.undo, "TOPLEFT", -6, 2)
+    holder.valueText:SetJustifyH("RIGHT")
+
+    local slider = CreateFrame("Slider", nil, holder)
+    slider:SetOrientation("HORIZONTAL")
+    slider:SetHeight(SLIDER_TRACK)
+    slider:SetPoint("BOTTOMLEFT", SLIDER_CAP + SLIDER_STEPPER_GAP * 2, 2)
+    slider:SetPoint("BOTTOMRIGHT", -(SLIDER_CAP + SLIDER_STEPPER_GAP * 2), 2)
+    slider:SetMinMaxValues(minimum, maximum)
+    slider:SetValueStep(step)
+    slider:SetObeyStepOnDrag(true)
+    local left = self:Texture(slider, "sliderLeft", "BACKGROUND")
+    left:SetSize(SLIDER_CAP, SLIDER_TRACK)
+    left:SetPoint("LEFT")
+    local right = self:Texture(slider, "sliderRight", "BACKGROUND")
+    right:SetSize(SLIDER_CAP, SLIDER_TRACK)
+    right:SetPoint("RIGHT")
+    local middle = self:Texture(slider, "sliderMiddle", "BACKGROUND")
+    middle:SetHeight(SLIDER_TRACK)
+    middle:SetPoint("LEFT", left, "RIGHT")
+    middle:SetPoint("RIGHT", right, "LEFT")
+    local thumb = self:Texture(slider, "sliderThumb", "OVERLAY")
+    thumb:SetSize(SLIDER_THUMB, SLIDER_TRACK + 2)
+    slider:SetThumbTexture(thumb)
+    holder.slider = slider
+
+    local function stepper(key, point, relativePoint, direction)
+        local button = CreateFrame("Button", nil, holder)
+        button:SetSize(SLIDER_CAP, SLIDER_TRACK + 2)
+        button:SetPoint(point, slider, relativePoint, direction * SLIDER_STEPPER_GAP, 0)
+        button.art = self:Texture(button, key, "ARTWORK")
+        button.art:SetAllPoints()
+        button:SetScript("OnClick", function()
+            local low, high = slider:GetMinMaxValues()
+            slider:SetValue(math.max(low, math.min(high, slider:GetValue() + direction * step)))
+        end)
+        return button
+    end
+    holder.back = stepper("sliderBack", "RIGHT", "LEFT", -1)
+    holder.forward = stepper("sliderForward", "LEFT", "RIGHT", 1)
+
+    function holder:Display(value)
+        self.valueText:SetText(self.formatter and self.formatter(value) or tostring(value))
+    end
+
+    function holder:SetLabel(text, formatter)
+        self.label:SetText(text)
+        self.formatter = formatter
+    end
+
+    -- Writing a value back into the slider must not look like the player moved it, or
+    -- every refresh would write the setting again.
+    function holder:SetValue(value)
+        self.updating = true
+        self.slider:SetValue(value)
+        self.updating = nil
+        self:Display(value)
+    end
+
+    slider:SetScript("OnValueChanged", function(_, value)
+        holder:Display(value)
+        if not holder.updating and onChange then
+            onChange(value)
+        end
+    end)
+    return holder
+end
+
+local ROW_HEIGHT, ROW_ICON, ROW_GAP = 34, 30, 8
+-- Every item icon ships with a dark margin baked into the art. Cropping it is what makes
+-- the icon meet the frame instead of floating inside it.
+local ICON_CROP = 0.08
+local ROW_BG_SCALE, ROW_BG_BLEED = 1.4, 12
+local ROW_UNDERLINE_HEIGHT, ROW_CHEVRON = 6, 12
+local ROW_FADE, ROW_SLIDE = 0.15, 0.12
+local ROW_SHADOW_X, ROW_SHADOW_Y = 1, -1
+Theme.lootRowHeight = ROW_HEIGHT
+
+-- A file the client refuses returns nothing from GetTexture. It cannot tell us about a
+-- file that exists but was added after the client started: those load only on a full
+-- restart, which is why /refactor loottest says so in its own words.
+local function verifyFile(texture, key)
+    if texture.GetTexture and not texture:GetTexture() then
+        Theme.missingFiles[key] = true
+        texture:Hide()
+        return false
+    end
+    return true
+end
+
+local function shadowed(label)
+    label:SetShadowColor(0, 0, 0, 1)
+    label:SetShadowOffset(ROW_SHADOW_X, ROW_SHADOW_Y)
+    return label
+end
+
+-- One row of the loot feed: a soft smudge behind an icon in a quality-tinted frame, the
+-- item name in its quality colour, and a muted line for price and source. A Button, not a
+-- Frame, so Gear Refactor has somewhere to put its upgrade badge and Equip button later
+-- (PRD 5.3): row.accessory is that anchor and stays empty here.
+-- Motion is three animation groups and no OnUpdate: fade in, hold then fade out, and the
+-- slide the feed plays when the row above it goes away.
+function Theme:LootRow(parent, width)
+    local row = CreateFrame("Button", nil, parent)
+    row:SetSize(width, ROW_HEIGHT)
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row.width = width
+    row.background = self:Texture(row, "lootRow", "BACKGROUND")
+    row.background:SetPoint("LEFT", -ROW_BG_BLEED, 0)
+    row.background:SetSize(width + ROW_BG_BLEED * 2, ROW_HEIGHT * ROW_BG_SCALE)
+    verifyFile(row.background, "lootRow")
+    row.hover = self:Texture(row, "lootRowHover", "BACKGROUND")
+    row.hover:SetAllPoints(row.background)
+    verifyFile(row.hover, "lootRowHover")
+    row.hover:SetShown(false)
+    row.underline = self:Texture(row, "lootUnderline", "BORDER")
+    row.underline:SetPoint("BOTTOMLEFT")
+    row.underline:SetPoint("BOTTOMRIGHT", -ROW_GAP, 0)
+    row.underline:SetHeight(ROW_UNDERLINE_HEIGHT)
+    verifyFile(row.underline, "lootUnderline")
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(ROW_ICON, ROW_ICON)
+    row.icon:SetPoint("LEFT")
+    row.iconFrame = self:Texture(row, "lootIconFrame", "OVERLAY")
+    row.iconFrame:SetPoint("TOPLEFT", row.icon, "TOPLEFT", -1, 1)
+    row.iconFrame:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 1, -1)
+    verifyFile(row.iconFrame, "lootIconFrame")
+    row.name = shadowed(self:Text(row, "", "body", "TEXT_BODY"))
+    row.detail = shadowed(self:Text(row, "", "small", "TEXT_MUTED"))
+    -- The chevron is the scrollbar's own arrow: an expander that already reads as one on
+    -- this client, rather than a new piece of art.
+    row.chevron = CreateFrame("Button", nil, row)
+    row.chevron:SetSize(ROW_CHEVRON, ROW_CHEVRON)
+    row.chevron:SetPoint("RIGHT", -ROW_GAP, 0)
+    row.chevron.art = self:Texture(row.chevron, "scrollDown", "OVERLAY")
+    row.chevron.art:SetAllPoints()
+    row.chevron.row = row
+    row.chevron:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row.chevron:Hide()
+    -- Reserved for Gear Refactor's badge and Equip button (PRD 5.3). Nothing is parented
+    -- here by Refactor; it exists so the layout already has the space.
+    row.accessory = CreateFrame("Frame", nil, row)
+    row.accessory:SetSize(ROW_ICON, ROW_ICON)
+    row.accessory:SetPoint("RIGHT", row.chevron, "LEFT", -ROW_GAP, 0)
+
+    local show = row:CreateAnimationGroup()
     local fadeIn = show:CreateAnimation("Alpha")
     fadeIn:SetFromAlpha(0)
     fadeIn:SetToAlpha(1)
-    fadeIn:SetDuration(TOAST_FADE)
-    toast.show = show
-    local hide = toast:CreateAnimationGroup()
-    local fadeOut = hide:CreateAnimation("Alpha")
-    fadeOut:SetFromAlpha(1)
-    fadeOut:SetToAlpha(0)
-    fadeOut:SetStartDelay(TOAST_HOLD)
-    fadeOut:SetDuration(TOAST_FADE)
+    fadeIn:SetDuration(ROW_FADE)
+    row.show = show
+    local hide = row:CreateAnimationGroup()
+    row.fadeOut = hide:CreateAnimation("Alpha")
+    row.fadeOut:SetFromAlpha(1)
+    row.fadeOut:SetToAlpha(0)
+    row.fadeOut:SetDuration(ROW_FADE)
     hide:SetScript("OnFinished", function()
-        toast:Hide()
-        if toast.onHidden then toast.onHidden(toast) end
+        row:Hide()
+        if row.onHidden then row.onHidden(row) end
     end)
-    toast.hide = hide
+    row.hide = hide
+    -- A Translation ends where it started, so the row is pointed at its destination only
+    -- when the slide finishes and the offset it travelled is released.
+    local slide = row:CreateAnimationGroup()
+    row.slideAnim = slide:CreateAnimation("Translation")
+    row.slideAnim:SetDuration(ROW_SLIDE)
+    row.slideAnim:SetSmoothing("OUT")
+    slide:SetScript("OnFinished", function() row:PlaceNow() end)
+    row.slide = slide
 
-    function toast:SetIcon(fileID)
-        self.icon:SetTexture(fileID)
+    -- Hovering holds the row on screen: reading a price should never race a fade. Leaving
+    -- starts its life again from the beginning rather than resuming a part-spent one.
+    -- The chevron is a child button, so the mouse entering it leaves the row; both wear the
+    -- same pair of handlers, or reaching for the chevron would start the row fading.
+    local function enterRow(widget)
+        local target = widget.row or widget
+        target.hover:SetShown(true)
+        target.hide:Stop()
+        target:SetAlpha(1)
+        if target.link and GameTooltip then
+            GameTooltip:SetOwner(target, "ANCHOR_LEFT")
+            GameTooltip:SetHyperlink(target.link)
+            GameTooltip:Show()
+        end
     end
-    function toast:SetQualityColor(r, g, b)
-        self.border:SetVertexColor(r or 1, g or 1, b or 1, 1)
-        self.name:SetTextColor(r or 1, g or 1, b or 1, 1)
+    local function leaveRow(widget)
+        local target = widget.row or widget
+        if target:IsMouseOver() then
+            return
+        end
+        target.hover:SetShown(false)
+        if target.link and GameTooltip then
+            GameTooltip:Hide()
+        end
+        if target.lifetime and not target.paused then
+            target:Present(target.lifetime)
+        end
     end
-    function toast:SetLines(name, detail)
+    -- Right click is the feed's own dismiss: the row goes now and the rest close the gap.
+    -- Left click stays free for Gear Refactor's Equip button (PRD 5.3).
+    local function dismissRow(target)
+        if GameTooltip and GameTooltip.GetOwner and GameTooltip:GetOwner() == target then
+            GameTooltip:Hide()
+        end
+        if target.onDismiss then
+            target.onDismiss(target)
+        end
+    end
+    row:SetScript("OnEnter", enterRow)
+    row:SetScript("OnLeave", leaveRow)
+    row:SetScript("OnClick", function(widget, button)
+        if button == "RightButton" then
+            dismissRow(widget)
+        end
+    end)
+    row.chevron:SetScript("OnEnter", enterRow)
+    row.chevron:SetScript("OnLeave", leaveRow)
+    row.chevron:SetScript("OnClick", function(widget, button)
+        if button == "RightButton" then
+            dismissRow(widget.row)
+        elseif widget.onToggle then
+            widget.onToggle(widget)
+        end
+    end)
+
+    -- Opacity is a setting, so the tint is applied per row rather than baked into a token.
+    function row:SetRowOpacity(opacity)
+        local tint, line = Theme.colors.LOOT_ROW, Theme.colors.LOOT_UNDERLINE
+        self.background:SetVertexColor(tint[1], tint[2], tint[3], tint[4] * opacity)
+        self.hover:SetVertexColor(tint[1], tint[2], tint[3], tint[4] * opacity)
+        self.underline:SetVertexColor(line[1], line[2], line[3], line[4] * opacity)
+    end
+
+    -- Gold and currency use the same row without the icon frame, so the frame follows its
+    -- own flag rather than the presence of an icon.
+    function row:SetIcon(fileID, r, g, b, framed)
+        local shown = fileID ~= nil
+        self.icon:SetShown(shown)
+        self.iconFrame:SetShown(shown and framed ~= false and Theme.missingFiles.lootIconFrame ~= true)
+        if shown then
+            self.icon:SetTexture(fileID)
+            self.icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
+            self.iconFrame:SetVertexColor(r or 1, g or 1, b or 1, 1)
+        end
+        self:LayoutText(shown and ROW_ICON + ROW_GAP or 0)
+    end
+
+    function row:LayoutText(inset)
+        self.name:ClearAllPoints()
+        self.detail:ClearAllPoints()
+        self.name:SetPoint("TOPLEFT", inset, -3)
+        self.name:SetPoint("RIGHT", self.accessory, "LEFT", -ROW_GAP, 0)
+        self.detail:SetPoint("BOTTOMLEFT", inset, 5)
+        self.detail:SetPoint("RIGHT", self.accessory, "LEFT", -ROW_GAP, 0)
+        self.underline:ClearAllPoints()
+        self.underline:SetPoint("BOTTOMLEFT", inset, 0)
+        self.underline:SetPoint("BOTTOMRIGHT", -ROW_GAP, 0)
+    end
+
+    -- A row with no quality of its own (a group, gold) takes the ordinary body colour.
+    function row:SetLines(name, detail, r, g, b)
         self.name:SetText(name or "")
+        if r then
+            self.name:SetTextColor(r, g, b, 1)
+        else
+            Theme:Color(self.name, "TEXT_BODY", true)
+        end
         self.detail:SetText(detail or "")
+        Theme:Color(self.detail, "TEXT_MUTED", true)
     end
-    -- Called again for the same item while visible: the hold restarts, nothing flashes.
-    function toast:Present()
+
+    function row:SetUnderlineShown(shown)
+        self.underline:SetShown(shown and Theme.missingFiles.lootUnderline ~= true)
+    end
+
+    function row:SetExpander(expandable, expanded, onToggle)
+        self.chevron:SetShown(expandable == true)
+        self.chevron.onToggle = onToggle
+        Theme:ApplyAsset(self.chevron.art, expanded and "scrollUp" or "scrollDown")
+        Theme:Color(self.chevron.art, "ACCENT_COPPER")
+    end
+
+    -- Called again for a row already on screen (a second drop of the same item): the hold
+    -- restarts from now and nothing flashes.
+    function row:Present(lifetime)
+        self.lifetime, self.paused = lifetime, nil
         self.hide:Stop()
         if not self:IsShown() then
             self:SetAlpha(1)
@@ -859,19 +1196,60 @@ function Theme:Toast(parent)
             self.show:Stop()
             self.show:Play()
         end
+        self.fadeOut:SetStartDelay(lifetime)
         self.hide:Play()
     end
-    function toast:ResetToast()
+
+    -- An expanded group and its children have no countdown: the row waits for the player.
+    function row:HoldTimer()
+        self.hide:Stop()
+        self.paused = true
+        self:SetAlpha(1)
+        self:Show()
+    end
+
+    function row:PlaceNow()
+        self.slide:Stop()
+        if not self.anchor then return end
+        self:ClearAllPoints()
+        self:SetPoint("TOPLEFT", self.anchor, "TOPLEFT", self.anchorX, self.anchorY)
+    end
+
+    -- A slide interrupted by another slide restarts from the target it was heading for,
+    -- which is a shorter jump than it looks: the feed only relayouts when a row leaves.
+    function row:PlaceAt(anchor, x, y, animate)
+        local previous = self.anchor == anchor and self.anchorX == x and self.anchorY or nil
+        self.anchor, self.anchorX, self.anchorY = anchor, x, y
+        if not animate or not previous or previous == y then
+            self:PlaceNow()
+            return
+        end
+        self.slide:Stop()
+        self:ClearAllPoints()
+        self:SetPoint("TOPLEFT", anchor, "TOPLEFT", x, previous)
+        self.slideAnim:SetOffset(0, y - previous)
+        self.slide:Play()
+    end
+
+    function row:ResetRow()
         self.show:Stop()
         self.hide:Stop()
+        self.slide:Stop()
         self:SetAlpha(1)
+        self.hover:SetShown(false)
+        self.lifetime, self.paused, self.link = nil, nil, nil
+        self.anchor, self.anchorX, self.anchorY, self.key = nil, nil, nil, nil
         self:SetLines(nil, nil)
-        self:SetQualityColor(1, 1, 1)
+        self:SetIcon(nil)
+        self:SetExpander(false, false, nil)
+        self:SetUnderlineShown(false)
         self:ClearAllPoints()
         self:Hide()
     end
-    toast:Hide()
-    return toast
+
+    row:LayoutText(ROW_ICON + ROW_GAP)
+    row:Hide()
+    return row
 end
 
 -- A stand-in for an Edit Mode system frame. Refactor cannot register a real system without

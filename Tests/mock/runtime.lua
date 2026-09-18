@@ -32,6 +32,7 @@ function Runtime.new()
     env.UnitGUID = function() return "Player-test" end
     env.GetBuildInfo = function() return "12.1.0", "69814", "", 120100 end
     env.InCombatLockdown = function() return false end
+    env.GetPhysicalScreenSize = function() return 1920, 1080 end
     env.DEFAULT_CHAT_FRAME = { AddMessage = function(_, text) env.messages[#env.messages + 1] = text end }
     env.SlashCmdList = {}
     env.UISpecialFrames = {}

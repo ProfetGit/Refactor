@@ -27,6 +27,7 @@ local BOOLEAN_OPTIONS = {
     nameplateReduceAnimation = true, nameplateDimCompleted = true,
     minimapButton = true,
     toastShowPrice = true, toastGold = true, toastCurrency = true,
+    toastShowSource = true, toastAggregate = true,
     priceTSM = true, priceAuctionator = true,
     questAcceptItemsOnly = true,
 }
@@ -42,6 +43,8 @@ local OPTION_DEFAULTS = {
     tooltipAnchor = "cursor", tooltipPoint = "BOTTOMRIGHT", tooltipX = -80, tooltipY = 120,
     tooltipCursorSide = "RIGHT", tooltipCursorX = 16, tooltipCursorY = 0,
     toastMinQuality = 0, toastShowPrice = true, toastGold = true, toastCurrency = true,
+    toastShowSource = true, toastAggregate = true,
+    toastOpacity = 0.85, toastLifetime = 5, toastMaxRows = 5, toastScale = 1,
     -- Auction providers are opt-in (PRD 5.5): on launch day no realm has auction data.
     priceTSM = false, priceAuctionator = false, tsmPriceString = "dbMarket",
     questAcceptItemsOnly = false,
@@ -67,6 +70,14 @@ local function validOption(key, value)
         return type(value) == "number" and value >= -4000 and value <= 4000
     elseif key == "toastMinQuality" then
         return type(value) == "number" and value >= 0 and value <= 5 and value % 1 == 0
+    elseif key == "toastOpacity" then
+        return type(value) == "number" and value >= 0.2 and value <= 1
+    elseif key == "toastLifetime" then
+        return type(value) == "number" and value >= 1 and value <= 60
+    elseif key == "toastMaxRows" then
+        return type(value) == "number" and value >= 1 and value <= 10 and value % 1 == 0
+    elseif key == "toastScale" then
+        return type(value) == "number" and value >= 0.7 and value <= 1.5
     elseif key == "tsmPriceString" then
         return type(value) == "string" and #value > 0 and #value <= 64 and not value:find("[%c]")
     elseif key == "neverSellIDs" then
@@ -141,6 +152,11 @@ function Settings:Get(id)
     if value ~= nil then
         return value
     end
+    return self:GetInherited(id)
+end
+
+-- What this character would use with no override of its own: profile, then account, then default.
+function Settings:GetInherited(id)
     local account = self.account
     if account then
         local profileName = self.guid and account.assignments[self.guid]

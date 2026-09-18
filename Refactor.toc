@@ -43,7 +43,7 @@ UI/Panels/Diagnostics.lua
 UI/Confirm.lua
 UI/FirstRun.lua
 UI/Minimap.lua
-UI/Toasts.lua
+UI/LootFeed.lua
 UI/VendorPanel.lua
 UI/UrlCopy.lua
 UI/Panels/Display.lua

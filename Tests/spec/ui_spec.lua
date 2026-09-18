@@ -56,21 +56,48 @@ describe("sidebar groups", function()
         assert.equal(#R.modules, total)
     end)
 
-    it("have no empty groups and fewer entries than categories", function()
+    it("have no empty groups and one entry per category, never a stack of them", function()
         local _, R = loaded()
-        local groups = 0
+        local groups, categories = 0, {}
+        for _, module in ipairs(R.modules) do categories[R.UI:Category(module)] = true end
+        local expected = 0
+        for _ in pairs(categories) do expected = expected + 1 end
         for _, entry in ipairs(R.UI.sidebar) do
             if entry.set then
                 groups = groups + 1
-                local count = 0
+                local count, listed = 0, 0
+                for _ in pairs(entry.set) do listed = listed + 1 end
+                assert.equal(1, listed, entry.key .. " stacks categories")
                 for _, module in ipairs(R.modules) do
                     if R.UI:Matches(module, "", entry.set) then count = count + 1 end
                 end
                 assert.is_true(count > 0, entry.key .. " lists nothing")
             end
         end
-        assert.is_true(#R.UI.sidebar <= 10)
-        assert.is_true(groups >= 3)
+        assert.equal(expected, groups)
+    end)
+
+    it("head every visible block with its category", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        UI:SelectCategory("All")
+        local seen = 0
+        for _, category in ipairs(UI.categories) do
+            local header, last = UI.sections[category], nil
+            assert.is_true(header:IsShown(), category .. " has no heading")
+            assert.equal(R.L["UI_" .. category], header.title:GetText())
+            for _, row in ipairs(UI.sectionRows[category]) do
+                if row:IsShown() then last = row; seen = seen + 1 end
+            end
+            assert.is_not.equal(nil, last, category .. " has a heading but no rows")
+        end
+        assert.equal(#R.modules, seen)
+        UI:SelectCategory("Vendor")
+        assert.is_true(UI.sections.Vendor:IsShown())
+        for _, category in ipairs(UI.categories) do
+            if category ~= "Vendor" then assert.is_false(UI.sections[category]:IsShown()) end
+        end
     end)
 
     it("keep search global regardless of the selected group", function()
@@ -134,6 +161,47 @@ describe("window chrome", function()
         row.undo:GetScript("OnClick")(row.undo)
         assert.is_nil(R.Settings:GetOverride(row.module.id))
         assert.is_false(row.undo:IsShown())
+        R.Settings:SetOverride(row.module.id, R.Settings:GetInherited(row.module.id))
+        UI:Refresh()
+        assert.is_false(row.undo:IsShown())
+    end)
+
+    it("toggles from anywhere on the row and lights the whole row while hovered", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        local row = UI.rows[1]
+        local before = R.Settings:Get(row.module.id)
+        row:GetScript("OnClick")(row)
+        assert.equal(not before, R.Settings:Get(row.module.id))
+        row:GetScript("OnClick")(row)
+        assert.equal(before, R.Settings:Get(row.module.id))
+        -- The wash is one alpha animation on the row, not a texture per child. Headless
+        -- animations never finish on their own, so the spec settles them by hand.
+        local function settle(fader)
+            fader.group:GetScript("OnFinished")(fader.group)
+        end
+        row:GetScript("OnEnter")(row)
+        assert.equal(1, row.hover.to)
+        settle(row.hover)
+        row.undo:GetScript("OnEnter")(row.undo)
+        assert.equal(1, row.hover.to)
+        row:GetScript("OnLeave")(row)
+        assert.equal(0, row.hover.to)
+        settle(row.hover)
+        row.undo:GetScript("OnLeave")(row.undo)
+        assert.equal(0, row.hover.to)
+    end)
+
+    it("refuses a row click while the toggle is unavailable", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        local row = UI.rows[1]
+        local before = R.Settings:Get(row.module.id)
+        row.toggle:SetEnabled(false)
+        row:GetScript("OnClick")(row)
+        assert.equal(before, R.Settings:Get(row.module.id))
     end)
 
     it("stacks every options section on one page with a known height", function()
@@ -147,6 +215,34 @@ describe("window chrome", function()
         assert.is_table(UI.toastQualityButton)
         assert.is_table(UI.tooltipModeButton)
         assert.is_table(UI.nameplateButtons[1])
+    end)
+end)
+
+describe("hairlines", function()
+    it("are one physical pixel tall and land on whole pixels", function()
+        local env = loaded()
+        local Theme = env.LibStub("LibRefactorTheme-1.0")
+        local frame = env.CreateFrame("Frame")
+        -- 1080 physical rows over the client's 768 unit screen, at scale 1.
+        local pixel = Theme:PixelSize(frame)
+        assert.is_true(math.abs(pixel - 768 / 1080) < 1e-9)
+        for _, value in ipairs({ 0, 17, 34.5, -102, 1093.7 }) do
+            local snapped = Theme:Snap(frame, value)
+            assert.is_true(math.abs(snapped - value) <= pixel / 2 + 1e-9)
+            local steps = snapped / pixel
+            assert.is_true(math.abs(steps - math.floor(steps + 0.5)) < 1e-9)
+        end
+    end)
+
+    it("fall back to one unit when the client cannot say how big a pixel is", function()
+        local env = loaded()
+        local Theme = env.LibStub("LibRefactorTheme-1.0")
+        local frame = env.CreateFrame("Frame")
+        local screen = env.GetPhysicalScreenSize
+        env.GetPhysicalScreenSize = function() return 0, 0 end
+        assert.equal(1, Theme:PixelSize(frame))
+        assert.equal(42, Theme:Snap(frame, 42))
+        env.GetPhysicalScreenSize = screen
     end)
 end)
 

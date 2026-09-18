@@ -44,7 +44,6 @@ local function vendor()
             env.lastSale = { slot = slot, info = env.bags[slot] }
         end,
     }
-    env.C_Item = { GetItemInfo = function() return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 50 end }
     env.C_TooltipInfo = { GetBagItem = function(_, slot)
         local info = env.bags[slot]
         if info.noTooltip then return nil end
@@ -60,6 +59,17 @@ local function vendor()
         local sale = self.lastSale
         self.bags[sale.slot] = nil
         self.money = self.money + sale.info.stackCount * 50
+        self:Fire("BAG_UPDATE_DELAYED")
+    end
+    -- The merchant takes everything the burst sent, which is the normal case.
+    function env:ConfirmAll()
+        for _, sale in ipairs(self.sales) do
+            local info = self.bags[sale.slot]
+            if info then
+                self.bags[sale.slot] = nil
+                self.money = self.money + info.stackCount * 50
+            end
+        end
         self:Fire("BAG_UPDATE_DELAYED")
     end
     return env
@@ -161,50 +171,123 @@ describe("M2 Retail modules", function()
         env:AddItem(11)
         local module = enable(env, "Modules/Vendor/AutoSell.lua", "vendor.autoSell")
         env:Fire("MERCHANT_SHOW")
-        env:Advance(0.2)
+        assert.equals(1, #env.sales)
         assert.equals(11, env.sales[1].itemID)
         noResidue(env, module)
         assert.is_true(env.R.Registry:Enable(module))
     end)
 
-    it("rescans changed slots and stops at twelve confirmed stack sales per visit", function()
+    it("sells every grey stack in one burst, past the twelve the buyback tab holds", function()
         local env = vendor()
-        for slot = 1, 15 do env:AddItem(slot) end
+        local sink, sold = {}, {}
+        env.R.Broker:Subscribe("REFACTOR_VENDOR_SOLD", function(_, _, count, value)
+            sold[#sold + 1] = { count = count, value = value }
+        end, sink)
+        for slot = 1, 20 do env:AddItem(slot, { stackCount = 2 }) end
+        env:AddItem(21, { quality = 4 })
         local module = enable(env, "Modules/Vendor/AutoSell.lua", "vendor.autoSell")
         env:Fire("MERCHANT_SHOW")
-        env.bags[1].quality = 4
-        for _ = 1, 12 do
-            env:Advance(0.21)
-            env:ConfirmSale()
-        end
+        assert.equals(20, #env.sales)
+        env:ConfirmAll()
+        assert.same({ count = 40, value = 2000 }, sold[1])
+        assert.is_not_nil(env.bags[21])
         env:Advance(1)
-        assert.equals(12, #env.sales)
-        assert.equals(2, env.sales[1].itemID)
-        assert.is_not_nil(env.bags[1])
+        assert.equals(20, #env.sales)
+        assert.equals(0, #env.messages)
         assert.is_false(module.active)
+        env.R.Broker:Unsubscribe("REFACTOR_VENDOR_SOLD", sink)
         noResidue(env, module)
+        assert.is_true(env.R.Registry:Enable(module))
     end)
 
-    it("waits for money and bag confirmation, cancels on close, combat and Ctrl", function()
+    it("reconciles on the pass timeout when no bag update arrives", function()
         local env = vendor()
         env:AddItem(1)
         local module = enable(env, "Modules/Vendor/AutoSell.lua", "vendor.autoSell")
         env:Fire("MERCHANT_SHOW")
-        env:Advance(0.2)
-        env:Fire("BAG_UPDATE_DELAYED")
-        env:Advance(1)
+        assert.equals(1, #env.sales)
+        env.bags[1] = nil
+        env:Advance(0.5)
+        assert.equals(0, #env.messages)
+        assert.is_false(module.active)
+        noResidue(env, module)
+    end)
+
+    it("drops a stack the merchant will not take and says so", function()
+        local env = vendor()
+        env:AddItem(1)
+        local module = enable(env, "Modules/Vendor/AutoSell.lua", "vendor.autoSell")
+        env:Fire("MERCHANT_SHOW")
+        env:Advance(2)
+        -- Two bursts for the one stuck slot, then it is dropped for the visit.
+        assert.equals(2, #env.sales)
+        assert.equals("Stopped selling junk: this merchant would not take some stacks.", env.messages[1])
+        assert.is_false(module.active)
+        noResidue(env, module)
+        assert.is_true(env.R.Registry:Enable(module))
+    end)
+
+    it("waits for the merchant window, which MERCHANT_SHOW does not guarantee is open", function()
+        local env = vendor()
+        env.merchantOpen = false
+        env:AddItem(1)
+        local module = enable(env, "Modules/Vendor/AutoSell.lua", "vendor.autoSell")
+        env:Fire("MERCHANT_SHOW")
+        env:Advance(0.4)
+        assert.equals(0, #env.sales)
+        env.merchantOpen = true
+        env:Advance(0.05)
+        assert.equals(1, env.sales[1].itemID)
+        env:Fire("MERCHANT_CLOSED")
+        noResidue(env, module)
+    end)
+
+    it("gives up on a window that never opens and says which check failed", function()
+        local env = vendor()
+        env.merchantOpen = false
+        env:AddItem(1)
+        local module = enable(env, "Modules/Vendor/AutoSell.lua", "vendor.autoSell")
+        env:Fire("MERCHANT_SHOW")
+        env:Advance(5)
+        assert.equals(0, #env.sales)
+        assert.equals("No junk sold: the merchant window did not open.", env.messages[1])
+        assert.is_false(module.active)
+        noResidue(env, module)
+        assert.is_true(env.R.Registry:Enable(module))
+    end)
+
+    it("explains a visit where every grey stack is protected", function()
+        local env = vendor()
+        env.R.Settings.account.options.neverSellIDs = { [1] = true }
+        env:AddItem(1)
+        env:AddItem(2, { quest = { questID = 7 } })
+        env:AddItem(3, { quality = 2 })
+        local module = enable(env, "Modules/Vendor/AutoSell.lua", "vendor.autoSell")
+        env:Fire("MERCHANT_SHOW")
+        assert.equals(0, #env.sales)
+        assert.matches("all 2 grey stacks are protected", env.messages[1], 1, true)
+        noResidue(env, module)
+    end)
+
+    it("stops on close, combat and the pause modifier", function()
+        local env = vendor()
+        env.control = true
+        env:AddItem(1)
+        local module = enable(env, "Modules/Vendor/AutoSell.lua", "vendor.autoSell")
+        env:Fire("MERCHANT_SHOW")
+        assert.equals(0, #env.sales)
+        env.control, env.combat = false, true
+        env:Fire("MERCHANT_SHOW")
+        assert.equals(0, #env.sales)
+        env.combat = false
+        env:Fire("MERCHANT_SHOW")
         assert.equals(1, #env.sales)
         env:Fire("MERCHANT_CLOSED")
         assert.equals(0, env:ActiveTimers())
         env:Fire("MERCHANT_SHOW")
-        env.control = true
-        env:Advance(1)
-        assert.equals(1, #env.sales)
-        env.control = false
-        env:Fire("MERCHANT_SHOW")
         env:Fire("PLAYER_REGEN_DISABLED")
         env:Advance(1)
-        assert.equals(1, #env.sales)
+        assert.equals(0, env:ActiveTimers())
         noResidue(env, module)
     end)
 

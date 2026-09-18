@@ -10,7 +10,7 @@ read_globals = {
     "LibStub",
     -- Frames and widgets
     "CreateFrame", "CreateColor", "UIParent", "UISpecialFrames", "DEFAULT_CHAT_FRAME", "Minimap", "GameTooltip",
-    "GetCursorPosition",
+    "GetCursorPosition", "GetPhysicalScreenSize",
     -- Slash command registration
     "SlashCmdList",
     -- Blizzard settings panel namespace
