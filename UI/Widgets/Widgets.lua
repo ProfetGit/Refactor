@@ -85,14 +85,16 @@ function Widgets:Section(parent, title, help)
     return section
 end
 
-function Widgets:Scroll(parent)
+-- barTop shortens the bar from the top without shortening the list: the feature list runs
+-- to the window border and the close button sits over where the upper stepper would be.
+function Widgets:Scroll(parent, barTop)
     local scroll = CreateFrame("ScrollFrame", nil, parent)
     local child = CreateFrame("Frame", nil, scroll)
     child:SetSize(400, 1)
     scroll:SetScrollChild(child)
     local bar = Theme.scrollBar
     local slider = Theme:ScrollBar(parent)
-    slider:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 8, -bar.trackInset)
+    slider:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 8, -(bar.trackInset + (barTop or 0)))
     slider:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 8, bar.trackInset)
     slider:SetMinMaxValues(0, 0)
     -- Continuous like every native bar: a 16 px step made a drag stutter against the glide.

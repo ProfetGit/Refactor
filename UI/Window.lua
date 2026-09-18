@@ -62,6 +62,11 @@ local PAD, SIDEBAR_WIDTH, SIDEBAR_ROW, SIDEBAR_TOP = 24, 148, 24, -64
 local CONTENT_X = PAD + SIDEBAR_WIDTH + 22
 local SEARCH_TOP, SEARCH_HEIGHT = -22, 26
 local TAB_BASELINE, HELP_Y = -72, -80
+-- The feature list has no heading of its own, so it runs the full height of the window,
+-- stopping only where the nine-slice border starts. A panel still keeps its title band.
+local LIST_TOP, LIST_BOTTOM = -14, 14
+-- The close button's own height plus a gap, so the upper stepper clears it.
+local LIST_BAR_TOP = 32
 local SECTION_GAP = 24
 -- Space above a heading, and between a heading and the first row under it.
 local LIST_SECTION_GAP, HEADER_GAP = 18, 4
@@ -211,13 +216,9 @@ function UI:Refresh()
         frame:SetShown(frame == panel)
     end
     self.scroll:SetShown(panel == nil)
-    self.modeCharacter:SetShown(panel == nil)
-    self.modeAccount:SetShown(panel == nil)
-    Theme:TabState(self.modeCharacter, self.mode == "character")
-    Theme:TabState(self.modeAccount, self.mode == "account")
     self.panelTitle:SetShown(panel ~= nil)
-    self.help:SetText(panel and L[panel.helpKey or "UI_OPTIONS_HELP"]
-        or self.mode == "account" and L.UI_ACCOUNT_HELP or L.UI_CHARACTER_HELP)
+    self.headerRule:SetShown(panel ~= nil)
+    self.help:SetText(panel and L[panel.helpKey or "UI_OPTIONS_HELP"] or "")
     local entry
     for _, button in ipairs(self.categoryButtons) do
         local selected = self.category == button.category
@@ -315,7 +316,11 @@ function UI:BuildOptions(parent)
     page:SetPoint("TOPLEFT")
     page:SetPoint("BOTTOMRIGHT", -20, 0)
     options.page = page
-    local sections = { self:BuildSafetySection(page.child), self:BuildNameplateSection(page.child) }
+    local sections = {
+        self:BuildScopeSection(page.child),
+        self:BuildSafetySection(page.child),
+        self:BuildNameplateSection(page.child),
+    }
     for _, section in ipairs(self:BuildDisplay(page.child)) do sections[#sections + 1] = section end
     sections[#sections + 1] = self:BuildTooltips(page.child)
     local offset = 0
@@ -327,12 +332,38 @@ function UI:BuildOptions(parent)
     options.contentHeight = offset - SECTION_GAP
     options.helpKey, options.countKey = "UI_OPTIONS_HELP", "UI_OPTIONS"
     options.Update = function()
+        self:RefreshScope()
         self:LoadDisplay()
         self:LoadTooltips()
         self:RefreshNameplateOptions()
         page:UpdateExtent(options.contentHeight)
     end
     self:RegisterPanel("Options", options)
+end
+
+-- The scope switch lives here rather than above the feature list: it is set once and then
+-- left alone, so it does not earn permanent space in the view it affects.
+function UI:BuildScopeSection(parent)
+    local section = self.Widgets:Section(parent, L.UI_SCOPE, L.UI_SCOPE_HELP)
+    self.scopeButton = Theme:Button(section, 240, "", function()
+        self.mode = self.mode == "account" and "character" or "account"
+        self:RefreshScope()
+        self:Refresh()
+    end)
+    self.scopeButton:SetPoint("TOPLEFT", 0, section.top)
+    self.scopeHelp = Theme:Text(section, "", "small", "TEXT_MUTED")
+    self.scopeHelp:SetPoint("TOPLEFT", 0, section.top - 34)
+    self.scopeHelp:SetPoint("RIGHT")
+    section:SetBodyHeight(58)
+    return section
+end
+
+function UI:RefreshScope()
+    if not self.scopeButton then return end
+    local account = self.mode == "account"
+    self.scopeButton.label:SetText(string.format(L.UI_TOGGLE_FORMAT, L.UI_SCOPE,
+        account and L.UI_ACCOUNT or L.UI_CHARACTER))
+    self.scopeHelp:SetText(account and L.UI_ACCOUNT_HELP or L.UI_CHARACTER_HELP)
 end
 
 function UI:BuildSafetySection(parent)
@@ -449,8 +480,13 @@ function UI:Initialize()
         self.confirmFrame:Hide()
     end)
     Theme:Panel(frame)
+    -- Only the main window gets it: a dialog is shorter than two bands and would come out
+    -- shaded end to end.
+    Theme:Vignette(frame, Theme.panelInset)
     local close = Theme:CloseButton(frame, function() frame:Hide() end)
     close:SetPoint("TOPRIGHT", -14, -14)
+    -- The one control that sits inside the shade and must not be dimmed by it.
+    close:SetFrameLevel(frame:GetFrameLevel() + Theme.vignetteLevel + 1)
     -- Search sits at the head of the sidebar column, above the categories it filters.
     self.search = self.Widgets:Search(frame, SIDEBAR_WIDTH, SEARCH_HEIGHT, L.UI_SEARCH)
     self.search:SetPoint("TOPLEFT", PAD, SEARCH_TOP)
@@ -479,25 +515,17 @@ function UI:Initialize()
         y = y - SIDEBAR_ROW
     end
 
-    self.modeCharacter = Theme:Tab(frame, L.UI_CHARACTER, function()
-        self.mode = "character"; self:Refresh()
-    end)
-    self.modeCharacter:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", CONTENT_X + 4, TAB_BASELINE)
-    self.modeAccount = Theme:Tab(frame, L.UI_ACCOUNT, function()
-        self.mode = "account"; self:Refresh()
-    end)
-    self.modeAccount:SetPoint("BOTTOMLEFT", self.modeCharacter, "BOTTOMRIGHT", 4, 0)
-    local strip = Theme:Divider(frame)
-    strip:SetPoint("TOPLEFT", CONTENT_X, TAB_BASELINE)
-    strip:SetPoint("TOPRIGHT", self.layout.right, TAB_BASELINE)
+    self.headerRule = Theme:Divider(frame)
+    self.headerRule:SetPoint("TOPLEFT", CONTENT_X, TAB_BASELINE)
+    self.headerRule:SetPoint("TOPRIGHT", self.layout.right, TAB_BASELINE)
     self.panelTitle = Theme:Text(frame, "", "title", "TEXT_TITLE")
     self.panelTitle:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", CONTENT_X, TAB_BASELINE + 6)
     self.help = Theme:Text(frame, "", "small", "TEXT_MUTED")
     self.help:SetPoint("TOPLEFT", CONTENT_X, HELP_Y)
     self.help:SetPoint("RIGHT", self.layout.right, 0)
-    self.scroll = self.Widgets:Scroll(frame)
-    self.scroll:SetPoint("TOPLEFT", CONTENT_X, self.layout.top)
-    self.scroll:SetPoint("BOTTOMRIGHT", -48, self.layout.bottom)
+    self.scroll = self.Widgets:Scroll(frame, LIST_BAR_TOP)
+    self.scroll:SetPoint("TOPLEFT", CONTENT_X, LIST_TOP)
+    self.scroll:SetPoint("BOTTOMRIGHT", -48, LIST_BOTTOM)
     -- Rows are created once, grouped by the category they will be listed under; Refresh
     -- only ever re-anchors them.
     self.rows, self.sectionRows, self.sections = {}, {}, {}

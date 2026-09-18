@@ -16,6 +16,8 @@ Theme.colors = {
     TEXT_WARNING = { 1, 0.63, 0.35, 1 },
     HIGHLIGHT = { 0.91, 0.75, 0.48, 0.20 },
     RING_SHADOW = { 0, 0, 0, 0.45 },
+    -- The shade a window carries around the inside of its border, darkest at the edge.
+    VIGNETTE = { 0, 0, 0, 0.42 },
     RING_SHADOW_SOFT = { 0, 0, 0, 0.16 },
     RING_TRACK = { 0.28, 0.24, 0.19, 0.85 },
     RING_FILL = { 0.85, 0.70, 0.42, 1 },
@@ -230,6 +232,44 @@ end
 -- atlas, which is what hand-placed pieces got wrong. Compact frames (a toast, a one-line
 -- readout) cannot host 64 px corners and take the flat border instead.
 local NINE_SLICE_INSET, FLAT_INSET = 10, 1
+Theme.panelInset = NINE_SLICE_INSET
+
+-- Four gradients inside the border, opaque at the edge and gone by the band's width. They
+-- live on a frame of their own above the content rather than on textures of the window,
+-- so a row scrolling towards the edge dissolves into the shade instead of being cut by it.
+local VIGNETTE_BAND, VIGNETTE_LEVEL = 56, 5
+Theme.vignetteLevel = VIGNETTE_LEVEL
+-- Anchor pair, orientation, and whether the solid end is the one the orientation names
+-- first: bottom for VERTICAL, left for HORIZONTAL.
+local VIGNETTE_EDGES = {
+    { "TOPLEFT", "TOPRIGHT", "VERTICAL", false },
+    { "BOTTOMLEFT", "BOTTOMRIGHT", "VERTICAL", true },
+    { "TOPLEFT", "BOTTOMLEFT", "HORIZONTAL", true },
+    { "TOPRIGHT", "BOTTOMRIGHT", "HORIZONTAL", false },
+}
+
+function Theme:Vignette(frame, inset)
+    local color = self.colors.VIGNETTE
+    local shade = CreateFrame("Frame", nil, frame)
+    shade:SetPoint("TOPLEFT", inset, -inset)
+    shade:SetPoint("BOTTOMRIGHT", -inset, inset)
+    shade:SetFrameLevel(frame:GetFrameLevel() + VIGNETTE_LEVEL)
+    for _, edge in ipairs(VIGNETTE_EDGES) do
+        local band = shade:CreateTexture(nil, "OVERLAY")
+        band:SetColorTexture(color[1], color[2], color[3], color[4])
+        band:SetPoint(edge[1])
+        band:SetPoint(edge[2])
+        if edge[3] == "VERTICAL" then band:SetHeight(VIGNETTE_BAND) else band:SetWidth(VIGNETTE_BAND) end
+        local solid = CreateColor(color[1], color[2], color[3], color[4])
+        local clear = CreateColor(color[1], color[2], color[3], 0)
+        if edge[4] then
+            band:SetGradient(edge[3], solid, clear)
+        else
+            band:SetGradient(edge[3], clear, solid)
+        end
+    end
+    return shade
+end
 
 function Theme:Panel(frame, compact)
     local nineSlice = not compact and NineSliceUtil and NineSliceUtil.GetLayout

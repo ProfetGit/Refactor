@@ -110,7 +110,7 @@ describe("sidebar groups", function()
 end)
 
 describe("window chrome", function()
-    it("selects exactly one sidebar row and shows the tabs only on the feature list", function()
+    it("selects exactly one sidebar row and keeps the scope switch out of the feature list", function()
         local _, R = loaded()
         local UI = R.UI
         UI:Toggle()
@@ -122,19 +122,21 @@ describe("window chrome", function()
             return count
         end
         assert.equal(1, selectedCount())
-        assert.is_true(UI.modeCharacter.selected)
-        assert.is_false(UI.modeAccount.selected)
-        assert.is_true(UI.modeCharacter:IsShown())
-        UI.modeAccount:GetScript("OnClick")(UI.modeAccount)
-        assert.is_true(UI.modeAccount.selected)
-        assert.is_false(UI.modeCharacter.selected)
+        assert.equal("character", UI.mode)
+        assert.equal("", UI.help:GetText())
+        UI:SelectCategory("Options")
+        assert.equal(1, selectedCount())
+        assert.equal(string.format(R.L.UI_TOGGLE_FORMAT, R.L.UI_SCOPE, R.L.UI_CHARACTER),
+            UI.scopeButton.label:GetText())
+        UI.scopeButton:GetScript("OnClick")(UI.scopeButton)
+        assert.equal("account", UI.mode)
+        assert.equal(string.format(R.L.UI_TOGGLE_FORMAT, R.L.UI_SCOPE, R.L.UI_ACCOUNT),
+            UI.scopeButton.label:GetText())
         UI:SelectCategory("Profiles")
         assert.equal(1, selectedCount())
-        assert.is_false(UI.modeCharacter:IsShown())
         assert.is_true(UI.panelTitle:IsShown())
         assert.equal(R.L.UI_PROFILES, UI.panelTitle:GetText())
         UI:SelectCategory("All")
-        assert.is_true(UI.modeCharacter:IsShown())
         assert.is_false(UI.panelTitle:IsShown())
     end)
 
