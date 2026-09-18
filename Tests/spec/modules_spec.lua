@@ -65,31 +65,6 @@ local function vendor()
     return env
 end
 
-local function mail()
-    local env = base()
-    env.inbox, env.requests = {}, {}
-    env.ATTACHMENTS_MAX = 16
-    env.C_Mail = { IsCommandPending = function() return env.commandPending or false end }
-    env.GetInboxNumItems = function() return #env.inbox end
-    env.GetInboxHeaderInfo = function(index)
-        local info = env.inbox[index]
-        return nil, nil, nil, nil, info.money or 0, info.cod or 0, nil, info.items or 0,
-            nil, nil, nil, nil, info.gm or false
-    end
-    env.HasInboxItem = function(index, slot) return slot <= (env.inbox[index].items or 0) end
-    env.TakeInboxMoney = function(index) env.requests[#env.requests + 1] = { index = index, money = true } end
-    env.TakeInboxItem = function(index, slot) env.requests[#env.requests + 1] = { index = index, slot = slot } end
-    local controls = {
-        Show = function(self) self.shown = true end,
-        Hide = function(self) self.shown = false end,
-        SetRunning = function(self, running) self.running = running end,
-        SetProgress = function(self, text) self.text = text end,
-    }
-    env.R.UI = { CreateMailControls = function() return controls end }
-    env.controls = controls
-    return env
-end
-
 describe("M2 Retail modules", function()
     it("fast loot respects all auto-loot modifier combinations and skips locked slots", function()
         local env = base()
@@ -130,14 +105,6 @@ describe("M2 Retail modules", function()
         assert.equal("150", rates.autoLootRate)
         noResidue(env, module)
         assert.is_true(env.R.Registry:Enable(module))
-    end)
-
-    it("marks automatic standing unavailable even when API names exist", function()
-        local env = base()
-        env.SitStandOrDescendStart = function() error("protected action called") end
-        env:Load("Modules/Interface/AutoStand.lua")
-        assert.is_false(env.R.Registry:Enable("interface.autoStand"))
-        assert.equals("unavailable", env.R.moduleByID["interface.autoStand"].state)
     end)
 
     it("fills only the unprotected deletion edit box after Blizzard's event", function()
@@ -285,65 +252,4 @@ describe("M2 Retail modules", function()
         assert.is_true(env.R.Registry:Enable(module))
     end)
 
-    it("mail waits for explicit start, skips COD/GM/text and follows inbox reindexing", function()
-        local env = mail()
-        env.inbox = { { cod = 20, items = 1 }, { gm = true, items = 1 }, {}, { money = 200 }, { items = 1 } }
-        local module = enable(env, "Modules/Mail/TakeAll.lua", "mail.takeAll")
-        env:Fire("MAIL_SHOW")
-        assert.equals(0, #env.requests)
-        assert.is_true(env.controls.shown)
-        module:Start()
-        assert.same({ index = 4, money = true }, env.requests[1])
-        table.remove(env.inbox, 4)
-        env:Fire("MAIL_INBOX_UPDATE")
-        env:Advance(0.19)
-        assert.equals(1, #env.requests)
-        env:Advance(0.22)
-        assert.same({ index = 4, slot = 1 }, env.requests[2])
-        table.remove(env.inbox, 4)
-        env:Fire("MAIL_INBOX_UPDATE")
-        env:Advance(0.5)
-        assert.is_false(module.running)
-        assert.equals(2, module.completed)
-        assert.equals(3, #env.inbox)
-        noResidue(env, module)
-        assert.is_true(env.R.Registry:Enable(module))
-    end)
-
-    it("mail never repeats a stale request without acknowledged progress", function()
-        local env = mail()
-        env.inbox = { { items = 1 } }
-        local module = enable(env, "Modules/Mail/TakeAll.lua", "mail.takeAll")
-        env:Fire("MAIL_SHOW")
-        module:Start()
-        env:Fire("MAIL_INBOX_UPDATE")
-        env:Advance(6)
-        assert.equals(1, #env.requests)
-        assert.is_false(module.running)
-        assert.equals(env.R.L.MAIL_TIMEOUT, env.controls.text)
-        noResidue(env, module)
-    end)
-
-    it("mail stops pending work on button, failure, combat and mailbox close", function()
-        local env = mail()
-        env.inbox = { { money = 100 } }
-        local module = enable(env, "Modules/Mail/TakeAll.lua", "mail.takeAll")
-        env:Fire("MAIL_SHOW")
-        module:Start()
-        module:Stop()
-        env:Advance(6)
-        assert.equals(1, #env.requests)
-        module:Start()
-        env:Fire("MAIL_FAILED")
-        assert.is_false(module.running)
-        module:Start()
-        env:Fire("PLAYER_REGEN_DISABLED")
-        assert.is_false(module.running)
-        module:Start()
-        env:Fire("MAIL_CLOSED")
-        assert.is_false(module.running)
-        assert.is_false(env.controls.shown)
-        assert.equals(0, env:ActiveTimers())
-        noResidue(env, module)
-    end)
 end)

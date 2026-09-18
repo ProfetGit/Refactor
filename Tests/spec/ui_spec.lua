@@ -182,3 +182,49 @@ describe("three-slice buttons", function()
         assert.equal(1, rightKept)
     end)
 end)
+
+describe("smooth scrolling", function()
+    local function scroller()
+        local env, R = loaded()
+        local parent = env.CreateFrame("Frame")
+        return R.UI.Widgets:Scroll(parent)
+    end
+
+    it("closes the gap to the target and then stops running", function()
+        local scroll = scroller()
+        scroll:ScrollTo(200)
+        local step = scroll:GetScript("OnUpdate")
+        assert.is_function(step)
+        local previous = 0
+        for _ = 1, 60 do
+            if not scroll:GetScript("OnUpdate") then break end
+            step(scroll, 1 / 60)
+            assert.is_true(scroll.offset > previous)
+            assert.is_true(scroll.offset <= 200)
+            previous = scroll.offset
+        end
+        assert.are.equal(200, scroll.offset)
+        assert.is_nil(scroll:GetScript("OnUpdate"))
+    end)
+
+    it("retargets mid-glide instead of queueing a second scroll", function()
+        local scroll = scroller()
+        scroll:ScrollTo(200)
+        local step = scroll:GetScript("OnUpdate")
+        step(scroll, 1 / 60)
+        scroll:ScrollTo(80)
+        assert.are.equal(80, scroll.target)
+        for _ = 1, 60 do
+            if not scroll:GetScript("OnUpdate") then break end
+            scroll:GetScript("OnUpdate")(scroll, 1 / 60)
+        end
+        assert.are.equal(80, scroll.offset)
+    end)
+
+    it("snaps without animating when the move is direct manipulation", function()
+        local scroll = scroller()
+        scroll:ScrollTo(140, true)
+        assert.are.equal(140, scroll.offset)
+        assert.is_nil(scroll:GetScript("OnUpdate"))
+    end)
+end)

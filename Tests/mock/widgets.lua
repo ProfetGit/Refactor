@@ -10,18 +10,20 @@ local noops = {
     "SetFrameStrata", "SetFrameLevel", "SetClampedToScreen", "SetMovable", "SetResizable",
     "SetResizeBounds", "EnableMouse", "EnableMouseWheel", "RegisterForDrag",
     "StartMoving", "StopMovingOrSizing", "StartSizing",
-    "SetHighlightTexture", "SetNormalTexture", "SetEnabled", "SetStartDelay", "SetScale",
+    "SetHighlightTexture", "SetNormalTexture", "SetPushedTexture", "SetEnabled", "SetStartDelay", "SetScale",
     "SetDuration", "SetOrder", "SetFromAlpha", "SetToAlpha", "Play", "Stop",
     "SetAutoFocus", "SetMultiLine", "SetFontObject", "SetTextInsets", "SetMaxLetters",
     "ClearFocus", "SetFocus", "SetScrollChild", "SetVerticalScroll",
     "SetOrientation", "SetMinMaxValues", "SetValueStep", "SetThumbTexture",
     "RegisterForClicks", "SetRadialProgressBarStartOffset", "SetRadialProgressBarFeather",
     "SetRadialProgressBarReverse", "SetSmoothing", "SetSmoothScaling", "SetCheckedTexture",
-    "SetDisabledCheckedTexture", "SetHitRectInsets",
+    "SetDisabledCheckedTexture", "SetHitRectInsets", "SetToFinalAlpha",
 }
 
 local values = {
     GetWidth = 920, GetHeight = 660, GetFrameLevel = 1, IsEnabled = true, HasFocus = false,
+    -- A headless animation never runs, so it always reports itself parked at the start.
+    IsPlaying = false, GetSmoothProgress = 0, GetAlpha = 1, IsMouseOver = false,
 }
 
 function Widgets.install(env)

@@ -81,10 +81,28 @@ Theme.assets = {
     resizeGrip = { file = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up" },
     resizeGripPressed = { file = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down" },
     resizeGripHighlight = { file = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight" },
-    scrollTrack = { atlas = "!minimal-scrollbar-track-middle", fallback = "SURFACE" },
-    scrollThumb = { atlas = "minimal-scrollbar-small-thumb-middle", fallback = "ACCENT_COPPER" },
+    -- MinimalScrollBar.xml stacks three pieces per bar: a cap at each end at its own atlas
+    -- size and a middle stretched between them. One stretched middle on its own is what
+    -- squares off the ends. Track caps come from the full-size kit and the thumb from the
+    -- small kit, which is the pairing Blizzard's own template uses.
+    scrollTrackTop = { atlas = "minimal-scrollbar-track-top", fallback = "SURFACE" },
+    scrollTrackMiddle = { atlas = "!minimal-scrollbar-track-middle", fallback = "SURFACE" },
+    scrollTrackBottom = { atlas = "minimal-scrollbar-track-bottom", fallback = "SURFACE" },
+    scrollThumbTop = { atlas = "minimal-scrollbar-small-thumb-top", fallback = "ACCENT_COPPER" },
+    scrollThumbMiddle = { atlas = "minimal-scrollbar-small-thumb-middle", fallback = "ACCENT_COPPER" },
+    scrollThumbBottom = { atlas = "minimal-scrollbar-small-thumb-bottom", fallback = "ACCENT_COPPER" },
+    scrollThumbTopOver = { atlas = "minimal-scrollbar-small-thumb-top-over", fallback = "HIGHLIGHT" },
+    scrollThumbMiddleOver = { atlas = "minimal-scrollbar-small-thumb-middle-over", fallback = "HIGHLIGHT" },
+    scrollThumbBottomOver = { atlas = "minimal-scrollbar-small-thumb-bottom-over", fallback = "HIGHLIGHT" },
+    scrollThumbTopDown = { atlas = "minimal-scrollbar-small-thumb-top-down", fallback = "BORDER_BRONZE" },
+    scrollThumbMiddleDown = { atlas = "minimal-scrollbar-small-thumb-middle-down", fallback = "BORDER_BRONZE" },
+    scrollThumbBottomDown = { atlas = "minimal-scrollbar-small-thumb-bottom-down", fallback = "BORDER_BRONZE" },
     scrollUp = { atlas = "minimal-scrollbar-arrow-top", fallback = "ACCENT_COPPER" },
+    scrollUpOver = { atlas = "minimal-scrollbar-arrow-top-over", fallback = "HIGHLIGHT" },
+    scrollUpDown = { atlas = "minimal-scrollbar-arrow-top-down", fallback = "BORDER_BRONZE" },
     scrollDown = { atlas = "minimal-scrollbar-arrow-bottom", fallback = "ACCENT_COPPER" },
+    scrollDownOver = { atlas = "minimal-scrollbar-arrow-bottom-over", fallback = "HIGHLIGHT" },
+    scrollDownDown = { atlas = "minimal-scrollbar-arrow-bottom-down", fallback = "BORDER_BRONZE" },
     -- Objective atlases selected in TextureAtlasViewer on the installed client.
     questRing = { file = "Interface\\AddOns\\Refactor\\Media\\RefactorRing.tga" },
     questIconKill = { atlas = "Crosshair_Attack_48", fallback = "TEXT_MUTED" },
@@ -192,13 +210,23 @@ end
 -- Window-sized frames wear a Blizzard nine-slice; NineSliceUtil sizes every piece from its
 -- atlas, which is what hand-placed pieces got wrong. Compact frames (a toast, a one-line
 -- readout) cannot host 64 px corners and take the flat border instead.
+local NINE_SLICE_INSET, FLAT_INSET = 10, 1
+
 function Theme:Panel(frame, compact)
-    self:Fill(frame, "PANEL_BG")
+    local nineSlice = not compact and NineSliceUtil and NineSliceUtil.GetLayout
+        and NineSliceUtil.GetLayout(self.panelLayout)
+    -- The nine-slice edges are drawn inside the frame rect, so both backgrounds stop short
+    -- of it; filling to the edge makes the tile spill over the bevel at the corners.
+    local inset = nineSlice and NINE_SLICE_INSET or FLAT_INSET
+    local base = self:Fill(frame, "PANEL_BG")
+    base:ClearAllPoints()
+    base:SetPoint("TOPLEFT", inset, -inset)
+    base:SetPoint("BOTTOMRIGHT", -inset, inset)
     local fill = self:Texture(frame, "panelFill", "BACKGROUND")
-    fill:SetPoint("TOPLEFT", 6, -6)
-    fill:SetPoint("BOTTOMRIGHT", -6, 6)
+    fill:SetPoint("TOPLEFT", inset, -inset)
+    fill:SetPoint("BOTTOMRIGHT", -inset, inset)
     fill:SetAlpha(0.38)
-    if not compact and NineSliceUtil and NineSliceUtil.GetLayout and NineSliceUtil.GetLayout(self.panelLayout) then
+    if nineSlice then
         NineSliceUtil.ApplyLayoutByName(frame, self.panelLayout)
         return
     end
@@ -322,6 +350,53 @@ end
 
 -- A sidebar row in the Settings panel's own style: text, a hover wash, a gold bar when
 -- selected. No button art, because choosing a page is navigation, not an action.
+local MIN_FADE = 0.01
+
+-- A fade that can be reversed mid-flight. An Alpha animation always starts from the value
+-- it was given, so an interrupted fade would snap before easing back; reading the smooth
+-- progress gives the alpha actually on screen, and the new leg starts there with its
+-- duration cut to the distance left. Crossing a list quickly therefore never flickers.
+function Theme:Fader(region, fadeIn, fadeOut)
+    local fader = { region = region, fadeIn = fadeIn, fadeOut = fadeOut, resting = 0 }
+    region:SetAlpha(0)
+    fader.group = region:CreateAnimationGroup()
+    fader.group:SetToFinalAlpha(true)
+    fader.anim = fader.group:CreateAnimation("Alpha")
+    fader.group:SetScript("OnFinished", function() fader.resting = fader.to end)
+
+    function fader:Current()
+        if self.anim:IsPlaying() then
+            return self.from + (self.to - self.from) * self.anim:GetSmoothProgress()
+        end
+        return self.resting
+    end
+
+    function fader:To(target)
+        local current = self:Current()
+        self.group:Stop()
+        self.region:SetAlpha(current)
+        self.resting = current
+        if current == target then return end
+        local full = target > current and self.fadeIn or self.fadeOut
+        self.from, self.to = current, target
+        self.anim:SetFromAlpha(current)
+        self.anim:SetToAlpha(target)
+        self.anim:SetDuration(math.max(MIN_FADE, full * math.abs(target - current)))
+        self.anim:SetSmoothing(target > current and "OUT" or "IN")
+        self.group:Play()
+    end
+
+    function fader:Snap(alpha)
+        self.group:Stop()
+        self.resting = alpha
+        self.region:SetAlpha(alpha)
+    end
+
+    return fader
+end
+
+local HOVER_IN, HOVER_OUT = 0.08, 0.13
+
 function Theme:ListButton(parent, width, height, text, callback)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(width, height)
@@ -330,15 +405,15 @@ function Theme:ListButton(parent, width, height, text, callback)
     button.selection:Hide()
     button.hover = self:Texture(button, "listHover", "BACKGROUND")
     button.hover:SetAllPoints()
-    button.hover:Hide()
+    button.hoverFade = self:Fader(button.hover, HOVER_IN, HOVER_OUT)
     button.label = self:Text(button, text, "body", "TEXT_BODY")
     button.label:SetPoint("LEFT", 12, 0)
     button.label:SetPoint("RIGHT", -8, 0)
     button:SetScript("OnClick", callback)
     button:SetScript("OnEnter", function(widget)
-        if not widget.selected then widget.hover:Show() end
+        if not widget.selected then widget.hoverFade:To(1) end
     end)
-    button:SetScript("OnLeave", function(widget) widget.hover:Hide() end)
+    button:SetScript("OnLeave", function(widget) widget.hoverFade:To(0) end)
     self:ListButtonState(button, false)
     return button
 end
@@ -346,7 +421,8 @@ end
 function Theme:ListButtonState(button, selected, tone)
     button.selected = selected == true
     button.selection:SetShown(button.selected)
-    if button.selected then button.hover:Hide() end
+    -- Selection wins outright: a fade under the active row would read as a stuck highlight.
+    if button.selected then button.hoverFade:Snap(0) end
     self:Color(button.label, button.selected and "TEXT_HIGHLIGHT" or tone or "TEXT_BODY", true)
 end
 
@@ -469,6 +545,71 @@ function Theme:UndoButton(parent, size, callback)
     button:SetHighlightTexture(highlight)
     button:SetScript("OnClick", callback)
     button:Hide()
+    return button
+end
+
+-- MinimalScrollBar, 12.1.0: an 8 px bar, 8 px caps, a 17x11 stepper at each end and a
+-- track inset by 19 so the steppers clear it. The thumb never goes below 23 px or it
+-- cannot be grabbed.
+local BAR_WIDTH, BAR_CAP, MIN_THUMB = 8, 8, 23
+local STEPPER_WIDTH, STEPPER_HEIGHT, STEPPER_GAP = 17, 11, 8
+Theme.scrollBar = { width = BAR_WIDTH, minThumb = MIN_THUMB,
+    stepperGap = STEPPER_GAP, trackInset = STEPPER_HEIGHT + STEPPER_GAP }
+
+local THUMB_STATES = { normal = "", over = "Over", down = "Down" }
+
+local function threeSlice(parent, prefix, layer)
+    local slice = { prefix = prefix }
+    slice.top = Theme:Texture(parent, prefix .. "Top", layer)
+    slice.top:SetSize(BAR_WIDTH, BAR_CAP)
+    slice.top:SetPoint("TOPLEFT")
+    slice.bottom = Theme:Texture(parent, prefix .. "Bottom", layer)
+    slice.bottom:SetSize(BAR_WIDTH, BAR_CAP)
+    slice.bottom:SetPoint("BOTTOMLEFT")
+    -- Anchored cap to cap: the middle must not run under a rounded cap, or the square
+    -- corners of the stretched piece show through the transparent part of the cap.
+    slice.middle = Theme:Texture(parent, prefix .. "Middle", layer)
+    slice.middle:SetPoint("TOPLEFT", slice.top, "BOTTOMLEFT")
+    slice.middle:SetPoint("BOTTOMRIGHT", slice.bottom, "TOPRIGHT")
+    return slice
+end
+
+function Theme:ScrollThumbState(thumb, state)
+    local suffix = THUMB_STATES[state] or ""
+    self:ApplyAsset(thumb.slice.top, "scrollThumbTop" .. suffix)
+    self:ApplyAsset(thumb.slice.middle, "scrollThumbMiddle" .. suffix)
+    self:ApplyAsset(thumb.slice.bottom, "scrollThumbBottom" .. suffix)
+end
+
+-- The Slider widget takes a single thumb texture, which cannot be a three-slice. The
+-- texture it moves is kept empty and used purely as an anchor: the visible thumb is a
+-- frame pinned to it, so the caps ride along with no per-frame work.
+function Theme:ScrollBar(parent)
+    local slider = CreateFrame("Slider", nil, parent)
+    slider:SetOrientation("VERTICAL")
+    slider:SetWidth(BAR_WIDTH)
+    threeSlice(slider, "scrollTrack", "BACKGROUND")
+    local anchor = slider:CreateTexture(nil, "ARTWORK")
+    anchor:SetSize(BAR_WIDTH, MIN_THUMB)
+    slider:SetThumbTexture(anchor)
+    local thumb = CreateFrame("Frame", nil, slider)
+    thumb:SetAllPoints(anchor)
+    thumb.anchor = anchor
+    thumb.slice = threeSlice(thumb, "scrollThumb", "ARTWORK")
+    slider.thumb = thumb
+    return slider
+end
+
+function Theme:ScrollStepper(parent, key, onClick)
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(STEPPER_WIDTH, STEPPER_HEIGHT)
+    for method, suffix in pairs({ SetNormalTexture = "", SetPushedTexture = "Down",
+        SetHighlightTexture = "Over" }) do
+        local art = self:Texture(button, key .. suffix)
+        art:SetAllPoints()
+        button[method](button, art)
+    end
+    button:SetScript("OnClick", onClick)
     return button
 end
 

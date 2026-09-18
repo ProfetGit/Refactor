@@ -42,7 +42,6 @@ UI/Panels/Conflicts.lua
 UI/Panels/Diagnostics.lua
 UI/Confirm.lua
 UI/FirstRun.lua
-UI/MailControls.lua
 UI/Minimap.lua
 UI/Toasts.lua
 UI/VendorPanel.lua
@@ -54,11 +53,7 @@ Modules/Loot/FastLoot.lua
 Modules/Vendor/AutoSell.lua
 Modules/Vendor/AutoRepair.lua
 Modules/Vendor/Summary.lua
-Modules/Interface/AutoStand.lua
 Modules/Items/DeleteFill.lua
-Modules/Mail/TakeAll.lua
-Modules/Mail/LastRecipient.lua
-Modules/Vendor/JunkValue.lua
 Modules/Vendor/ExtendedUI.lua
 Modules/Quest/AutoAccept.lua
 Modules/Quest/AutoTurnIn.lua
@@ -78,7 +73,6 @@ Integrations/Auctionator.lua
 
 Modules_LoD/Nameplates/QuestProgress_Data.lua
 Modules_LoD/Nameplates/QuestProgress.lua
-Modules_LoD/Tooltips/SellPrice.lua
 Modules_LoD/Tooltips/RarityBorder_Data.lua
 Modules_LoD/Tooltips/RarityBorder.lua
 Modules_LoD/Tooltips/Anchor.lua

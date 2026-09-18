@@ -77,28 +77,6 @@ local function tooltipEnv()
 end
 
 describe("M4 tooltips", function()
-    it("sell price adds unit and stack lines away from a merchant, labelled by source", function()
-        local env = tooltipEnv()
-        env.stack = 20
-        local module = enable(env, "Modules_LoD/Tooltips/SellPrice.lua", "tooltips.sellPrice")
-        env:PostCall(env.GameTooltip)
-        assert.same({ { 25, "Sell price" }, { 500, "Stack of 20" } }, env.GameTooltip.money)
-        env.merchantOpen = true
-        env:PostCall(env.ItemRefTooltip)
-        assert.same({}, env.ItemRefTooltip.money)
-        env.merchantOpen = false
-        env.R.Price:RegisterProvider("tsm", 100, function() return 1000 end)
-        env.R.Price:SetEnabled("tsm", true)
-        env.GameTooltip.money = {}
-        env:PostCall(env.GameTooltip)
-        assert.same({ 1000, "TradeSkillMaster dbMarket" }, env.GameTooltip.money[1])
-        env.R.Registry:Disable(module)
-        env.GameTooltip.money = {}
-        env:PostCall(env.GameTooltip)
-        assert.same({}, env.GameTooltip.money)
-        noResidue(env, module)
-    end)
-
     it("rarity border tints, resets on clear, fills a miss when item data arrives", function()
         local env = tooltipEnv()
         env:Load("Modules_LoD/Tooltips/RarityBorder_Data.lua")
@@ -419,33 +397,6 @@ describe("M4 interface, mail, vendor", function()
         assert.equal(1, shots)
     end)
 
-    it("remembers the last recipient per character and only fills an empty field", function()
-        local env = base()
-        local box = { text = "" }
-        function box:GetText() return self.text end
-        function box:SetText(text) self.text = text end
-        env.SendMailNameEditBox = box
-        env.SendMailFrame = { HookScript = function(_, _, fn) env.onShow = fn end }
-        local module = enable(env, "Modules/Mail/LastRecipient.lua", "mail.lastRecipient")
-        box.text = "Alt-Realm"
-        env:Fire("MAIL_SEND_SUCCESS")
-        assert.equal("Alt-Realm", env.R.Settings.character.lastMailRecipient)
-        box.text = ""
-        env.onShow()
-        env:Advance(0)
-        assert.equal("Alt-Realm", box.text)
-        box.text = "Typed"
-        env.onShow()
-        env:Advance(0)
-        assert.equal("Typed", box.text)
-        env.R.Registry:Disable(module)
-        box.text = ""
-        env.onShow()
-        env:Advance(0)
-        assert.equal("", box.text)
-        noResidue(env, module)
-    end)
-
     local function merchantEnv()
         local env = base(true)
         env:Load("UI/Search.lua")
@@ -471,22 +422,6 @@ describe("M4 interface, mail, vendor", function()
         }
         return env
     end
-
-    it("junk value counts grey items with a price, minus the never-sell list, while at a merchant", function()
-        local env = merchantEnv()
-        env.R.Settings:SetOption("neverSellIDs", { [4] = true })
-        local module = enable(env, "Modules/Vendor/JunkValue.lua", "vendor.junkValue")
-        env:Fire("MERCHANT_SHOW")
-        assert.equal("Junk: 3 items, 0g 3s 0c", module.readout.text:GetText())
-        env.bags[1] = nil
-        env:Fire("BAG_UPDATE_DELAYED")
-        env:Advance(0.3)
-        assert.equal("No junk in your bags.", module.readout.text:GetText())
-        env:Fire("MERCHANT_CLOSED")
-        assert.is_false(module.readout:IsShown())
-        assert.is_nil(env.R.Broker.events.BAG_UPDATE_DELAYED)
-        noResidue(env, module)
-    end)
 
     it("extended vendor list filters stock and buys one or a stack", function()
         local env = merchantEnv()

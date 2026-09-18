@@ -10,7 +10,7 @@ local unpack = unpack
 local SIDEBAR = {
     { key = "All", labelKey = "UI_ALL" },
     { key = "Quests", labelKey = "UI_GROUP_QUESTS", categories = { "Quest", "Loot", "Toasts" } },
-    { key = "Vendor", labelKey = "UI_GROUP_VENDOR", categories = { "Vendor", "Items", "Mail" } },
+    { key = "Vendor", labelKey = "UI_GROUP_VENDOR", categories = { "Vendor", "Items" } },
     { key = "Interface", labelKey = "UI_GROUP_INTERFACE",
         categories = { "Interface", "Chat", "Social", "Nameplates" } },
     { key = "Tooltips", labelKey = "UI_Tooltips", categories = { "Tooltips" } },
@@ -28,11 +28,12 @@ for _, entry in ipairs(SIDEBAR) do
 end
 UI.sidebar = SIDEBAR
 
-local PAD, SIDEBAR_WIDTH, SIDEBAR_ROW, SIDEBAR_TOP = 24, 148, 24, -92
+local PAD, SIDEBAR_WIDTH, SIDEBAR_ROW, SIDEBAR_TOP = 24, 148, 24, -64
 local CONTENT_X = PAD + SIDEBAR_WIDTH + 22
-local TAB_BASELINE, HELP_Y = -120, -128
+local SEARCH_TOP, SEARCH_HEIGHT = -22, 26
+local TAB_BASELINE, HELP_Y = -72, -80
 local SECTION_GAP = 24
-UI.layout = { x = CONTENT_X, top = -150, right = -36, bottom = 48 }
+UI.layout = { x = CONTENT_X, top = -102, right = -36, bottom = 48 }
 local ROW_HEIGHT = 58
 local modifiers = { "CTRL", "SHIFT", "ALT" }
 
@@ -82,19 +83,13 @@ end
 function UI:SavePosition()
     if not Settings.character then return end
     local point, _, relativePoint, x, y = self.frame:GetPoint(1)
-    Settings.character.window = {
-        point = point, relativePoint = relativePoint, x = x, y = y,
-        width = self.frame:GetWidth(), height = self.frame:GetHeight(),
-    }
+    Settings.character.window = { point = point, relativePoint = relativePoint, x = x, y = y }
 end
 
 function UI:RestorePosition()
     if self.restored or not Settings.character then return end
     self.restored = true
     local saved = Settings.character.window
-    if type(saved.width) == "number" and type(saved.height) == "number" then
-        self.frame:SetSize(math.max(820, math.min(1200, saved.width)), math.max(590, math.min(900, saved.height)))
-    end
     local validPoints = { CENTER = true, TOP = true, BOTTOM = true, LEFT = true, RIGHT = true,
         TOPLEFT = true, TOPRIGHT = true, BOTTOMLEFT = true, BOTTOMRIGHT = true }
     if validPoints[saved.point] and validPoints[saved.relativePoint]
@@ -374,8 +369,6 @@ function UI:Initialize()
     frame:SetFrameStrata("DIALOG")
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
-    frame:SetResizable(true)
-    frame:SetResizeBounds(820, 660, 1200, 900)
     R:OwnFrame(frame)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
@@ -387,24 +380,16 @@ function UI:Initialize()
         self.confirmFrame:Hide()
     end)
     Theme:Panel(frame)
-    local title = Theme:Text(frame, L.UI_TITLE, "title", "TEXT_TITLE")
-    title:SetPoint("TOPLEFT", 28, -24)
-    local subtitle = Theme:Text(frame, L.UI_SUBTITLE, "small", "TEXT_MUTED")
-    subtitle:SetPoint("TOPLEFT", 28, -50)
     local close = Theme:CloseButton(frame, function() frame:Hide() end)
     close:SetPoint("TOPRIGHT", -14, -14)
-    self.search = self.Widgets:Search(frame, 260, 26, L.UI_SEARCH)
-    self.search:SetPoint("TOPRIGHT", -52, -26)
+    -- Search sits at the head of the sidebar column, above the categories it filters.
+    self.search = self.Widgets:Search(frame, SIDEBAR_WIDTH, SEARCH_HEIGHT, L.UI_SEARCH)
+    self.search:SetPoint("TOPLEFT", PAD, SEARCH_TOP)
     self.search:SetScript("OnTextChanged", function(widget)
         widget.placeholder:SetShown(widget:GetText() == "")
         self.scroll.slider:SetValue(0)
         self:Refresh()
     end)
-    local divider = Theme:Texture(frame, "header", "ARTWORK")
-    divider:SetPoint("TOPLEFT", PAD, -78)
-    divider:SetPoint("TOPRIGHT", -PAD, -78)
-    divider:SetHeight(8)
-
     self.categoryButtons = {}
     local y = SIDEBAR_TOP
     for _, entry in ipairs(SIDEBAR) do
@@ -455,16 +440,12 @@ function UI:Initialize()
     self.empty:SetPoint("RIGHT", -12, 0)
     local edition = Theme:Text(frame, L.UI_RETAIL, "small", "TEXT_MUTED")
     edition:SetPoint("LEFT", self.count, "RIGHT", 16, 0)
-    local grip = Theme:ResizeGrip(frame, function() frame:StartSizing("BOTTOMRIGHT") end,
-        function() frame:StopMovingOrSizing(); self:SavePosition() end)
-    grip:SetPoint("BOTTOMRIGHT", -12, 12)
     self.panels = {}
     self:BuildOptions(frame)
     self:BuildProfiles(frame)
     self:BuildConflicts(frame)
     self:BuildDiagnostics(frame)
     self:BuildConfirm(frame)
-    frame:SetScript("OnSizeChanged", function() self:Refresh() end)
     R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.Refresh, self)
     R.Broker:Subscribe("REFACTOR_MODULE_CHANGED", self.Refresh, self)
     frame:Hide()

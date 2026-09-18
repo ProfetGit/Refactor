@@ -94,9 +94,8 @@ function Settings:Init(account, character, guid)
     character.window = type(character.window) == "table" and character.window or {}
     character.minimap = type(character.minimap) == "table" and character.minimap or {}
     character.toast = type(character.toast) == "table" and character.toast or {}
-    if type(character.lastMailRecipient) ~= "string" or #character.lastMailRecipient > 80 then
-        character.lastMailRecipient = nil
-    end
+    -- Left over from the mail modules, which are gone: drop it so saved variables shrink.
+    character.lastMailRecipient = nil
     local profiles = {}
     if type(account.profiles) == "table" then
         local count = 0

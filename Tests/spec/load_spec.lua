@@ -27,7 +27,7 @@ describe("the real load sequence", function()
             end
         end
         assert.is_table(env.LibStub)
-        assert.equal(25, #R.modules)
+        assert.equal(20, #R.modules)
         env:Fire("PLAYER_LOGIN")
         assert.is_function(env.SlashCmdList.REFACTOR)
         assert.is_table(R.UI.frame)
@@ -86,7 +86,6 @@ describe("the real load sequence", function()
         assert.equal("unavailable", R.moduleByID["loot.fastLoot"].state)
         assert.same({ "C_CVar.GetCVarBool", "C_CVar.SetCVar", "C_CVar.GetCVarDefault", "IsModifiedClick",
             "GetNumLootItems", "GetLootSlotInfo", "LootSlot" }, R.moduleByID["loot.fastLoot"].missing)
-        assert.equal("unavailable", R.moduleByID["interface.autoStand"].state)
         assert.equal(0, #R.errors)
     end)
 end)

@@ -2,15 +2,6 @@ local _, R = ...
 R.L = R.L or {}
 local L = R.L
 L.UI_Tooltips = "Tooltips"
-L.TOOLTIP_PRICE_NAME = "Sell price in tooltips"
-L.TOOLTIP_PRICE_DESC = "Show what an item sells for, per unit and per full stack."
-L.TOOLTIP_PRICE_DETAIL = "Hidden while a merchant window is open, because the game shows it there already. "
-    .. "Auction prices appear only if you switch on a provider under Display options, and the line names "
-    .. "its source."
-L.TOOLTIP_SELL_PRICE = "Sell price"
-L.TOOLTIP_STACK_PRICE = "Stack of %d"
-L.TOOLTIP_SOURCE_TSM = "TradeSkillMaster %s"
-L.TOOLTIP_SOURCE_AUCTIONATOR = "Auctionator"
 L.TOOLTIP_BORDER_NAME = "Rarity-coloured tooltip border"
 L.TOOLTIP_BORDER_DESC = "Tint the tooltip border with the item's quality colour."
 L.TOOLTIP_BORDER_DETAIL = "Applies to the main, linked and comparison tooltips. The border returns to normal as "
