@@ -1,0 +1,16 @@
+-- Optional custom art: edit this file, add your .tga or .blp files to Media, then /reload.
+-- Each semantic asset can use { file = path, texcoords = { left, right, top, bottom } }
+-- or { atlas = verifiedAtlasName }. Unchanged assets keep the Dragonflight defaults.
+-- All panels and buttons share these assets; no UI or module code needs changing.
+-- Example (uncomment and supply your own file):
+-- local Theme = LibStub("LibRefactorTheme-1.0")
+-- Theme:SetAsset("panelFill", {
+--     file = "Interface\\AddOns\\Refactor\\Media\\MyPanel.tga",
+--     texcoords = { 0, 1, 0, 1 },
+-- })
+-- Theme:SetColor("ACCENT_COPPER", { 0.78, 0.54, 0.30, 1 })
+-- The window border is a Blizzard nine-slice layout; pick another by name, for example
+-- Theme.panelLayout = "GenericMetal" or "SimplePanelTemplate". The fill is panelFill.
+-- Button keys: button{Left,Center,Right}, plus Pressed and Disabled variants,
+-- and buttonHighlight. Scroll keys: scrollTrack, scrollThumb, scrollUp, scrollDown.
+-- Install new files while the game is closed. Custom assets are local to your install.

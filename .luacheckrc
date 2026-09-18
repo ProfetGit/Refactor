@@ -1,0 +1,45 @@
+-- Lint noise control only. This whitelist is not evidence that a symbol exists:
+-- Tools/api-check.lua verifies every declared dependency against Data/api-retail.json.
+std = "lua51"
+self = false
+max_line_length = 120
+exclude_files = { ".tools", ".release" }
+
+read_globals = {
+    -- Addon loading and libraries
+    "LibStub",
+    -- Frames and widgets
+    "CreateFrame", "CreateColor", "UIParent", "UISpecialFrames", "DEFAULT_CHAT_FRAME", "Minimap", "GameTooltip",
+    "GetCursorPosition",
+    -- Slash command registration
+    "SlashCmdList",
+    -- Blizzard settings panel namespace
+    "Settings",
+    -- Core client API
+    "C_AddOns", "C_CVar", "C_Container", "C_Item", "C_Mail", "C_NamePlate", "C_QuestLog",
+    "C_Texture", "C_Timer", "C_TooltipInfo",
+    "Enum", "GetBuildInfo", "GetTime", "UnitGUID", "debugstack",
+    -- Input and combat state
+    "InCombatLockdown", "IsAltKeyDown", "IsControlKeyDown", "IsModifiedClick", "IsShiftKeyDown",
+    -- Loot
+    "GetLootSlotInfo", "GetNumLootItems", "LootSlot",
+    -- Vendor and money
+    "CanMerchantRepair", "GetMoney", "GetRepairAllCost", "MerchantFrame", "RepairAllItems",
+    -- Mail
+    "ATTACHMENTS_MAX", "GetInboxHeaderInfo", "GetInboxNumItems", "HasInboxItem",
+    "TakeInboxItem", "TakeInboxMoney",
+    -- Items
+    "DELETE_ITEM_CONFIRM_STRING", "NUM_TOTAL_EQUIPPED_BAG_SLOTS", "StaticPopup_FindVisible",
+    -- M4: tooltips, toasts, quest, social, merchant, bench
+    "hooksecurefunc", "TooltipDataProcessor", "TooltipUtil", "SetTooltipMoney", "GameTooltip_SetDefaultAnchor",
+    "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "C_CurrencyInfo", "C_MerchantFrame",
+    "C_FriendList", "C_BattleNet", "GetMerchantNumItems", "GetMerchantItemLink", "GetMerchantItemMaxStack",
+    "BuyMerchantItem", "GetNumBuybackItems", "GetBuybackItemInfo", "BuybackItem", "AcceptQuest",
+    "GetQuestReward", "CompleteQuest", "IsQuestCompletable", "GetNumQuestChoices", "QuestGetAutoAccept",
+    "QuestFlagsPVP", "GetQuestID", "CancelDuel", "AcceptGroup", "AcceptResurrect", "StaticPopup_Hide", "ConsoleExec", "EventRegistry", "NineSliceUtil",
+    "IsGuildMember", "ChatFrameUtil", "SetItemRef", "SendMailNameEditBox", "SendMailFrame", "Screenshot",
+    "GetFramerate", "GetAddOnCPUUsage", "UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage", "GetTimePreciseSec",
+}
+
+files["Tests/"] = { std = "+busted" }
+files["Tools/"] = { max_line_length = 160 }

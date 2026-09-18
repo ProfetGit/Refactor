@@ -1,0 +1,90 @@
+## Interface: 120100
+## Title: Refactor
+## Notes: Quality of life, one feature at a time. Search everything, override per character.
+## Author: emppu
+## Version: 0.1.0
+## SavedVariables: RefactorDB
+## SavedVariablesPerCharacter: RefactorCharDB
+## X-Category: Miscellaneous
+## X-License: All Rights Reserved
+## IconTexture: Interface/AddOns/Refactor/Media/RefactorIcon
+
+Libs/LibStub/LibStub.lua
+Libs/LibRefactorTheme-1.0/LibRefactorTheme-1.0.lua
+Libs/LibRefactorPrice-1.0/LibRefactorPrice-1.0.lua
+
+Core/Namespace.lua
+Core/Capabilities.lua
+Core/Broker.lua
+Core/Registry.lua
+Core/Codec.lua
+Core/Settings.lua
+Core/Pools.lua
+Core/Safety.lua
+Core/Presets.lua
+
+Locales/Modules.enUS.lua
+Locales/UI.enUS.lua
+Locales/Commands.enUS.lua
+Locales/Nameplates.enUS.lua
+Locales/Panels.enUS.lua
+Locales/Tooltips.enUS.lua
+Locales/Toasts.enUS.lua
+Locales/Features.enUS.lua
+
+Media/CustomTheme.lua
+
+UI/Search.lua
+UI/Widgets/Widgets.lua
+UI/Window.lua
+UI/Panels/Profiles.lua
+UI/Panels/Conflicts.lua
+UI/Panels/Diagnostics.lua
+UI/Confirm.lua
+UI/FirstRun.lua
+UI/MailControls.lua
+UI/Minimap.lua
+UI/Toasts.lua
+UI/VendorPanel.lua
+UI/UrlCopy.lua
+UI/Panels/Display.lua
+UI/Panels/Tooltips.lua
+
+Modules/Loot/FastLoot.lua
+Modules/Vendor/AutoSell.lua
+Modules/Vendor/AutoRepair.lua
+Modules/Vendor/Summary.lua
+Modules/Interface/AutoStand.lua
+Modules/Items/DeleteFill.lua
+Modules/Mail/TakeAll.lua
+Modules/Mail/LastRecipient.lua
+Modules/Vendor/JunkValue.lua
+Modules/Vendor/ExtendedUI.lua
+Modules/Quest/AutoAccept.lua
+Modules/Quest/AutoTurnIn.lua
+Modules/Chat/Urls.lua
+Modules/Chat/DeclineDuels.lua
+Modules/Chat/AcceptResurrect.lua
+Modules/Chat/AcceptInvites.lua
+Modules/Interface/CameraDistance.lua
+Modules/Interface/ActionCam.lua
+Modules/Interface/ScreenshotLevelUp.lua
+
+Integrations/Neighbours.lua
+Integrations/Questie.lua
+Integrations/Plater.lua
+Integrations/TSM.lua
+Integrations/Auctionator.lua
+
+Modules_LoD/Nameplates/QuestProgress_Data.lua
+Modules_LoD/Nameplates/QuestProgress.lua
+Modules_LoD/Tooltips/SellPrice.lua
+Modules_LoD/Tooltips/RarityBorder_Data.lua
+Modules_LoD/Tooltips/RarityBorder.lua
+Modules_LoD/Tooltips/Anchor.lua
+Modules_LoD/Tooltips/HealthBar.lua
+Modules_LoD/Toasts/Loot.lua
+
+Core/Bench.lua
+Core/Commands.lua
+Core/Bootstrap.lua

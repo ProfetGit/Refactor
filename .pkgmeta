@@ -1,0 +1,13 @@
+package-as: Refactor
+ignore:
+  - Tools
+  - Tests
+  - Data
+  - docs
+  - .github
+  - .tools
+  - .release
+  - Makefile
+  - .luacheckrc
+  - CLAUDE.md
+  - CONTRIBUTING.md

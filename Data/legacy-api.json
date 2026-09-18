@@ -1,0 +1,253 @@
+{
+  "ATTACHMENTS_MAX": {
+    "needle": "ATTACHMENTS_MAX",
+    "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.lua"
+  },
+  "AcceptGroup": {
+    "needle": "AcceptGroup();",
+    "path": "Interface/AddOns/Blizzard_StaticPopup_Game/GameDialogDefs.lua"
+  },
+  "AcceptQuest": {
+    "needle": "AcceptQuest();",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
+  "BuyMerchantItem": {
+    "needle": "BuyMerchantItem(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "BuybackItem": {
+    "needle": "BuybackItem(self:GetID())",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "CanMerchantRepair": {
+    "needle": "CanMerchantRepair",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "CancelDuel": {
+    "needle": "CancelDuel();",
+    "path": "Interface/AddOns/Blizzard_StaticPopup_Game/GameDialogDefs.lua"
+  },
+  "ChatFrame1": {
+    "needle": "DEFAULT_CHAT_FRAME = ChatFrame1",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameUtil.lua"
+  },
+  "ChatFrameUtil.AddMessageEventFilter": {
+    "needle": "function ChatFrameUtil.AddMessageEventFilter",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameFilters.lua"
+  },
+  "ChatFrameUtil.RemoveMessageEventFilter": {
+    "needle": "function ChatFrameUtil.RemoveMessageEventFilter",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameFilters.lua"
+  },
+  "CompleteQuest": {
+    "needle": "CompleteQuest();",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
+  "DEFAULT_CHAT_FRAME": {
+    "needle": "DEFAULT_CHAT_FRAME = ChatFrame1",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameUtil.lua"
+  },
+  "DELETE_ITEM_CONFIRM_STRING": {
+    "path": "Interface/AddOns/Blizzard_StaticPopup_Game/Mainline/GameDialogDefs.lua"
+  },
+  "Enum.ItemQuality.Common": {
+    "needle": "Name = \"Common\", Type = \"ItemQuality\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ItemQualitiesDocumentation.lua"
+  },
+  "Enum.ItemQuality.Poor": {
+    "needle": "Name = \"Poor\", Type = \"ItemQuality\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ItemQualitiesDocumentation.lua"
+  },
+  "Enum.TooltipDataLineType.QuestObjective": {
+    "needle": "Name = \"QuestObjective\", Type = \"TooltipDataLineType\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoSharedDocumentation.lua"
+  },
+  "Enum.TooltipDataLineType.QuestPlayer": {
+    "needle": "Name = \"QuestPlayer\", Type = \"TooltipDataLineType\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoSharedDocumentation.lua"
+  },
+  "Enum.TooltipDataLineType.QuestTitle": {
+    "needle": "Name = \"QuestTitle\", Type = \"TooltipDataLineType\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoSharedDocumentation.lua"
+  },
+  "Enum.TooltipDataLineType.TradeTimeRemaining": {
+    "needle": "Name = \"TradeTimeRemaining\", Type = \"TooltipDataLineType\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoSharedDocumentation.lua"
+  },
+  "Enum.TooltipDataType.Item": {
+    "needle": "Name = \"Item\", Type = \"TooltipDataType\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoSharedDocumentation.lua"
+  },
+  "EventRegistry": {
+    "needle": "EventRegistry = CreateFromMixins(CallbackRegistryMixin);",
+    "path": "Interface/AddOns/Blizzard_SharedXMLBase/GlobalCallbackRegistry.lua"
+  },
+  "GameTooltip": {
+    "needle": "name=\"GameTooltip\"",
+    "path": "Interface/AddOns/Blizzard_GameTooltip/Mainline/GameTooltip.xml"
+  },
+  "GameTooltip_SetDefaultAnchor": {
+    "needle": "function GameTooltip_SetDefaultAnchor",
+    "path": "Interface/AddOns/Blizzard_SharedXML/SharedTooltipTemplates.lua"
+  },
+  "GetBuybackItemInfo": {
+    "needle": "GetBuybackItemInfo(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "GetInboxHeaderInfo": {
+    "needle": "GetInboxHeaderInfo",
+    "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.lua"
+  },
+  "GetInboxNumItems": {
+    "needle": "GetInboxNumItems",
+    "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.lua"
+  },
+  "GetLootSlotInfo": {
+    "needle": "GetLootSlotInfo(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua"
+  },
+  "GetMerchantItemLink": {
+    "needle": "GetMerchantItemLink(index)",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "GetMerchantItemMaxStack": {
+    "needle": "GetMerchantItemMaxStack(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "GetMerchantNumItems": {
+    "needle": "GetMerchantNumItems()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "GetNumBuybackItems": {
+    "needle": "GetNumBuybackItems()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "GetNumLootItems": {
+    "needle": "GetNumLootItems(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua"
+  },
+  "GetNumQuestChoices": {
+    "needle": "GetNumQuestChoices()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
+  "GetQuestID": {
+    "needle": "local questID = GetQuestID();",
+    "path": "Interface/AddOns/Blizzard_BoostTutorial/Blizzard_TutorialLogic.lua"
+  },
+  "GetQuestReward": {
+    "needle": "GetQuestReward(QuestInfoFrame.itemChoice)",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
+  "GetRepairAllCost": {
+    "needle": "GetRepairAllCost",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "HasInboxItem": {
+    "needle": "HasInboxItem",
+    "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.lua"
+  },
+  "InCombatLockdown": {
+    "path": "Interface/AddOns/Blizzard_UnitPopupShared/UnitPopupSharedButtonMixins.lua"
+  },
+  "IsGuildMember": {
+    "needle": "IsGuildMember(player)",
+    "path": "Interface/AddOns/Blizzard_QuickJoin/QuickJoinToast.lua"
+  },
+  "IsModifiedClick": {
+    "path": "Interface/AddOns/Blizzard_WeeklyRewards/Blizzard_WeeklyRewards.lua"
+  },
+  "IsQuestCompletable": {
+    "needle": "IsQuestCompletable()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
+  "ItemRefTooltip": {
+    "needle": "name=\"ItemRefTooltip\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/ItemRef.xml"
+  },
+  "LootSlot": {
+    "needle": "LootSlot(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua"
+  },
+  "MerchantFrame": {
+    "needle": "MerchantFrame",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "NUM_TOTAL_EQUIPPED_BAG_SLOTS": {
+    "path": "Interface/AddOns/Blizzard_FrameXMLBase/Constants.lua"
+  },
+  "QuestFlagsPVP": {
+    "needle": "QuestFlagsPVP()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
+  "QuestGetAutoAccept": {
+    "needle": "QuestGetAutoAccept()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
+  "RepairAllItems": {
+    "needle": "RepairAllItems(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "SendMailFrame": {
+    "needle": "name=\"SendMailFrame\"",
+    "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.xml"
+  },
+  "SendMailNameEditBox": {
+    "needle": "name=\"SendMailNameEditBox\"",
+    "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.xml"
+  },
+  "SetItemRef": {
+    "needle": "function SetItemRef",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/ItemRef.lua"
+  },
+  "SetTooltipMoney": {
+    "needle": "function SetTooltipMoney",
+    "path": "Interface/AddOns/Blizzard_MoneyFrame/Shared/MoneyFrame.lua"
+  },
+  "ShoppingTooltip1": {
+    "needle": "name=\"ShoppingTooltip1\"",
+    "path": "Interface/AddOns/Blizzard_GameTooltip/Mainline/GameTooltip.xml"
+  },
+  "ShoppingTooltip2": {
+    "needle": "name=\"ShoppingTooltip2\"",
+    "path": "Interface/AddOns/Blizzard_GameTooltip/Mainline/GameTooltip.xml"
+  },
+  "SlashCmdList": {
+    "needle": "_G.SlashCmdList = {}",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/SlashCommandsRegistry.lua"
+  },
+  "StaticPopup_FindVisible": {
+    "path": "Interface/AddOns/Blizzard_StaticPopup/StaticPopup.lua"
+  },
+  "StaticPopup_Hide": {
+    "needle": "function StaticPopup_Hide",
+    "path": "Interface/AddOns/Blizzard_StaticPopup/StaticPopup.lua"
+  },
+  "TakeInboxItem": {
+    "needle": "TakeInboxItem",
+    "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.lua"
+  },
+  "TakeInboxMoney": {
+    "needle": "TakeInboxMoney",
+    "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.lua"
+  },
+  "TooltipDataProcessor.AddTooltipPostCall": {
+    "needle": "function TooltipDataProcessor.AddTooltipPostCall",
+    "path": "Interface/AddOns/Blizzard_SharedXMLGame/Tooltip/TooltipDataHandler.lua"
+  },
+  "TooltipUtil.GetDisplayedItem": {
+    "needle": "function TooltipUtil.GetDisplayedItem",
+    "path": "Interface/AddOns/Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua"
+  },
+  "UIParent": {
+    "needle": "parent=\"UIParent\"",
+    "path": "Interface/AddOns/Blizzard_GameTooltip/Mainline/GameTooltip.xml"
+  },
+  "hash_SlashCmdList": {
+    "needle": "_G.hash_SlashCmdList = {}",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/SlashCommandsRegistry.lua"
+  },
+  "hooksecurefunc": {
+    "needle": "hooksecurefunc(",
+    "path": "Interface/AddOns/Blizzard_EditMode/Shared/EditModeManager.lua"
+  }
+}

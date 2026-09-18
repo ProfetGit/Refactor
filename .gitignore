@@ -1,0 +1,5 @@
+.release/
+.tools/
+*.zip
+*.luac
+Data/*-probe.lua
