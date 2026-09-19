@@ -23,6 +23,8 @@ R.Integrations.neighbours = {
         modules = { "nameplates.questProgress" } },
     { addon = "Scrap", labelKey = "NEIGHBOUR_SCRAP",
         modules = { "vendor.autoSell" } },
+    { addon = "Plumber", labelKey = "NEIGHBOUR_PLUMBER",
+        modules = { "vendor.itemCosts" } },
 }
 
 function R.Integrations:Conflicts(into)

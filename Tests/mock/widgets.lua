@@ -4,7 +4,7 @@
 local Widgets = {}
 
 local noops = {
-    "SetPoint", "SetAllPoints", "ClearAllPoints", "SetSize", "SetWidth", "SetHeight",
+    "SetPoint", "SetAllPoints", "ClearAllPoints", "SetHeight",
     "SetTexCoord", "SetTexture", "SetColorTexture", "SetAlpha",
     "SetTextColor", "SetJustifyH", "SetJustifyV",
     "SetFrameStrata", "SetFrameLevel", "SetClampedToScreen", "SetMovable", "SetResizable",
@@ -31,7 +31,7 @@ local noops = {
 }
 
 local values = {
-    GetWidth = 920, GetHeight = 660, GetFrameLevel = 1, HasFocus = false,
+    GetHeight = 660, GetFrameLevel = 1, HasFocus = false,
     GetEffectiveScale = 1,
     -- A headless animation never runs, so it always reports itself parked at the start.
     IsPlaying = false, GetSmoothProgress = 0, GetAlpha = 1, IsMouseOver = false,
@@ -66,10 +66,17 @@ function Widgets.install(env)
         end
         function root:SetTag() end
         function root:SetScrollMode() end
+        function root:CreateTitle() end
+        function root:CreateDivider() end
         if self.menuGenerator then self.menuGenerator(self, root) end
         return picked
     end
 
+    -- A width that was set is a width that reads back: the coin strip fits tokens by it.
+    -- Anything never sized reads as the window's stock 920.
+    function Frame:SetWidth(width) self.width = width end
+    function Frame:SetSize(width) self.width = width end
+    function Frame:GetWidth() return rawget(self, "width") or 920 end
     function Frame:RegisterEvent(event) self.events[event] = true end
     function Frame:UnregisterEvent(event) self.events[event] = nil end
     function Frame:UnregisterAllEvents() self.events = {} end
@@ -120,6 +127,9 @@ function Widgets.install(env)
     -- Recorded, not dropped: a row refuses a click while its toggle is disabled, and that
     -- is only testable if the mock remembers being disabled.
     function Frame:SetEnabled(enabled) self.enabled = enabled ~= false end
+    -- A merchant cell's item button carries the merchant index Blizzard's click code reads.
+    function Frame:SetID(id) self.id = id end
+    function Frame:GetID() return rawget(self, "id") or 0 end
     function Frame:IsEnabled() return rawget(self, "enabled") ~= false end
     function Frame:SetChecked(checked) self.checked = checked == true end
     function Frame:GetChecked() return rawget(self, "checked") == true end

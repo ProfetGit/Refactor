@@ -209,7 +209,22 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   again, Blizzard's grey-all returns on the next update. At the Sporeggar tabard vendor the
   coin box lists Glowcap with the carried count and its tooltip on hover, the gold display
   moves left beside it, and a vendor taking four items hides the gold as Blizzard does past
-  three currencies; the BackpackTokenTemplate tokens draw with icon and count
+  three currencies; the BackpackTokenTemplate tokens draw with icon and count; the left
+  box art stretches across the whole bottom with the right box gone, gold at the right
+  edge, and in the stock window with a merchant taking five currencies the gold gives way
+  and nothing spills past the left edge. With
+  Plumber's Merchant Price on, the module's row reads "Plumber already shows merchant
+  costs", the conflict panel lists it, and nothing of ours draws in the strip; with it off
+  and a reload, ours draws
+- Merchant filter: the dropdown sits between the portrait and Blizzard's class filter in the
+  stock window without overlap and reads "Mounts, Missing" without clipping; at a mount
+  vendor Mounts plus Missing leaves only unowned mounts from the first slot, paged as
+  "Page 1 of n" by their own count with no empty page, prev and next and the wheel move
+  through those pages, and buying, shift-buying, the stack split and the tooltip on a
+  laid-out cell all act on the right item; a red unusable cell, a sold-out cell and an
+  extended-cost cell look as Blizzard draws them on a filtered page; a caged pet, a toy,
+  an ensemble and a recipe classify as expected; learning a mount at the vendor moves it
+  out of Missing on the next redraw; reopening any merchant starts from Everything
 - Auto accept and auto turn in on an ordinary quest; a reward-choice quest stays open
 - Auto accept at an NPC with several offers, on both the gossip list and the greeting panel
   the hand-in leaves behind: each offer opens and is accepted in turn, a repeatable or

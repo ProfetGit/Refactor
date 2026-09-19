@@ -944,7 +944,11 @@ describe("M4 chat and social", function()
             end,
         }
         env.hooks = {}
-        env.hooksecurefunc = function(name, fn) env.hooks[name] = fn end
+        -- Chained in the order installed, as the client chains them.
+        env.hooksecurefunc = function(name, fn)
+            local previous = env.hooks[name]
+            env.hooks[name] = previous and function() previous() fn() end or fn
+        end
         env.SetItemRef = function() end
         local shown
         env.R.UI.ShowUrl = function(_, url) shown = url end
@@ -1119,10 +1123,14 @@ describe("M4 interface, mail, vendor", function()
         env.MERCHANT_ITEMS_PER_PAGE, env.BUYBACK_ITEMS_PER_PAGE = 10, 12
         env.MerchantFrame.selectedTab, env.MerchantFrame.page = 1, 3
         env.hooks, env.updates = {}, 0
-        env.hooksecurefunc = function(name, fn) env.hooks[name] = fn end
+        -- Chained in the order installed, as the client chains them.
+        env.hooksecurefunc = function(name, fn)
+            local previous = env.hooks[name]
+            env.hooks[name] = previous and function() previous() fn() end or fn
+        end
         env.MerchantFrame_Update = function()
             env.updates = env.updates + 1
-            env.hooks.MerchantFrame_Update()
+            if env.hooks.MerchantFrame_Update then env.hooks.MerchantFrame_Update() end
         end
         return env
     end
@@ -1191,19 +1199,28 @@ describe("M4 merchant costs", function()
     local Runtime2 = require("Tests.mock.runtime")
     local Widgets2 = require("Tests.mock.widgets")
 
+    local INTEGRATIONS = { "Integrations/Questie.lua", "Integrations/Plater.lua", "Integrations/Plumber.lua" }
+
     local function costEnv()
         local env = Runtime2.new()
         Widgets2.install(env)
-        for _, path in ipairs({ "Locales/Modules.enUS.lua", "Locales/UI.enUS.lua", "Locales/Features.enUS.lua" }) do
+        for _, path in ipairs({ "Locales/Modules.enUS.lua", "Locales/UI.enUS.lua", "Locales/Features.enUS.lua",
+            "Locales/Panels.enUS.lua" }) do
             env:Load(path)
         end
         env.R.UI = env.R.UI or {}
+        -- The module asks its neighbours before drawing; none are installed unless a spec says so.
+        for _, path in ipairs(INTEGRATIONS) do
+            env:Load(path)
+        end
+        env.C_AddOns = { IsAddOnLoaded = function() return false end }
         env:Load("UI/MerchantCosts.lua")
         env.MerchantFrame = env.CreateFrame("Frame", "MerchantFrame")
         env.MerchantFrame:Show()
         env.MerchantFrame.selectedTab, env.MerchantFrame.page = 1, 1
         for index = 1, 12 do
             local cell = env.CreateFrame("Frame", "MerchantItem" .. index, env.MerchantFrame)
+            env.CreateFrame("ItemButton", "MerchantItem" .. index .. "ItemButton", cell)
             local alt = env.CreateFrame("Frame", "MerchantItem" .. index .. "AltCurrencyFrame", cell)
             for cost = 1, 3 do
                 env.CreateFrame("Button", "MerchantItem" .. index .. "AltCurrencyFrameItem" .. cost, alt)
@@ -1212,18 +1229,32 @@ describe("M4 merchant costs", function()
         end
         env.MERCHANT_ITEMS_PER_PAGE, env.MAX_ITEM_COST = 10, 3
         env.hooks, env.updates, env.money = {}, 0, 1000
-        env.hooksecurefunc = function(name, fn) env.hooks[name] = fn end
+        -- Chained in the order installed, as the client chains them.
+        env.hooksecurefunc = function(name, fn)
+            local previous = env.hooks[name]
+            env.hooks[name] = previous and function() previous() fn() end or fn
+        end
+        -- Blizzard's pass, reduced to the ids it leaves on the item buttons.
         env.MerchantFrame_Update = function()
             env.updates = env.updates + 1
-            env.hooks.MerchantFrame_Update()
+            for cellIndex = 1, env.MERCHANT_ITEMS_PER_PAGE do
+                local button = env["MerchantItem" .. cellIndex .. "ItemButton"]
+                local index = (env.MerchantFrame.page - 1) * env.MERCHANT_ITEMS_PER_PAGE + cellIndex
+                button:SetID(index)
+                button.hasItem = index <= #env.stock or nil
+                button:SetShown(button.hasItem == true)
+            end
+            if env.hooks.MerchantFrame_Update then env.hooks.MerchantFrame_Update() end
         end
         env.currencyUpdates, env.currencyList = 0, {}
         env.MerchantFrame_UpdateCurrencies = function() env.currencyUpdates = env.currencyUpdates + 1 end
         env.MAX_MERCHANT_CURRENCIES = 6
         env.GameTooltip = env.CreateFrame("GameTooltip", "GameTooltip")
-        for _, name in ipairs({ "MerchantMoneyFrame", "MerchantExtraCurrencyInset", "MerchantExtraCurrencyBg" }) do
+        for _, name in ipairs({ "MerchantMoneyFrame", "MerchantMoneyInset", "MerchantMoneyBg",
+            "MerchantExtraCurrencyInset", "MerchantExtraCurrencyBg" }) do
             env.CreateFrame("Frame", name, env.MerchantFrame)
         end
+        env.MerchantMoneyFrame:SetWidth(100)
         env.stock = {}
         env.GetMerchantNumItems = function() return #env.stock end
         env.C_MerchantFrame = {
@@ -1274,8 +1305,9 @@ describe("M4 merchant costs", function()
                 costs = { cost(1, 1, "currency:2", "Marks") } },
             { hasExtendedCost = false, price = 10, canAfford = true, costs = {} },
         }
+        env.MerchantFrame_Update()
         local module = enable(env, "Modules/Vendor/ItemCosts.lua", "vendor.itemCosts")
-        assert.equal(0, env.updates)
+        assert.equal(1, env.updates)
         assert.is_false(env.shown.MerchantItem1AltCurrencyFrameItem1)
         assert.is_true(env.shown.MerchantItem1AltCurrencyFrameItem2)
         assert.equal("default", env.moneyColor.MerchantItem1MoneyFrame)
@@ -1290,8 +1322,8 @@ describe("M4 merchant costs", function()
         assert.is_true(env.shown.MerchantItem4AltCurrencyFrameItem1)
         assert.equal("gray", env.moneyColor.MerchantItem4MoneyFrame)
         assert.is_nil(env.shown.MerchantItem5AltCurrencyFrameItem1)
-        -- The one item this merchant takes sits in the coin box with the carried count,
-        -- in Blizzard's first slot, and the money frame moves over to share the row.
+        -- The one item this merchant takes sits in the strip with the carried count, next
+        -- to the money, in the stretched left box; the right box is gone.
         local token = env.RefactorMerchantToken1
         assert.is_true(token:IsShown())
         assert.equal("item:9", token.itemLink)
@@ -1299,6 +1331,7 @@ describe("M4 merchant costs", function()
         assert.equal(3, token.Count.text)
         assert.is_false(env.RefactorMerchantToken2:IsShown())
         assert.is_true(env.MerchantExtraCurrencyInset:IsShown())
+        assert.is_false(env.MerchantMoneyInset:IsShown())
         assert.is_true(env.MerchantMoneyFrame:IsShown())
         -- A later page maps cells to the items on it, and the buyback tab is left alone.
         for index = 6, 10 do
@@ -1317,16 +1350,39 @@ describe("M4 merchant costs", function()
         env.R.Registry:Disable(module)
         assert.is_false(env.MerchantItem2AltCurrencyFrameItem5:IsShown())
         assert.is_false(env.RefactorMerchantToken1:IsShown())
-        assert.equal(3, env.updates)
+        assert.is_true(env.MerchantMoneyInset:IsShown())
+        assert.equal(4, env.updates)
         assert.equal(1, env.currencyUpdates)
         noResidue(env, module)
     end)
 
-    it("chains item tokens after the merchant's currencies and gives the money frame way past three", function()
+    it("stands down when Plumber's Merchant Price module is on, and only then", function()
         local env = costEnv()
-        env.currencyList = { 101, 102 }
-        env.CreateFrame("Button", "MerchantToken1", env.MerchantFrame)
-        env.CreateFrame("Button", "MerchantToken2", env.MerchantFrame)
+        env.C_AddOns = { IsAddOnLoaded = function(name) return name == "Plumber" end }
+        env.stock = { { hasExtendedCost = false, price = 10, canAfford = true, costs = {} } }
+        env.MerchantFrame_Update()
+        -- Loaded with the feature off: Refactor draws.
+        env.PlumberDB = { MerchantPrice = false }
+        local module = enable(env, "Modules/Vendor/ItemCosts.lua", "vendor.itemCosts")
+        assert.equal("enabled", module.state)
+        assert.is_not_nil(env.RefactorMerchantToken1)
+        noResidue(env, module)
+        -- The feature on: the module names Plumber and creates nothing.
+        env.PlumberDB.MerchantPrice = true
+        env.R.Registry:Enable(module)
+        assert.equal("unavailable", module.state)
+        assert.matches("Plumber", module.unavailableReason)
+        env.R.Registry:Disable(module)
+    end)
+
+    it("chains item tokens after the money and the merchant's currencies, as many as fit", function()
+        local env = costEnv()
+        -- Two currency tokens as Blizzard leaves them: shown, 50 wide.
+        for slot = 1, 2 do
+            local token = env.CreateFrame("Button", "MerchantToken" .. slot, env.MerchantFrame, "BackpackTokenTemplate")
+            token:SetWidth(50)
+            token:Show()
+        end
         env.items["item:1"], env.items["item:2"], env.items["item:3"] = 1, 200000, 0
         env.stock = {
             { hasExtendedCost = true, price = 0, canAfford = true,
@@ -1334,19 +1390,355 @@ describe("M4 merchant costs", function()
             { hasExtendedCost = true, price = 0, canAfford = true,
                 costs = { cost(1, 1, "item:1"), cost(1, 1, "item:3"), cost(9, 1, "currency:101", "Marks") } },
         }
+        env.MerchantFrame_Update()
         local module = enable(env, "Modules/Vendor/ItemCosts.lua", "vendor.itemCosts")
+        -- A wide window: money stays, both currencies and all three items follow it.
+        assert.is_true(env.MerchantMoneyFrame:IsShown())
         assert.same({ 3, 4, 5 }, { env.RefactorMerchantToken1.slot, env.RefactorMerchantToken2.slot,
             env.RefactorMerchantToken3.slot })
         assert.equal("*", env.RefactorMerchantToken2.Count.text)
         assert.equal(0, env.RefactorMerchantToken3.Count.text)
         assert.is_false(env.RefactorMerchantToken4:IsShown())
-        assert.is_false(env.MerchantMoneyFrame:IsShown())
-        -- Six currencies leave no slot, and Blizzard's own layout is left standing.
-        env.currencyList = { 1, 2, 3, 4, 5, 6 }
-        env.MerchantMoneyFrame:Show()
+        -- Blizzard's stock window: 312 usable, money 100 and its gap, two currencies 100,
+        -- room left for two items of the three.
+        env.MerchantFrame:SetWidth(336)
         env.MerchantFrame_Update()
-        assert.is_false(env.RefactorMerchantToken1:IsShown())
         assert.is_true(env.MerchantMoneyFrame:IsShown())
+        assert.is_true(env.RefactorMerchantToken2:IsShown())
+        assert.is_false(env.RefactorMerchantToken3:IsShown())
+        -- Five currencies: money would not fit beside them, so it gives way as it does
+        -- in Blizzard's layout, and 62 is left, room for one item.
+        for slot = 3, 5 do
+            local token = env.CreateFrame("Button", "MerchantToken" .. slot, env.MerchantFrame, "BackpackTokenTemplate")
+            token:SetWidth(50)
+            token:Show()
+        end
+        env.MerchantFrame_Update()
+        assert.is_false(env.MerchantMoneyFrame:IsShown())
+        assert.is_true(env.RefactorMerchantToken1:IsShown())
+        assert.is_false(env.RefactorMerchantToken2:IsShown())
+        noResidue(env, module)
+    end)
+end)
+
+describe("M4 merchant filter", function()
+    local Runtime3 = require("Tests.mock.runtime")
+    local Widgets3 = require("Tests.mock.widgets")
+
+    local MISC, RECIPE, ARMOR, PET = 15, 9, 4, 2
+    local function filterEnv(perPage)
+        local env = Runtime3.new()
+        Widgets3.install(env)
+        for _, path in ipairs({ "Locales/Modules.enUS.lua", "Locales/UI.enUS.lua", "Locales/Features.enUS.lua" }) do
+            env:Load(path)
+        end
+        env.R.UI = env.R.UI or {}
+        env:Load("UI/MerchantFilter.lua")
+        env.MerchantFrame = env.CreateFrame("Frame", "MerchantFrame")
+        env.MerchantFrame:Show()
+        env.MerchantFrame.selectedTab, env.MerchantFrame.page = 1, 1
+        env.MerchantFrame.FilterDropdown = env.CreateFrame("DropdownButton", nil, env.MerchantFrame)
+        for index = 1, 12 do
+            local cell = env.CreateFrame("Frame", "MerchantItem" .. index, env.MerchantFrame)
+            local button = env.CreateFrame("ItemButton", "MerchantItem" .. index .. "ItemButton", cell)
+            button.IconQuestTexture = button:CreateTexture()
+            env.CreateFrame("Frame", "MerchantItem" .. index .. "MoneyFrame", cell)
+            env.CreateFrame("Frame", "MerchantItem" .. index .. "AltCurrencyFrame", cell)
+            env["MerchantItem" .. index .. "Name"] = cell:CreateFontString()
+        end
+        for _, name in ipairs({ "MerchantPrevPageButton", "MerchantNextPageButton" }) do
+            env.CreateFrame("Button", name, env.MerchantFrame)
+        end
+        env.MerchantPageText = env.MerchantFrame:CreateFontString()
+        env.MERCHANT_ITEMS_PER_PAGE, env.MERCHANT_PAGE_NUMBER = perPage or 10, "Page %d of %d"
+        env.TEXTURE_ITEM_QUEST_BANG, env.ITEM_SPELL_KNOWN = "bang", "Already known"
+        env.hooks, env.updates = {}, 0
+        -- Chained in the order installed, as the client chains them.
+        env.hooksecurefunc = function(name, fn)
+            local previous = env.hooks[name]
+            env.hooks[name] = previous and function() previous() fn() end or fn
+        end
+        -- Blizzard's own pass, reduced to what the filter has to undo: cell i shows item
+        -- (page - 1) * perPage + i.
+        env.MerchantFrame_Update = function()
+            env.updates = env.updates + 1
+            for cellIndex = 1, env.MERCHANT_ITEMS_PER_PAGE do
+                local button = env["MerchantItem" .. cellIndex .. "ItemButton"]
+                local index = (env.MerchantFrame.page - 1) * env.MERCHANT_ITEMS_PER_PAGE + cellIndex
+                button:SetID(index)
+                button.hasItem = index <= env.GetMerchantNumItems() or nil
+                button:SetShown(button.hasItem == true)
+            end
+            if env.hooks.MerchantFrame_Update then env.hooks.MerchantFrame_Update() end
+        end
+        env.MerchantFrame_UpdateItemQualityBorders = function()
+            env.hooks.MerchantFrame_UpdateItemQualityBorders()
+        end
+        env.Enum = { ItemClass = { Miscellaneous = MISC, Recipe = RECIPE, Armor = ARMOR, Weapon = 2 },
+            ItemMiscellaneousSubclass = { CompanionPet = PET } }
+        -- itemID: class, subclass, and which collection it belongs to with its state
+        env.items = {
+            [1] = { class = MISC, sub = 5, mount = 100, owned = true },
+            [2] = { class = MISC, sub = 5, mount = 101, owned = false },
+            [3] = { class = MISC, sub = PET, species = 7, owned = false },
+            [4] = { class = MISC, sub = 0, toy = true, owned = true },
+            [5] = { class = RECIPE, sub = 1, known = true },
+            [6] = { class = 0, sub = 0 },
+            [7] = { class = ARMOR, sub = 1, appearance = true, owned = false },
+        }
+        env.GetMerchantNumItems = function() return 7 end
+        env.GetMerchantItemLink = function(index) return "|Hitem:" .. index .. ":|h" end
+        env.GetMerchantItemID = function(index) return index end
+        env.C_MerchantFrame = {
+            GetItemInfo = function(index)
+                return { name = "Item " .. index, texture = index, price = index * 100, stackCount = 1,
+                    numAvailable = -1, isPurchasable = true, isUsable = index ~= 7, hasExtendedCost = index == 3 }
+            end,
+            IsMerchantItemRefundable = function() return true end,
+        }
+        env.CanAffordMerchantItem = function(index) return index ~= 2 end
+        env.CurrencyContainerUtil = { GetCurrencyContainerInfo = function() end }
+        env.C_Heirloom = { IsItemHeirloom = function() return false end,
+            PlayerHasHeirloom = function() return false end }
+        env.tints, env.quality, env.costRows = {}, {}, {}
+        for _, name in ipairs({ "SetItemButtonCount", "SetItemButtonStock", "SetItemButtonTexture",
+            "SetItemButtonDesaturated", "SetItemButtonSlotVertexColor", "SetItemButtonTextureVertexColor",
+            "SetItemButtonNormalTextureVertexColor", "MoneyFrame_SetMaxDisplayWidth", "MoneyFrame_Update",
+            "SetMoneyFrameColor" }) do
+            env[name] = function() end
+        end
+        env.SetItemButtonNameFrameVertexColor = function(cell, r, g, b) env.tints[cell.name] = { r, g, b } end
+        env.MerchantFrameItem_UpdateQuality = function(cell, link) env.quality[cell.name] = link end
+        env.MerchantFrame_UpdateAltCurrency = function(index, cellIndex) env.costRows[cellIndex] = index return 20 end
+        env.C_Item = { GetItemInfoInstant = function(itemID)
+            local item = env.items[itemID]
+            return itemID, "", "", "", 0, item.class, item.sub
+        end }
+        env.C_MountJournal = {
+            GetMountFromItem = function(itemID) return env.items[itemID].mount end,
+            GetMountInfoByID = function(mountID)
+                for _, item in pairs(env.items) do
+                    if item.mount == mountID then
+                        return "m", 0, 0, false, true, 0, false, false, nil, false, item.owned, mountID
+                    end
+                end
+            end,
+        }
+        env.C_PetJournal = {
+            GetPetInfoByItemID = function(itemID)
+                local item = env.items[itemID]
+                if not item.species then return nil end
+                return "p", 0, 0, 0, "", "", false, true, true, false, true, 0, item.species
+            end,
+            GetNumCollectedInfo = function(species)
+                for _, item in pairs(env.items) do
+                    if item.species == species then return item.owned and 1 or 0, 3 end
+                end
+            end,
+        }
+        env.C_ToyBox = { GetToyInfo = function(itemID) return env.items[itemID].toy and itemID or nil end }
+        env.PlayerHasToy = function(itemID) return env.items[itemID].owned == true end
+        env.C_TransmogCollection = {
+            GetItemInfo = function(itemID) return env.items[itemID].appearance and 1 or nil end,
+            PlayerHasTransmogByItemInfo = function(link)
+                return env.items[tonumber(link:match("item:(%d+)"))].owned == true
+            end,
+        }
+        env.tooltips = 0
+        env.C_TooltipInfo = { GetMerchantItem = function(index)
+            env.tooltips = env.tooltips + 1
+            return { lines = { { leftText = env.items[index].known and "Already known" or "Teaches you" } } }
+        end }
+        env.filtered = 0
+        env.R.Broker:Subscribe("REFACTOR_MERCHANT_FILTERED", function() env.filtered = env.filtered + 1 end, env)
+        env.MerchantFrame_Update()
+        return env
+    end
+
+    -- The merchant index in each cell of the page, 0 for an empty slot.
+    local function page(env)
+        local result = {}
+        for cellIndex = 1, env.MERCHANT_ITEMS_PER_PAGE do
+            local button = env["MerchantItem" .. cellIndex .. "ItemButton"]
+            result[cellIndex] = button:IsShown() and button.hasItem and button:GetID() or 0
+        end
+        return result
+    end
+
+    local function pick(env, text)
+        for _, entry in ipairs(env.R.moduleByID["vendor.filter"].filter.button:OpenMenu()) do
+            if entry.text == text then entry.choose() return end
+        end
+        error("no menu entry " .. text)
+    end
+
+    it("lays the matching stock out from the first cell and leaves Blizzard's page alone otherwise", function()
+        local env = filterEnv(10)
+        local module = enable(env, "Modules/Vendor/Filter.lua", "vendor.filter")
+        local filter = module.filter
+        assert.is_true(filter.button:IsShown())
+        assert.equal("Everything", filter.button:GetDefaultText())
+        assert.same({ 1, 2, 3, 4, 5, 6, 7, 0, 0, 0 }, page(env))
+        pick(env, "Mounts")
+        assert.equal("Mounts", filter.button:GetDefaultText())
+        assert.same({ 1, 2, 0, 0, 0, 0, 0, 0, 0, 0 }, page(env))
+        pick(env, "Missing")
+        assert.equal("Mounts, Missing", filter.button:GetDefaultText())
+        assert.same({ 2, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, page(env))
+        -- The cell is filled the way Blizzard fills it: name plate tint, quality, costs.
+        assert.same({ 0.5, 0.5, 0.5 }, env.tints.MerchantItem1)
+        assert.equal("|Hitem:2:|h", env.quality.MerchantItem1)
+        assert.equal("", env.MerchantItem2Name:GetText())
+        pick(env, "Everything")
+        assert.equal("Missing", filter.button:GetDefaultText())
+        -- Missing across every kind: the unowned mount, pet and appearance. Food has no
+        -- collection to be missing from, and a known recipe is owned.
+        assert.same({ 2, 3, 7, 0, 0, 0, 0, 0, 0, 0 }, page(env))
+        assert.equal(3, env.costRows[2])
+        assert.same({ 1, 0, 0 }, env.tints.MerchantItem3)
+        pick(env, "Owned")
+        assert.same({ 1, 4, 5, 0, 0, 0, 0, 0, 0, 0 }, page(env))
+        -- Late quality data is reapplied to the cells as laid out here.
+        env.quality = {}
+        env.MerchantFrame_UpdateItemQualityBorders()
+        assert.equal("|Hitem:4:|h", env.quality.MerchantItem2)
+        assert.is_nil(env.quality.MerchantItem4)
+        -- The buyback tab is Blizzard's; back on the merchant tab the layout returns.
+        env.MerchantFrame.selectedTab = 2
+        env.costRows = {}
+        env.MerchantFrame_Update()
+        assert.same({}, env.costRows)
+        env.MerchantFrame.selectedTab = 1
+        env.MerchantFrame_Update()
+        assert.same({ 1, 4, 5, 0, 0, 0, 0, 0, 0, 0 }, page(env))
+        -- The recipe's tooltip is read once per visit.
+        local reads = env.tooltips
+        env.MerchantFrame_Update()
+        assert.equal(reads, env.tooltips)
+        env:Fire("NEW_RECIPE_LEARNED")
+        assert.is_true(env.tooltips > reads)
+        -- A new merchant starts from everything, through Blizzard's own pass.
+        local updates = env.updates
+        env:Fire("MERCHANT_SHOW")
+        assert.equal("Everything", filter.button:GetDefaultText())
+        assert.equal(updates + 1, env.updates)
+        assert.same({ 1, 2, 3, 4, 5, 6, 7, 0, 0, 0 }, page(env))
+        pick(env, "Toys")
+        assert.is_true(env.filtered > 0)
+        env.R.Registry:Disable(module)
+        assert.same({ 1, 2, 3, 4, 5, 6, 7, 0, 0, 0 }, page(env))
+        assert.is_false(filter.button:IsShown())
+        noResidue(env, module)
+    end)
+
+    -- The costs module on top of the filter: whichever hook Blizzard's pass reaches first,
+    -- a filtered page ends with its emptied cells bare and its filled cells recoloured.
+    local function withCosts(env)
+        env:Load("Locales/Panels.enUS.lua")
+        for _, path in ipairs({ "Integrations/Questie.lua", "Integrations/Plater.lua", "Integrations/Plumber.lua" }) do
+            env:Load(path)
+        end
+        env.C_AddOns = { IsAddOnLoaded = function() return false end }
+        env:Load("UI/MerchantCosts.lua")
+        for index = 1, 12 do
+            local alt = env["MerchantItem" .. index .. "AltCurrencyFrame"]
+            for cost = 1, 3 do
+                env.CreateFrame("Button", "MerchantItem" .. index .. "AltCurrencyFrameItem" .. cost, alt)
+            end
+        end
+        env.MAX_ITEM_COST, env.MAX_MERCHANT_CURRENCIES = 3, 6
+        env.GameTooltip = env.CreateFrame("GameTooltip", "GameTooltip")
+        for _, name in ipairs({ "MerchantMoneyFrame", "MerchantMoneyInset", "MerchantMoneyBg",
+            "MerchantExtraCurrencyInset", "MerchantExtraCurrencyBg" }) do
+            env.CreateFrame("Frame", name, env.MerchantFrame)
+        end
+        env.MerchantFrame_UpdateCurrencies = function() end
+        env.C_MerchantFrame.GetMerchantCurrencies = function() return {} end
+        env.GetMoney = function() return 0 end
+        env.GetMerchantItemCostInfo = function(index) return index == 3 and 1 or 0 end
+        env.GetMerchantItemCostItem = function(index, cost)
+            if index == 3 and cost == 1 then return 77, 2, "|Hitem:9:|h", nil end
+        end
+        env.C_CurrencyInfo = { GetCurrencyInfoFromLink = function() return nil end }
+        env.C_Item.GetItemCount = function() return 1 end
+        -- Item 3 costs two of an item the player has one of, so Blizzard calls it unaffordable.
+        env.CanAffordMerchantItem = function(index) return index ~= 2 and index ~= 3 end
+        env.greys = {}
+        env.AltCurrencyFrame_Update = function(name, _, _, white) env.greys[name] = white end
+        -- Blizzard's pass shows the cost row of every cell it fills with an extended cost.
+        local blizzard = env.MerchantFrame_Update
+        env.MerchantFrame_Update = function()
+            for cellIndex = 1, env.MERCHANT_ITEMS_PER_PAGE do
+                local index = (env.MerchantFrame.page - 1) * env.MERCHANT_ITEMS_PER_PAGE + cellIndex
+                env["MerchantItem" .. cellIndex .. "AltCurrencyFrame"]:SetShown(index == 3)
+                env["MerchantItem" .. cellIndex .. "AltCurrencyFrameItem1"]:SetShown(index == 3)
+            end
+            blizzard()
+        end
+        return env
+    end
+
+    local function altShown(env)
+        local result = {}
+        for cellIndex = 1, env.MERCHANT_ITEMS_PER_PAGE do
+            result[cellIndex] = env["MerchantItem" .. cellIndex .. "AltCurrencyFrame"]:IsShown()
+        end
+        return result
+    end
+
+    for _, order in ipairs({ { "costs", "filter" }, { "filter", "costs" } }) do
+        it("leaves no cost row on an emptied cell with the " .. order[1] .. " hook first", function()
+            local env = withCosts(filterEnv(10))
+            local modules = {}
+            for _, which in ipairs(order) do
+                if which == "costs" then
+                    modules[#modules + 1] = enable(env, "Modules/Vendor/ItemCosts.lua", "vendor.itemCosts")
+                else
+                    modules[#modules + 1] = enable(env, "Modules/Vendor/Filter.lua", "vendor.filter")
+                end
+            end
+            env.MerchantFrame_Update()
+            assert.same({ false, false, true, false, false, false, false, false, false, false }, altShown(env))
+            pick(env, "Missing")
+            -- Items 2, 3 and 7 from the first cell: only the second cell, item 3, has a cost
+            -- row, greyed for its own shortfall, and the cells past the third are bare.
+            assert.same({ 2, 3, 7, 0, 0, 0, 0, 0, 0, 0 }, page(env))
+            assert.same({ false, true, false, false, false, false, false, false, false, false }, altShown(env))
+            assert.is_false(env.greys.MerchantItem2AltCurrencyFrameItem1)
+            -- An emptied cell hides its cost buttons themselves, not only their row.
+            assert.is_false(env.MerchantItem4AltCurrencyFrameItem1:IsShown())
+            for _, module in ipairs(modules) do
+                env.R.Registry:Disable(module)
+            end
+        end)
+    end
+
+    it("pages the filtered stock by its own count and clamps a page that no longer exists", function()
+        local env = filterEnv(2)
+        local module = enable(env, "Modules/Vendor/Filter.lua", "vendor.filter")
+        env.MerchantFrame.page = 4
+        env.MerchantFrame_Update()
+        assert.same({ 7, 0 }, page(env))
+        assert.equal(4, env.MerchantFrame.page)
+        pick(env, "Missing")
+        -- Three matches on pages of two: page four becomes page two, the last one.
+        assert.equal(2, env.MerchantFrame.page)
+        assert.same({ 7, 0 }, page(env))
+        assert.equal("Page 2 of 2", env.MerchantPageText:GetText())
+        assert.is_true(env.MerchantPrevPageButton:IsEnabled())
+        assert.is_false(env.MerchantNextPageButton:IsEnabled())
+        env.MerchantFrame.page = 1
+        env.MerchantFrame_Update()
+        assert.same({ 2, 3 }, page(env))
+        assert.is_false(env.MerchantPrevPageButton:IsEnabled())
+        assert.is_true(env.MerchantNextPageButton:IsEnabled())
+        -- The one toy is owned, so Toys with Missing is an empty page, and Toys alone fits
+        -- one page with the paging controls put away.
+        pick(env, "Toys")
+        assert.same({ 0, 0 }, page(env))
+        pick(env, "Owned or not")
+        assert.same({ 4, 0 }, page(env))
+        assert.is_false(env.MerchantPageText:IsShown())
         noResidue(env, module)
     end)
 end)

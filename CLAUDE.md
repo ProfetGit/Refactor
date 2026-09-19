@@ -33,7 +33,7 @@ Violating any of these is a bug even if the code works.
 9. **No user-facing strings outside `Locales/`.**
 10. **No new dependencies.** Ace3 is deliberately not used, see PRD 9.7. The complete list of embedded libraries: `LibStub`, `CallbackHandler-1.0`, `LibDataBroker-1.1`, `LibDBIcon-1.0`, and our own `LibRefactorPrice-1.0` and `LibRefactorTheme-1.0` (in-tree under `Libs/` until extracted). Anything else needs approval first.
 11. **No frame creation inside an event handler.** Frames are created once at module enable and pooled.
-12. **Never reskin Blizzard frames.** Refactor styles its own frames only, through `LibRefactorTheme` and the visual style in PRD 8.3. No colour literals or texture paths in module or widget code, only theme tokens. One layout exception, decided 19 Sep 2026: `vendor.extendedUI` resizes Blizzard's merchant window and adds cells from Blizzard's own `MerchantItemTemplate`. It changes where things sit, never how they look, and undoes all of it on disable.
+12. **Never reskin Blizzard frames.** Refactor styles its own frames only, through `LibRefactorTheme` and the visual style in PRD 8.3. No colour literals or texture paths in module or widget code, only theme tokens. One layout exception, decided 19 Sep 2026: the vendor modules that work inside Blizzard's merchant window (`vendor.extendedUI`, `vendor.itemCosts`, `vendor.filter`) resize it, hide cells, and add widgets from Blizzard's own templates. They change where things sit, never how they look, and undo all of it on disable.
 13. **Animation uses `AnimationGroup`.** `OnUpdate` only when an animation cannot be expressed that way.
 
 ## API ground truth

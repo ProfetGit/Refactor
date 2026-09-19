@@ -27,6 +27,26 @@
     "needle": "BuybackItem(self:GetID())",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
   },
+  "C_Heirloom.IsItemHeirloom": {
+    "needle": "C_Heirloom.IsItemHeirloom(merchantItemID)",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "C_Heirloom.PlayerHasHeirloom": {
+    "needle": "C_Heirloom.PlayerHasHeirloom(merchantItemID)",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "C_PetJournal.GetNumCollectedInfo": {
+    "needle": "C_PetJournal.GetNumCollectedInfo(speciesID)",
+    "path": "Interface/AddOns/Blizzard_PetBattleUI/Shared/Blizzard_PetBattleUI.lua"
+  },
+  "C_PetJournal.GetPetInfoByItemID": {
+    "needle": "C_PetJournal.GetPetInfoByItemID(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/DressUpFrames.lua"
+  },
+  "C_ToyBox.GetToyInfo": {
+    "needle": "C_ToyBox.GetToyInfo(self.itemID)",
+    "path": "Interface/AddOns/Blizzard_Collections/Mainline/Blizzard_ToyBox.lua"
+  },
   "CanAffordMerchantItem": {
     "needle": "CanAffordMerchantItem(index)",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
@@ -59,6 +79,10 @@
     "needle": "CompleteQuest();",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
   },
+  "CurrencyContainerUtil.GetCurrencyContainerInfo": {
+    "needle": "function CurrencyContainerUtil.GetCurrencyContainerInfo(",
+    "path": "Interface/AddOns/Blizzard_FrameXMLUtil/CurrencyContainer.lua"
+  },
   "DEFAULT_CHAT_FRAME": {
     "needle": "DEFAULT_CHAT_FRAME = ChatFrame1",
     "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameUtil.lua"
@@ -77,6 +101,26 @@
   "Enum.GossipOptionStatus.Available": {
     "needle": "Name = \"Available\", Type = \"GossipOptionStatus\"",
     "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua"
+  },
+  "Enum.ItemClass.Armor": {
+    "needle": "Enum.ItemClass.Armor",
+    "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
+  },
+  "Enum.ItemClass.Miscellaneous": {
+    "needle": "Enum.ItemClass.Miscellaneous, Enum.ItemMiscellaneousSubclass.CompanionPet",
+    "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
+  },
+  "Enum.ItemClass.Recipe": {
+    "needle": "GenerateSubCategoriesAndFiltersFromSubClass(Enum.ItemClass.Recipe)",
+    "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
+  },
+  "Enum.ItemClass.Weapon": {
+    "needle": "Enum.ItemClass.Weapon, Enum.ItemWeaponSubclass.Axe1H",
+    "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
+  },
+  "Enum.ItemMiscellaneousSubclass.CompanionPet": {
+    "needle": "Enum.ItemClass.Miscellaneous, Enum.ItemMiscellaneousSubclass.CompanionPet",
+    "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
   },
   "Enum.ItemQuality.Common": {
     "needle": "Name = \"Common\", Type = \"ItemQuality\"",
@@ -146,6 +190,10 @@
     "needle": "GetMerchantItemCostItem(index, i)",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
   },
+  "GetMerchantItemID": {
+    "needle": "GetMerchantItemID(index)",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
   "GetMerchantItemLink": {
     "needle": "GetMerchantItemLink(index)",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
@@ -194,6 +242,10 @@
     "needle": "HasInboxItem",
     "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.lua"
   },
+  "ITEM_SPELL_KNOWN": {
+    "needle": "requirements = ITEM_SPELL_KNOWN;",
+    "path": "Interface/AddOns/Blizzard_TrainerUI/Mainline/Blizzard_TrainerUI.lua"
+  },
   "InCombatLockdown": {
     "path": "Interface/AddOns/Blizzard_UnitPopupShared/UnitPopupSharedButtonMixins.lua"
   },
@@ -228,6 +280,10 @@
     "needle": "MERCHANT_ITEMS_PER_PAGE = 10;",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
   },
+  "MERCHANT_PAGE_NUMBER": {
+    "needle": "MerchantPageText:SetFormattedText(MERCHANT_PAGE_NUMBER",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
   "MerchantBuyBackItem": {
     "needle": "name=\"MerchantBuyBackItem\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
@@ -248,12 +304,24 @@
     "needle": "name=\"MerchantFrameBottomLeftBorder\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
   },
+  "MerchantFrameItem_UpdateQuality": {
+    "needle": "function MerchantFrameItem_UpdateQuality(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
   "MerchantFrame_Update": {
     "needle": "function MerchantFrame_Update()",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
   },
+  "MerchantFrame_UpdateAltCurrency": {
+    "needle": "function MerchantFrame_UpdateAltCurrency(",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
   "MerchantFrame_UpdateCurrencies": {
     "needle": "function MerchantFrame_UpdateCurrencies()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "MerchantFrame_UpdateItemQualityBorders": {
+    "needle": "function MerchantFrame_UpdateItemQualityBorders(",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
   },
   "MerchantItem1": {
@@ -264,12 +332,28 @@
     "needle": "name=\"MerchantItem12\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
   },
+  "MerchantMoneyBg": {
+    "needle": "name=\"MerchantMoneyBg\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
   "MerchantMoneyFrame": {
     "needle": "name=\"MerchantMoneyFrame\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
   },
+  "MerchantMoneyInset": {
+    "needle": "name=\"MerchantMoneyInset\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
   "MerchantNextPageButton": {
     "needle": "name=\"MerchantNextPageButton\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "MerchantPageText": {
+    "needle": "name=\"MerchantPageText\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "MerchantPrevPageButton": {
+    "needle": "name=\"MerchantPrevPageButton\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
   },
   "MoneyFrame_SetMaxDisplayWidth": {
@@ -282,6 +366,10 @@
   },
   "NUM_TOTAL_EQUIPPED_BAG_SLOTS": {
     "path": "Interface/AddOns/Blizzard_FrameXMLBase/Constants.lua"
+  },
+  "PlayerHasToy": {
+    "needle": "PlayerHasToy(self.itemID)",
+    "path": "Interface/AddOns/Blizzard_Collections/Mainline/Blizzard_ToyBox.lua"
   },
   "QuestFlagsPVP": {
     "needle": "QuestFlagsPVP()",
@@ -310,6 +398,38 @@
   "SendMailNameEditBox": {
     "needle": "name=\"SendMailNameEditBox\"",
     "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.xml"
+  },
+  "SetItemButtonCount": {
+    "needle": "function SetItemButtonCount(",
+    "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+  },
+  "SetItemButtonDesaturated": {
+    "needle": "function SetItemButtonDesaturated(",
+    "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+  },
+  "SetItemButtonNameFrameVertexColor": {
+    "needle": "function SetItemButtonNameFrameVertexColor(",
+    "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+  },
+  "SetItemButtonNormalTextureVertexColor": {
+    "needle": "function SetItemButtonNormalTextureVertexColor(",
+    "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+  },
+  "SetItemButtonSlotVertexColor": {
+    "needle": "function SetItemButtonSlotVertexColor(",
+    "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+  },
+  "SetItemButtonStock": {
+    "needle": "function SetItemButtonStock(",
+    "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+  },
+  "SetItemButtonTexture": {
+    "needle": "function SetItemButtonTexture(",
+    "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+  },
+  "SetItemButtonTextureVertexColor": {
+    "needle": "function SetItemButtonTextureVertexColor(",
+    "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
   },
   "SetItemRef": {
     "needle": "function SetItemRef",
@@ -341,6 +461,10 @@
   "StaticPopup_Hide": {
     "needle": "function StaticPopup_Hide",
     "path": "Interface/AddOns/Blizzard_StaticPopup/StaticPopup.lua"
+  },
+  "TEXTURE_ITEM_QUEST_BANG": {
+    "needle": "TEXTURE_ITEM_QUEST_BANG = ",
+    "path": "Interface/AddOns/Blizzard_FrameXMLBase/Constants.lua"
   },
   "TakeInboxItem": {
     "needle": "TakeInboxItem",

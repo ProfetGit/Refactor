@@ -51,6 +51,7 @@ UI/SessionSummary.lua
 UI/VendorPanel.lua
 UI/MerchantCosts.lua
 UI/MerchantGrid.lua
+UI/MerchantFilter.lua
 UI/UrlCopy.lua
 UI/Panels/Display.lua
 UI/Panels/Tooltips.lua
@@ -63,6 +64,7 @@ Modules/Vendor/Summary.lua
 Modules/Items/DeleteFill.lua
 Modules/Vendor/ExtendedUI.lua
 Modules/Vendor/ItemCosts.lua
+Modules/Vendor/Filter.lua
 Modules/Quest/AutoAccept.lua
 Modules/Quest/AutoTurnIn.lua
 Modules/Quest/AutoGossip.lua
@@ -77,6 +79,7 @@ Modules/Interface/ScreenshotLevelUp.lua
 Integrations/Neighbours.lua
 Integrations/Questie.lua
 Integrations/Plater.lua
+Integrations/Plumber.lua
 Integrations/TSM.lua
 Integrations/Auctionator.lua
 Integrations/Prices.lua

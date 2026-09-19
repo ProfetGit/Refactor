@@ -13,12 +13,15 @@ local COST_TEMPLATE, COST_GAP = "SmallDenominationTemplate", 4
 -- Blizzard's MAX_MONEY_DISPLAY_WIDTH, a local in MerchantFrame.lua: the room a cell gives
 -- the money and the costs together. A row past it is scaled down rather than clipped.
 local ROW_BUDGET, MIN_SCALE = 120, 0.6
--- The coin box: Blizzard's token slots run 6 5 4 in the left box and 3 2 1 in the right,
--- slot one against the right edge and slot four at x 89. Past three tokens the money
--- frame gives way; with any token at all it moves into the left box.
+-- The coin box. Blizzard keeps two boxes along the bottom, currencies right and money
+-- left, and hides the money past three currencies. Here the left box is stretched into
+-- one strip and everything chains leftwards from the money: Blizzard's currency tokens,
+-- then the items, for as long as the width holds. Numbers are Blizzard's own anchors.
 local TOKEN_TEMPLATE, TOKEN_PREFIX, BLIZZARD_TOKEN = "BackpackTokenTemplate", "RefactorMerchantToken", "MerchantToken"
-local TOKEN_WIDTH, TOKEN_Y, TOKEN_RIGHT_X, TOKEN_LEFT_X, LEFT_BOX_FIRST = 50, 8, -16, 89, 4
-local MONEY_SLOTS, MONEY_SHARED_X, TOKEN_COUNT_CAP = 3, -169, 99999
+local TOKEN_WIDTH, TOKEN_COUNT_CAP = 50, 99999
+local STRIP_INSET_X, STRIP_INSET_BOTTOM, STRIP_INSET_TOP = 4, 4, 27
+local STRIP_BG_X, STRIP_BG_BOTTOM, STRIP_BG_TOP = 7, 6, 25
+local MONEY_X, MONEY_Y, MONEY_GAP, STRIP_MARGIN = -8, 8, 6, 12
 
 local extras = {}
 
@@ -51,6 +54,23 @@ local function affordable(link, value, currencyName)
     end
     if not link then return nil end
     return C_Item.GetItemCount(link) >= value
+end
+
+local function capturePoints(frame)
+    local saved = {}
+    for index = 1, 2 do
+        local point, relativeTo, relativePoint, x, y = frame:GetPoint(index)
+        if not point then break end
+        saved[index] = { point, relativeTo, relativePoint, x, y }
+    end
+    return saved
+end
+
+local function restorePoints(frame, saved)
+    frame:ClearAllPoints()
+    for _, point in ipairs(saved) do
+        frame:SetPoint(point[1], point[2], point[3], point[4], point[5])
+    end
 end
 
 local function tokenEnter(token)
@@ -87,10 +107,16 @@ end
 
 function R.UI:CreateMerchantCosts(owner)
     if owner.refactorMerchantCosts then return owner.refactorMerchantCosts end
-    local costs = { active = false, verdicts = {}, items = {}, tokens = {} }
+    local costs = { active = false, verdicts = {}, items = {}, tokens = {}, blizzardTokens = {} }
     for index = 1, MAX_CELLS do
         self:PrepareMerchantCostRow(index)
     end
+    -- Blizzard's own anchors for the strip, put back on disable. Its currency tokens are
+    -- made lazily, so theirs are kept as each is first seen.
+    costs.original = {
+        inset = capturePoints(MerchantExtraCurrencyInset), background = capturePoints(MerchantExtraCurrencyBg),
+        money = capturePoints(MerchantMoneyFrame),
+    }
     for slot = 1, MAX_MERCHANT_CURRENCIES do
         local token = CreateFrame("Button", TOKEN_PREFIX .. slot, MerchantFrame, TOKEN_TEMPLATE)
         -- The template's scripts are for a currency: they would ask the tooltip for a
@@ -177,68 +203,89 @@ function R.UI:CreateMerchantCosts(owner)
         end
     end
 
-    -- Item tokens take the slots after Blizzard's currency tokens, chained onto them the
-    -- way Blizzard chains its own, and the money frame follows Blizzard's rule for the
-    -- whole row rather than for its currencies alone.
-    local function placeToken(token, slot, previous)
+    local function chain(token, previous, gap)
         token:ClearAllPoints()
-        if slot == 1 then
-            token:SetPoint("BOTTOMRIGHT", MerchantFrame, "BOTTOMRIGHT", TOKEN_RIGHT_X, TOKEN_Y)
-        elseif slot == LEFT_BOX_FIRST then
-            token:SetPoint("BOTTOMLEFT", MerchantFrame, "BOTTOMLEFT", TOKEN_LEFT_X, TOKEN_Y)
-        elseif previous then
-            token:SetPoint("RIGHT", previous, "LEFT", 0, 0)
-        elseif slot < LEFT_BOX_FIRST then
-            token:SetPoint("BOTTOMRIGHT", MerchantFrame, "BOTTOMRIGHT",
-                TOKEN_RIGHT_X - TOKEN_WIDTH * (slot - 1), TOKEN_Y)
+        if previous then
+            token:SetPoint("RIGHT", previous, "LEFT", -gap, 0)
         else
-            token:SetPoint("BOTTOMLEFT", MerchantFrame, "BOTTOMLEFT",
-                TOKEN_LEFT_X - TOKEN_WIDTH * (slot - LEFT_BOX_FIRST), TOKEN_Y)
+            token:SetPoint("BOTTOMRIGHT", MerchantFrame, "BOTTOMRIGHT", -STRIP_MARGIN, MONEY_Y)
         end
     end
 
+    -- Blizzard's left box becomes the whole strip; its right box, the money's, goes.
+    local function stretchStrip()
+        local frame = MerchantFrame
+        MerchantExtraCurrencyInset:ClearAllPoints()
+        MerchantExtraCurrencyInset:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", STRIP_INSET_X, STRIP_INSET_BOTTOM)
+        MerchantExtraCurrencyInset:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", -STRIP_INSET_X - 1, STRIP_INSET_TOP)
+        MerchantExtraCurrencyInset:Show()
+        MerchantExtraCurrencyBg:ClearAllPoints()
+        MerchantExtraCurrencyBg:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", STRIP_BG_X, STRIP_BG_BOTTOM)
+        MerchantExtraCurrencyBg:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", -STRIP_BG_X, STRIP_BG_TOP)
+        MerchantExtraCurrencyBg:Show()
+        MerchantMoneyInset:Hide()
+        MerchantMoneyBg:Hide()
+    end
+
+    -- Money at the right, unless Blizzard's own tokens leave it no room, in which case
+    -- it gives way as it does in Blizzard's layout. Then Blizzard's tokens in Blizzard's
+    -- order, then the items, each as long as it still fits inside the strip.
     local function updateCoinBox()
-        local currencies = C_MerchantFrame.GetMerchantCurrencies() or {}
-        local numCurrencies = math.min(#currencies, MAX_MERCHANT_CURRENCIES)
-        local shown = math.min(collectCostItems(costs.items), MAX_MERCHANT_CURRENCIES - numCurrencies)
+        local frame, money = MerchantFrame, MerchantMoneyFrame
+        stretchStrip()
+        local room = frame:GetWidth() - STRIP_MARGIN * 2
+        local blizzard, blizzardWidth = 0, 0
+        for slot = 1, MAX_MERCHANT_CURRENCIES do
+            local token = _G[BLIZZARD_TOKEN .. slot]
+            if not token or not token:IsShown() then break end
+            blizzard, blizzardWidth = slot, blizzardWidth + token:GetWidth()
+        end
+        local previous
+        if blizzardWidth + money:GetWidth() + MONEY_GAP <= room then
+            money:ClearAllPoints()
+            money:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", MONEY_X, MONEY_Y)
+            money:Show()
+            previous, room = money, room - money:GetWidth() - MONEY_GAP
+        else
+            money:Hide()
+        end
+        for slot = 1, blizzard do
+            local token = _G[BLIZZARD_TOKEN .. slot]
+            if not costs.blizzardTokens[token] then
+                costs.blizzardTokens[token] = capturePoints(token)
+            end
+            chain(token, previous, previous == money and MONEY_GAP or 0)
+            previous, room = token, room - token:GetWidth()
+        end
+        local count = collectCostItems(costs.items)
         for i, token in ipairs(costs.tokens) do
-            if i <= shown then
-                local entry, slot = costs.items[i], numCurrencies + i
-                placeToken(token, slot, i > 1 and costs.tokens[i - 1] or _G[BLIZZARD_TOKEN .. (slot - 1)])
-                token.itemLink, token.slot = entry.link, slot
+            if i <= count and room >= TOKEN_WIDTH then
+                local entry = costs.items[i]
+                chain(token, previous, previous == money and MONEY_GAP or 0)
+                token.itemLink, token.slot = entry.link, blizzard + i
                 token.Icon:SetTexture(entry.texture)
                 local owned = C_Item.GetItemCount(entry.link)
                 token.Count:SetText(owned > TOKEN_COUNT_CAP and "*" or owned)
                 token:Show()
+                previous, room = token, room - TOKEN_WIDTH
             else
                 token.itemLink, token.slot = nil, nil
                 token:Hide()
             end
         end
-        if shown == 0 then return end
-        MerchantExtraCurrencyInset:Show()
-        MerchantExtraCurrencyBg:Show()
-        if numCurrencies + shown > MONEY_SLOTS then
-            MerchantMoneyFrame:Hide()
-        else
-            MerchantMoneyFrame:SetPoint("BOTTOMRIGHT", MONEY_SHARED_X, TOKEN_Y)
-            MerchantMoneyFrame:Show()
-        end
     end
 
-    -- Runs after Blizzard's own pass over the page, so every cell it touched is redone
-    -- with the same calls it made, and the two extra buttons on top. The coin box is set
-    -- at MERCHANT_SHOW before that pass and so is always redone here last.
+    -- Which item a cell holds is read off its item button: the merchant filter lays pages
+    -- out in its own order, and Blizzard sets the same ID on the same button.
     function costs:Refresh()
         if not self.active then return end
         updateCoinBox()
         if MerchantFrame.selectedTab ~= 1 then return end
-        local perPage, total = MERCHANT_ITEMS_PER_PAGE, GetMerchantNumItems()
-        for cellIndex = 1, perPage do
-            if _G[CELL_PREFIX .. cellIndex] then
-                local index = (MerchantFrame.page - 1) * perPage + cellIndex
-                if index <= total then
-                    updateCell(cellIndex, index)
+        for cellIndex = 1, MERCHANT_ITEMS_PER_PAGE do
+            local itemButton = _G[CELL_PREFIX .. cellIndex .. "ItemButton"]
+            if itemButton then
+                if itemButton.hasItem and itemButton:IsShown() then
+                    updateCell(cellIndex, itemButton:GetID())
                 else
                     reset(cellIndex)
                 end
@@ -251,8 +298,9 @@ function R.UI:CreateMerchantCosts(owner)
         if MerchantFrame:IsShown() then self:Refresh() end
     end
 
-    -- Blizzard's own passes restore its colours, money widths and coin box; only the
-    -- extra buttons and the item tokens are ours to hide.
+    -- Blizzard's own passes restore its colours and money widths. The strip, the money
+    -- and its tokens go back to the anchors they had, and its currency pass then shows
+    -- and hides the boxes by its own rule.
     function costs:Restore()
         if not self.active then return end
         self.active = false
@@ -260,6 +308,15 @@ function R.UI:CreateMerchantCosts(owner)
             reset(cellIndex)
         end
         hideTokens()
+        local original = self.original
+        restorePoints(MerchantExtraCurrencyInset, original.inset)
+        restorePoints(MerchantExtraCurrencyBg, original.background)
+        restorePoints(MerchantMoneyFrame, original.money)
+        MerchantMoneyInset:Show()
+        MerchantMoneyBg:Show()
+        for token, points in pairs(self.blizzardTokens) do
+            restorePoints(token, points)
+        end
         if MerchantFrame:IsShown() then
             MerchantFrame_UpdateCurrencies()
             MerchantFrame_Update()

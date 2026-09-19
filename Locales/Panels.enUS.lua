@@ -60,6 +60,7 @@ L.NEIGHBOUR_PLATER = "Plater"
 L.NEIGHBOUR_THREATPLATES = "Threat Plates"
 L.NEIGHBOUR_NEATPLATES = "NeatPlates"
 L.NEIGHBOUR_SCRAP = "Scrap"
+L.NEIGHBOUR_PLUMBER = "Plumber"
 
 L.UI_DIAGNOSTICS = "Diagnostics"
 L.UI_DIAGNOSTICS_HELP = "Every feature, what state it is in, and why. Start here before reporting anything."

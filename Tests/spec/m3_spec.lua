@@ -142,6 +142,15 @@ describe("conflict panel", function()
         assert.is_false(R.Settings:Get(row.moduleID))
     end)
 
+    it("lists Plumber against the merchant costs module", function()
+        local _, R = loaded({ Plumber = true })
+        R.UI:LoadConflicts()
+        local row = R.UI.conflictRows[1]
+        assert.is_true(row:IsShown())
+        assert.matches("Plumber", row.title:GetText())
+        assert.equal("vendor.itemCosts", row.moduleID)
+    end)
+
     it("shows nothing when no neighbour is installed", function()
         local _, R = loaded({})
         R.UI:LoadConflicts()

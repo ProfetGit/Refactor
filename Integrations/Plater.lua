@@ -10,10 +10,16 @@ R.Integrations.providers = R.Integrations.providers or {}
 R.Integrations.providers["Plater"] = "nameplates.questProgress"
 
 -- One question for every module: is a neighbour already doing this job? Deference is
--- decided once at enable, never per plate, so it costs nothing while deferring.
+-- decided once at enable, never per plate, so it costs nothing while deferring. A
+-- neighbour that ships the job switched off answers through its own setting.
+function R.Integrations:IsActive(addon)
+    local check = self.activeChecks and self.activeChecks[addon]
+    return check == nil or check() == true
+end
+
 function R.Integrations:Owner(moduleID)
     for addon, owned in pairs(self.providers) do
-        if owned == moduleID and self:IsLoaded(addon) then
+        if owned == moduleID and self:IsLoaded(addon) and self:IsActive(addon) then
             return addon
         end
     end

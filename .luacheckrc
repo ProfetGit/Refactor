@@ -12,6 +12,9 @@ read_globals = {
     "CreateFrame", "CreateColor", "UIParent", "UISpecialFrames", "DEFAULT_CHAT_FRAME", "Minimap", "GameTooltip",
     "GetCursorPosition", "GetPhysicalScreenSize",
     -- Blizzard's merchant window, reshaped by vendor.extendedUI
+    "MerchantMoneyInset", "MerchantMoneyBg",
+    "MerchantFrame_UpdateItemQualityBorders", "MerchantFrame_UpdateAltCurrency", "MerchantFrameItem_UpdateQuality", "MERCHANT_PAGE_NUMBER", "MerchantPrevPageButton", "MerchantPageText", "TEXTURE_ITEM_QUEST_BANG", "GetMerchantItemID", "CurrencyContainerUtil", "C_Heirloom", "SetItemButtonCount", "SetItemButtonStock", "SetItemButtonTexture", "SetItemButtonDesaturated", "SetItemButtonNameFrameVertexColor", "SetItemButtonSlotVertexColor", "SetItemButtonTextureVertexColor", "SetItemButtonNormalTextureVertexColor",
+    "PlayerHasToy", "ITEM_SPELL_KNOWN", "C_MountJournal", "C_PetJournal", "C_ToyBox", "C_TransmogCollection",
     "MAX_MERCHANT_CURRENCIES", "MerchantFrame_UpdateCurrencies", "MerchantMoneyFrame", "MerchantExtraCurrencyInset", "MerchantExtraCurrencyBg",
     "CanAffordMerchantItem", "GetMerchantItemCostInfo", "GetMerchantItemCostItem", "MAX_ITEM_COST", "AltCurrencyFrame_Update", "SetMoneyFrameColor", "MoneyFrame_SetMaxDisplayWidth", "MoneyFrame_Update",
     "MerchantBuyBackItem", "MerchantNextPageButton", "MerchantFrameBottomLeftBorder", "MerchantFrame_Update", "MERCHANT_ITEMS_PER_PAGE", "BUYBACK_ITEMS_PER_PAGE",

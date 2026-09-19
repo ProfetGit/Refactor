@@ -6851,6 +6851,16 @@
       "line": 369,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GuildInfoDocumentation.lua"
     },
+    "C_Heirloom.IsItemHeirloom": {
+      "kind": "source-reference",
+      "line": 353,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
+    "C_Heirloom.PlayerHasHeirloom": {
+      "kind": "source-reference",
+      "line": 354,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
     "C_HeirloomInfo.AreAllCollectionFiltersChecked": {
       "line": 11,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/HeirloomInfoDocumentation.lua"
@@ -10867,6 +10877,11 @@
       "line": 61,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PetJournalInfoDocumentation.lua"
     },
+    "C_PetJournal.GetNumCollectedInfo": {
+      "kind": "source-reference",
+      "line": 1272,
+      "path": "Interface/AddOns/Blizzard_PetBattleUI/Shared/Blizzard_PetBattleUI.lua"
+    },
     "C_PetJournal.GetNumDisplays": {
       "line": 76,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PetJournalInfoDocumentation.lua"
@@ -10886,6 +10901,11 @@
     "C_PetJournal.GetPetAbilityListTable": {
       "line": 134,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PetJournalInfoDocumentation.lua"
+    },
+    "C_PetJournal.GetPetInfoByItemID": {
+      "kind": "source-reference",
+      "line": 175,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/DressUpFrames.lua"
     },
     "C_PetJournal.GetPetInfoTableByPetID": {
       "line": 150,
@@ -14627,6 +14647,11 @@
       "line": 1355,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoDocumentation.lua"
     },
+    "C_ToyBox.GetToyInfo": {
+      "kind": "source-reference",
+      "line": 322,
+      "path": "Interface/AddOns/Blizzard_Collections/Mainline/Blizzard_ToyBox.lua"
+    },
     "C_ToyBoxInfo.ClearFanfare": {
       "line": 11,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ToyBoxInfoDocumentation.lua"
@@ -17155,6 +17180,11 @@
       "line": 117,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FrameScriptDocumentation.lua"
     },
+    "CurrencyContainerUtil.GetCurrencyContainerInfo": {
+      "kind": "source-reference",
+      "line": 3,
+      "path": "Interface/AddOns/Blizzard_FrameXMLUtil/CurrencyContainer.lua"
+    },
     "CursorHasItem": {
       "line": 18,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GameCursorDocumentation.lua"
@@ -17231,6 +17261,31 @@
       "kind": "source-reference",
       "line": 308,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua"
+    },
+    "Enum.ItemClass.Armor": {
+      "kind": "source-reference",
+      "line": 64,
+      "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
+    },
+    "Enum.ItemClass.Miscellaneous": {
+      "kind": "source-reference",
+      "line": 192,
+      "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
+    },
+    "Enum.ItemClass.Recipe": {
+      "kind": "source-reference",
+      "line": 144,
+      "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
+    },
+    "Enum.ItemClass.Weapon": {
+      "kind": "source-reference",
+      "line": 19,
+      "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
+    },
+    "Enum.ItemMiscellaneousSubclass.CompanionPet": {
+      "kind": "source-reference",
+      "line": 192,
+      "path": "Interface/AddOns/Blizzard_AuctionHouseUI/Mainline/Blizzard_AuctionData.lua"
     },
     "Enum.ItemQuality.Common": {
       "kind": "source-reference",
@@ -17711,6 +17766,11 @@
     "GetMerchantItemCostItem": {
       "kind": "source-reference",
       "line": 479,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
+    "GetMerchantItemID": {
+      "kind": "source-reference",
+      "line": 352,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
     },
     "GetMerchantItemLink": {
@@ -18241,6 +18301,11 @@
       "line": 1025,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
     },
+    "ITEM_SPELL_KNOWN": {
+      "kind": "source-reference",
+      "line": 264,
+      "path": "Interface/AddOns/Blizzard_TrainerUI/Mainline/Blizzard_TrainerUI.lua"
+    },
     "InCinematic": {
       "line": 43,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/CinematicDocumentation.lua"
@@ -18626,6 +18691,11 @@
       "line": 1,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
     },
+    "MERCHANT_PAGE_NUMBER": {
+      "kind": "source-reference",
+      "line": 273,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
     "MakeModifiers": {
       "line": 244,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/InputDocumentation.lua"
@@ -18655,14 +18725,29 @@
       "line": 118,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
     },
+    "MerchantFrameItem_UpdateQuality": {
+      "kind": "source-reference",
+      "line": 212,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
     "MerchantFrame_Update": {
       "kind": "source-reference",
       "line": 189,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
     },
+    "MerchantFrame_UpdateAltCurrency": {
+      "kind": "source-reference",
+      "line": 470,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
     "MerchantFrame_UpdateCurrencies": {
       "kind": "source-reference",
       "line": 969,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
+    "MerchantFrame_UpdateItemQualityBorders": {
+      "kind": "source-reference",
+      "line": 242,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
     },
     "MerchantItem1": {
@@ -18675,14 +18760,34 @@
       "line": 182,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
     },
+    "MerchantMoneyBg": {
+      "kind": "source-reference",
+      "line": 508,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
     "MerchantMoneyFrame": {
       "kind": "source-reference",
       "line": 515,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
     },
+    "MerchantMoneyInset": {
+      "kind": "source-reference",
+      "line": 502,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
     "MerchantNextPageButton": {
       "kind": "source-reference",
       "line": 548,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
+    "MerchantPageText": {
+      "kind": "source-reference",
+      "line": 110,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
+    "MerchantPrevPageButton": {
+      "kind": "source-reference",
+      "line": 520,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
     },
     "Mixin": {
@@ -18751,6 +18856,11 @@
     "PlayerGetTimerunningSeasonID": {
       "line": 1351,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
+    },
+    "PlayerHasToy": {
+      "kind": "source-reference",
+      "line": 248,
+      "path": "Interface/AddOns/Blizzard_Collections/Mainline/Blizzard_ToyBox.lua"
     },
     "PlayerIsInCombat": {
       "line": 1360,
@@ -18987,6 +19097,46 @@
       "line": 10,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GameUIDocumentation.lua"
     },
+    "SetItemButtonCount": {
+      "kind": "source-reference",
+      "line": 9,
+      "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+    },
+    "SetItemButtonDesaturated": {
+      "kind": "source-reference",
+      "line": 137,
+      "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+    },
+    "SetItemButtonNameFrameVertexColor": {
+      "kind": "source-reference",
+      "line": 154,
+      "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+    },
+    "SetItemButtonNormalTextureVertexColor": {
+      "kind": "source-reference",
+      "line": 146,
+      "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+    },
+    "SetItemButtonSlotVertexColor": {
+      "kind": "source-reference",
+      "line": 163,
+      "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+    },
+    "SetItemButtonStock": {
+      "kind": "source-reference",
+      "line": 40,
+      "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+    },
+    "SetItemButtonTexture": {
+      "kind": "source-reference",
+      "line": 94,
+      "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+    },
+    "SetItemButtonTextureVertexColor": {
+      "kind": "source-reference",
+      "line": 111,
+      "path": "Interface/AddOns/Blizzard_ItemButton/Mainline/ItemButtonTemplate.lua"
+    },
     "SetItemRef": {
       "kind": "source-reference",
       "line": 6,
@@ -19134,6 +19284,11 @@
     "SupportsClipCursor": {
       "line": 121,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/BuildDocumentation.lua"
+    },
+    "TEXTURE_ITEM_QUEST_BANG": {
+      "kind": "source-reference",
+      "line": 289,
+      "path": "Interface/AddOns/Blizzard_FrameXMLBase/Constants.lua"
     },
     "TakeInboxItem": {
       "kind": "source-reference",

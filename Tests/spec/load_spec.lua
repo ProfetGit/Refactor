@@ -27,7 +27,7 @@ describe("the real load sequence", function()
             end
         end
         assert.is_table(env.LibStub)
-        assert.equal(23, #R.modules)
+        assert.equal(24, #R.modules)
         env:Fire("PLAYER_LOGIN")
         assert.is_function(env.SlashCmdList.REFACTOR)
         assert.is_table(R.UI.frame)
