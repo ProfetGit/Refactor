@@ -894,6 +894,7 @@ function UI:Initialize()
     self:BuildFarmSettings(self.scroll.child)
     self:BuildQuestSettings(self.scroll.child)
     self:BuildGossipSettings(self.scroll.child)
+    self:BuildResurrectSettings(self.scroll.child)
     self:BuildTooltipSettings(self.scroll.child)
     self.panels = {}
     self:BuildProfiles(frame)

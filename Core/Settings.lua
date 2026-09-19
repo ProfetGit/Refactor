@@ -33,6 +33,7 @@ local BOOLEAN_OPTIONS = {
     farmShowRates = true,
     questAcceptItemsOnly = true, questAcceptLists = true,
     gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = true, gossipInInstances = true,
+    resurrectPvp = true, resurrectInstance = true, resurrectWorld = true,
 }
 local ANCHOR_POINTS = {
     TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true,
@@ -61,6 +62,10 @@ local OPTION_DEFAULTS = {
     questAcceptItemsOnly = false, questAcceptLists = true,
     gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = false, gossipInInstances = false,
     gossipLearnModifier = "SHIFT", gossipLearned = {},
+    -- Everywhere by default, which is what the module did before the areas existed. The
+    -- three cover every instanceType between them, so turning two off is how a player says
+    -- "battlegrounds only".
+    resurrectPvp = true, resurrectInstance = true, resurrectWorld = true,
     -- Blizzard's window is two by five. Three by six nearly doubles the page and stays
     -- inside the left panel area at the default UI scale.
     vendorColumns = 3, vendorRows = 6,

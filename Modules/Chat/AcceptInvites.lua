@@ -1,19 +1,16 @@
 --- @module social.acceptInvites
 --- Purpose: accept party invites from friends and guild members, never from strangers.
---- Requires: AcceptGroup, StaticPopup_Hide, C_FriendList.IsFriend, C_BattleNet.GetAccountInfoByGUID, IsGuildMember
+--- Requires: AcceptGroup, StaticPopup_Hide, StaticPopup_FindVisible, C_FriendList.IsFriend,
+---     C_BattleNet.GetAccountInfoByGUID, IsGuildMember
 --- Events: PARTY_INVITE_REQUEST
 --- Hot: no
 local _, R = ...
 local AcceptInvites = R:RegisterModule({
     id = "social.acceptInvites", category = "Social", nameKey = "SOCIAL_INVITE_NAME",
     descriptionKey = "SOCIAL_INVITE_DESC", detailKey = "SOCIAL_INVITE_DETAIL",
-    requires = { "AcceptGroup", "StaticPopup_Hide", "C_FriendList.IsFriend", "C_BattleNet.GetAccountInfoByGUID",
-        "IsGuildMember" },
+    requires = { "AcceptGroup", "StaticPopup_Hide", "StaticPopup_FindVisible", "C_FriendList.IsFriend",
+        "C_BattleNet.GetAccountInfoByGUID", "IsGuildMember" },
     tier = "manual", risk = "automation", defaultEnabled = false,
-    -- The API linter reports AcceptGroup as a protected call on Retail. Blizzard only ever
-    -- calls it from secure popup handlers, so the source cannot settle it. Stays unavailable
-    -- until a live client shows an addon call succeeding (M4 manual checklist).
-    unavailableReasonKey = "SOCIAL_INVITE_UNVERIFIED",
 })
 
 function AcceptInvites:IsTrusted(name, guid)
@@ -25,12 +22,23 @@ function AcceptInvites:IsTrusted(name, guid)
     return type(name) == "string" and IsGuildMember(name) == true
 end
 
+-- The invite event fires before Blizzard shows PARTY_INVITE, and that dialog's OnHide
+-- calls DeclineGroup unless it is marked accepted. So the popup is cleared a tick later,
+-- once it exists, with the flag Blizzard's own accept button sets.
+function AcceptInvites:ClearPopup()
+    local dialog = StaticPopup_FindVisible("PARTY_INVITE")
+    if dialog then
+        dialog.inviteAccepted = 1
+        StaticPopup_Hide("PARTY_INVITE")
+    end
+end
+
 function AcceptInvites:OnInvite(_, name, _, _, _, _, _, inviterGUID)
     if R:Paused() or not self:IsTrusted(name, inviterGUID) then
         return
     end
     AcceptGroup()
-    StaticPopup_Hide("PARTY_INVITE")
+    R:After(self, 0, self.ClearPopup)
 end
 
 function AcceptInvites:OnEnable()

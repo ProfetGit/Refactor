@@ -972,15 +972,13 @@ describe("M4 chat and social", function()
         env.C_FriendList = { IsFriend = function(guid) return guid == "Player-friend" end }
         env.C_BattleNet = { GetAccountInfoByGUID = function(guid) return guid == "Player-bnet" and {} or nil end }
         env.IsGuildMember = function(name) return name == "Guildie" end
+        env.instanceType = "none"
+        env.IsInInstance = function() return env.instanceType ~= "none", env.instanceType end
+        local popup = { inviteAccepted = nil }
+        env.StaticPopup_FindVisible = function(which) return which == "PARTY_INVITE" and popup or nil end
         local duels = enable(env, "Modules/Chat/DeclineDuels.lua", "social.declineDuels")
         local res = enable(env, "Modules/Chat/AcceptResurrect.lua", "social.acceptResurrect")
-        env:Load("Modules/Chat/AcceptInvites.lua")
-        env.R.Settings:Confirm("social.acceptInvites", true)
-        -- Unavailable until AcceptGroup is verified unprotected in game; the trust check is
-        -- still exercised directly.
-        assert.is_false(env.R.Registry:Enable("social.acceptInvites"))
-        local invites = env.R.moduleByID["social.acceptInvites"]
-        assert.equal("unavailable", invites.state)
+        local invites = enable(env, "Modules/Chat/AcceptInvites.lua", "social.acceptInvites")
         assert.is_true(invites:IsTrusted("Stranger", "Player-friend"))
         assert.is_true(invites:IsTrusted("Guildie", "Player-x"))
         assert.is_true(invites:IsTrusted("Bnet", "Player-bnet"))
@@ -994,12 +992,48 @@ describe("M4 chat and social", function()
         env.combat = false
         env:Fire("RESURRECT_REQUEST", "Healer")
         assert.same({ "duel", "res" }, actions)
-        env:Fire("PARTY_INVITE_REQUEST", "Friend", false, false, false, true, false, "Player-friend", false)
+        -- Area options: battlegrounds only is the other two switched off, and an
+        -- instanceType the client never returned today is not accepted anywhere.
+        env.R.Settings:SetOption("resurrectWorld", false)
+        env.R.Settings:SetOption("resurrectInstance", false)
+        env:Fire("RESURRECT_REQUEST", "Healer")
         assert.same({ "duel", "res" }, actions)
+        env.instanceType = "party"
+        env:Fire("RESURRECT_REQUEST", "Healer")
+        assert.same({ "duel", "res" }, actions)
+        env.instanceType = "pvp"
+        env:Fire("RESURRECT_REQUEST", "Healer")
+        assert.same({ "duel", "res", "res" }, actions)
+        env.instanceType = "arena"
+        env:Fire("RESURRECT_REQUEST", "Healer")
+        assert.same({ "duel", "res", "res", "res" }, actions)
+        env.instanceType = "somethingnew"
+        env:Fire("RESURRECT_REQUEST", "Healer")
+        assert.equal(4, #actions)
+        env.R.Settings:SetOption("resurrectInstance", true)
+        env.instanceType = "raid"
+        env:Fire("RESURRECT_REQUEST", "Healer")
+        assert.equal(5, #actions)
+        env.instanceType = "none"
+        env.R.Settings:SetOption("resurrectWorld", true)
+        env:Fire("PARTY_INVITE_REQUEST", "Stranger", false, false, false, true, false, "Player-stranger", false)
+        assert.equal(5, #actions)
+        env:Fire("PARTY_INVITE_REQUEST", "Friend", false, false, false, true, false, "Player-friend", false)
+        assert.equal("group", actions[6])
+        -- The popup is only cleared once it exists, and only with the flag that stops
+        -- Blizzard's OnHide from declining the invite we just accepted.
+        assert.is_nil(popup.inviteAccepted)
+        env:Advance(1)
+        assert.equal(1, popup.inviteAccepted)
+        assert.equal("PARTY_INVITE", hidden[#hidden])
         env.control = true
         env:Fire("DUEL_REQUESTED", "Bob")
-        assert.equal(2, #actions)
-        for _, module in ipairs({ duels, res }) do noResidue(env, module) end
+        assert.equal(6, #actions)
+        env:Fire("PARTY_INVITE_REQUEST", "Friend", false, false, false, true, false, "Player-friend", false)
+        assert.equal(6, #actions)
+        env:Fire("RESURRECT_REQUEST", "Healer")
+        assert.equal(6, #actions)
+        for _, module in ipairs({ duels, res, invites }) do noResidue(env, module) end
     end)
 end)
 

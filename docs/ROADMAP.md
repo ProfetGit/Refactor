@@ -222,8 +222,10 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   its quest; a dungeon NPC is left alone until taught; the flagged single option is still
   skipped by the client alone, once, with no double selection
 - Chat link click opens the copy box; duel declined; resurrection accepted out of combat
-- `AcceptGroup()` from a `/run` on a friend's invite: if it works, remove
-  `unavailableReasonKey` from `Modules/Chat/AcceptInvites.lua`
+- Resurrection areas: with only battlegrounds ticked, a res in a dungeon and one in the
+  open world still show the popup and one inside a battleground is taken
+- A friend's invite is accepted with no popup left on screen and no decline afterwards;
+  a stranger's invite still shows the normal popup
 - Camera CVars set on enable and restored on disable; screenshot 1.5 s after level up
 - `/refactor farmtest` over a dark and a snow-bright zone after a full client restart:
   every HUD texture loads, the text shadows keep both lines readable, the hold to reset

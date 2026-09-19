@@ -280,6 +280,16 @@ function UI:BuildQuestSettings(parent)
     self:RegisterModuleSettings("quest.autoAccept", quests)
 end
 
+function UI:BuildResurrectSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_RESURRECT_HELP)
+    local top = block.top
+    self:OptionCheckbox(block, "resurrectPvp", "UI_RESURRECT_PVP", top)
+    self:OptionCheckbox(block, "resurrectInstance", "UI_RESURRECT_INSTANCE", top - 32)
+    self:OptionCheckbox(block, "resurrectWorld", "UI_RESURRECT_WORLD", top - 64)
+    block:SetBodyHeight(90)
+    self:RegisterModuleSettings("social.acceptResurrect", block)
+end
+
 function UI:BuildGossipSettings(parent)
     local gossip = self.Widgets:SettingsBlock(parent, L.UI_GOSSIP_HELP)
     local top = gossip.top
