@@ -11,7 +11,7 @@ local noops = {
     "SetResizeBounds", "EnableMouse", "EnableMouseWheel", "RegisterForDrag",
     "StartMoving", "StopMovingOrSizing", "StartSizing",
     "SetHighlightTexture", "SetNormalTexture", "SetPushedTexture", "SetStartDelay", "SetScale",
-    "SetDuration", "SetOrder", "SetFromAlpha", "SetToAlpha", "Play", "Stop",
+    "SetDuration", "SetOrder", "SetFromAlpha", "SetToAlpha",
     "SetAutoFocus", "SetMultiLine", "SetFontObject", "SetTextInsets", "SetMaxLetters",
     "ClearFocus", "SetFocus", "SetScrollChild", "SetVerticalScroll",
     "SetOrientation", "SetValueStep", "SetThumbTexture",
@@ -19,9 +19,15 @@ local noops = {
     "SetRadialProgressBarReverse", "SetSmoothing", "SetSmoothScaling", "SetCheckedTexture",
     "SetDisabledCheckedTexture", "SetHitRectInsets", "SetToFinalAlpha",
     "SetTexelSnappingBias", "SetSnapToPixelGrid",
+    -- A settings block clips its contents to however much of it is currently revealed.
+    "SetClipsChildren",
     -- Loot feed rows: a text shadow, and the Translation the slide plays. The Edit Mode
     -- dialog's sliders are Blizzard's minimal slider, which steps on drag.
-    "SetShadowColor", "SetOffset", "SetObeyStepOnDrag",
+    "SetShadowColor", "SetObeyStepOnDrag",
+    -- The session summary: a multi-line header, a hand-rolled scroll frame, and the copy
+    -- box that selects its own text so Ctrl C works.
+    "SetSpacing", "SetVerticalScrollRange", "HighlightText",
+    "SetRadians",
 }
 
 local values = {
@@ -29,6 +35,8 @@ local values = {
     GetEffectiveScale = 1,
     -- A headless animation never runs, so it always reports itself parked at the start.
     IsPlaying = false, GetSmoothProgress = 0, GetAlpha = 1, IsMouseOver = false,
+    -- Nothing has a screen rect here, so nothing is ever scrolled off the bottom.
+    GetVerticalScroll = 0, GetVerticalScrollRange = 0,
 }
 
 function Widgets.install(env)
@@ -40,6 +48,26 @@ function Widgets.install(env)
     end
     for name, value in pairs(values) do
         Frame[name] = function() return value end
+    end
+
+    -- Blizzard's dropdown button, enough of it to drive the menu generator from a spec:
+    -- SetupMenu keeps the generator, and Open runs it against a recording root description
+    -- so the entries, the selected one and the setter are all really exercised.
+    function Frame:SetupMenu(generator) self.menuGenerator = generator end
+    function Frame:SetDefaultText(text) self.defaultText = text end
+    function Frame:GetDefaultText() return self.defaultText end
+    function Frame:GenerateMenu() end
+    function Frame:OpenMenu()
+        local root, picked = {}, {}
+        function root:CreateRadio(text, isSelected, setSelected, value)
+            picked[#picked + 1] = { text = text, value = value,
+                selected = isSelected(value) == true, choose = function() setSelected(value) end }
+            return { SetTooltip = function() end }
+        end
+        function root:SetTag() end
+        function root:SetScrollMode() end
+        if self.menuGenerator then self.menuGenerator(self, root) end
+        return picked
     end
 
     function Frame:RegisterEvent(event) self.events[event] = true end
@@ -100,6 +128,19 @@ function Widgets.install(env)
     function Frame:SetRadialProgressBarPercent(percent) self.percent = percent end
     function Frame:GetRadialProgressBarPercent() return rawget(self, "percent") or 0 end
     function Frame:SetVertexColor(r, g, b, a) self.color = { r, g, b, a } end
+    -- Recorded, not dropped: which way the chevron ended up pointing is the thing under test.
+    function Frame:SetRotation(radians) self.rotation = radians end
+    function Frame:GetRotation() return rawget(self, "rotation") or 0 end
+    -- An animation that overshoots is only correct if its legs sum back to the distance it
+    -- was meant to travel, so the legs have to be readable.
+    function Frame:SetOffset(x, y) self.offsetX, self.offsetY = x, y end
+    function Frame:GetOffset() return rawget(self, "offsetX") or 0, rawget(self, "offsetY") or 0 end
+    function Frame:SetDegrees(degrees) self.degrees = degrees end
+    function Frame:GetDegrees() return rawget(self, "degrees") or 0 end
+    -- A headless group never runs, so what it was asked to do is all there is to assert on.
+    function Frame:Play() self.playCount = (rawget(self, "playCount") or 0) + 1 end
+    function Frame:Stop() self.stopCount = (rawget(self, "stopCount") or 0) + 1 end
+    function Frame:GetPlayCount() return rawget(self, "playCount") or 0 end
     function Frame:SetParent(parent) self.parent = parent end
     function Frame:GetParent() return self.parent end
     function Frame:CreateAnimationGroup() return region(env, "AnimationGroup") end
@@ -126,6 +167,12 @@ function Widgets.install(env)
         }, Frame)
         env.frames[#env.frames + 1] = frame
         if name then env[name] = frame end
+        -- Only the parentKey children the addon actually reaches for, and only on the
+        -- template that owns them: an unstubbed one must still be an error that names itself.
+        if type(template) == "string" and template:find("BasicFrameTemplate", 1, true) then
+            frame.TitleText = region(env, "FontString")
+            frame.CloseButton = region(env, "Button")
+        end
         return frame
     end
     -- The client's string aliases that embedded libraries expect to be global.

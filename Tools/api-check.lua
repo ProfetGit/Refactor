@@ -76,7 +76,7 @@ walk("Modules_LoD")
 for _, path in ipairs({
     "Core/Safety.lua", "Core/Commands.lua", "Core/Bootstrap.lua", "Core/Bench.lua",
     "Integrations/Neighbours.lua", "Integrations/Questie.lua", "Integrations/Plater.lua",
-    "Integrations/TSM.lua", "Integrations/Auctionator.lua",
+    "Integrations/TSM.lua", "Integrations/Auctionator.lua", "Integrations/Prices.lua",
 }) do checkHeader(path) end
 local toc = read("Refactor.toc")
 assert(tonumber(toc:match("## Interface:%s*(%d+)")) == index.interface, "TOC/index interface mismatch")

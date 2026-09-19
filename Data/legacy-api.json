@@ -39,6 +39,10 @@
     "needle": "function ChatFrameUtil.RemoveMessageEventFilter",
     "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameFilters.lua"
   },
+  "CloseDropDownMenus": {
+    "needle": "function CloseDropDownMenus(level)",
+    "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+  },
   "CompleteQuest": {
     "needle": "CompleteQuest();",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
@@ -102,6 +106,10 @@
     "needle": "function GameTooltip_SetDefaultAnchor",
     "path": "Interface/AddOns/Blizzard_SharedXML/SharedTooltipTemplates.lua"
   },
+  "GetAvailableQuestInfo": {
+    "needle": "= GetAvailableQuestInfo(i - numActiveQuests);",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
   "GetBuybackItemInfo": {
     "needle": "GetBuybackItemInfo(",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
@@ -129,6 +137,10 @@
   "GetMerchantNumItems": {
     "needle": "GetMerchantNumItems()",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "GetNumAvailableQuests": {
+    "needle": "local numAvailableQuests = GetNumAvailableQuests();",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
   },
   "GetNumBuybackItems": {
     "needle": "GetNumBuybackItems()",
@@ -199,9 +211,17 @@
     "needle": "QuestGetAutoAccept()",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
   },
+  "QuestIsFromAdventureMap": {
+    "needle": "if ( QuestIsFromAdventureMap() ) then",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
   "RepairAllItems": {
     "needle": "RepairAllItems(",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "SelectAvailableQuest": {
+    "needle": "SelectAvailableQuest(self:GetID());",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
   },
   "SendMailFrame": {
     "needle": "name=\"SendMailFrame\"",
@@ -246,6 +266,10 @@
     "needle": "TakeInboxMoney",
     "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.lua"
   },
+  "ToggleDropDownMenu": {
+    "needle": "function ToggleDropDownMenu(level, value, dropDownFrame, anchorName,",
+    "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+  },
   "TooltipDataProcessor.AddTooltipPostCall": {
     "needle": "function TooltipDataProcessor.AddTooltipPostCall",
     "path": "Interface/AddOns/Blizzard_SharedXMLGame/Tooltip/TooltipDataHandler.lua"
@@ -253,6 +277,18 @@
   "TooltipUtil.GetDisplayedItem": {
     "needle": "function TooltipUtil.GetDisplayedItem",
     "path": "Interface/AddOns/Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua"
+  },
+  "UIDropDownMenu_AddButton": {
+    "needle": "function UIDropDownMenu_AddButton(info, level)",
+    "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+  },
+  "UIDropDownMenu_CreateInfo": {
+    "needle": "function UIDropDownMenu_CreateInfo()",
+    "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+  },
+  "UIDropDownMenu_Initialize": {
+    "needle": "function UIDropDownMenu_Initialize(frame, initFunction, displayMode, level, menuList)",
+    "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
   },
   "UIParent": {
     "needle": "parent=\"UIParent\"",

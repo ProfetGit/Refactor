@@ -1,4 +1,4 @@
-local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 13)
+local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 14)
 if not Theme then return end
 
 local unpack = unpack
@@ -27,6 +27,11 @@ Theme.colors = {
     -- LOOT_ROW is the smudge behind a row, its alpha replaced by the opacity setting.
     LOOT_ROW = { 0.07, 0.05, 0.04, 0.85 },
     LOOT_UNDERLINE = { 0.48, 0.34, 0.20, 0.30 },
+    -- The farm HUD art is white with an alpha channel too. HUD_BG is the smudge behind the
+    -- whole HUD, its alpha replaced by the opacity setting; HUD_TRACK is the unfilled half
+    -- of the goal meter, which has to stay readable over snow without competing with the fill.
+    HUD_BG = { 0.07, 0.05, 0.04, 0.90 },
+    HUD_TRACK = { 0.47, 0.41, 0.33, 0.55 },
     QUEST_VALUE = { 1, 1, 1, 1 },
     QUEST_TOTAL = { 0.90, 0.90, 0.86, 1 },
     TEXT_LAST = { 1, 0.86, 0.36, 1 },
@@ -43,6 +48,18 @@ Theme.fonts = { title = "GameFontNormalLarge", body = "GameFontNormal", small = 
 -- DiamondMetal frame every Retail dialog wears; "GenericMetal" and "SimplePanelTemplate"
 -- are the other window-sized kits.
 Theme.panelLayout = "Dialog"
+
+-- Refactor's own addon icon, one path per size. Nothing else in the addon spells these
+-- paths out: UI code goes through the appIcon, minimapIcon and smallIcon assets, and the
+-- namespace exposes this table as R.Media.icons.
+Theme.icons = {
+    app = "Interface\\AddOns\\Refactor\\Media\\Icon64",
+    minimap = "Interface\\AddOns\\Refactor\\Media\\IconMinimap",
+    small = "Interface\\AddOns\\Refactor\\Media\\Icon32",
+    -- Blizzard's AddOn list scales the .toc icon into a fixed box, so this copy is cropped
+    -- tighter than Icon64: the mark fills the box instead of floating in its own margin.
+    list = "Interface\\AddOns\\Refactor\\Media\\IconList",
+}
 
 -- Verified in Blizzard's 12.1.0 UI source: ThreeSliceButtonMixin and MinimalScrollBar.
 -- Never fall back to legacy panel art.
@@ -120,8 +137,13 @@ Theme.assets = {
     checkboxTickDisabled = { atlas = "checkmark-minimal-disabled", fallback = "TEXT_MUTED" },
     checkboxHighlight = { atlas = "checkbox-minimal", fallback = "HIGHLIGHT" },
     minimapBorder = { file = 136430 },
+    -- Interface\\Minimap\\UI-Minimap-Background, the circle Blizzard draws under the minimap
+    -- itself. IconMinimap.tga is a transparent mark, so it needs something to sit on.
+    minimapIconBackdrop = { file = 136467 },
     minimapHighlight = { file = 136477 },
-    addonIcon = { file = "Interface\\AddOns\\Refactor\\Media\\RefactorIcon.tga" },
+    appIcon = { file = Theme.icons.app },
+    minimapIcon = { file = Theme.icons.minimap },
+    smallIcon = { file = Theme.icons.small },
     -- MinimalSliderTemplate and MinimalSliderWithSteppersTemplate, the slider Blizzard's own
     -- Edit Mode dialog uses for every numeric system setting (12.1.0 MinimalSlider.xml).
     sliderLeft = { atlas = "Minimal_SliderBar_Left", fallback = "SURFACE" },
@@ -138,6 +160,20 @@ Theme.assets = {
         fallback = "BORDER_BRONZE" },
     lootUnderline = { file = "Interface\\AddOns\\Refactor\\Media\\LootUnderline.tga",
         fallback = "LOOT_UNDERLINE" },
+    -- Refactor's own farm HUD art, same rule as the loot feed: white plus alpha, tinted at
+    -- the call site, never drawn untinted.
+    hudBackdrop = { file = "Interface\\AddOns\\Refactor\\Media\\HudBackdrop.tga", fallback = "HUD_BG" },
+    hudMeterTrack = { file = "Interface\\AddOns\\Refactor\\Media\\MeterTrack.tga", fallback = "HUD_TRACK" },
+    hudMeterFill = { file = "Interface\\AddOns\\Refactor\\Media\\MeterFill.tga", fallback = "ACCENT_COPPER" },
+    hudGrip = { file = "Interface\\AddOns\\Refactor\\Media\\DragGrip.tga", fallback = "TEXT_MUTED" },
+    hudClock = { file = "Interface\\AddOns\\Refactor\\Media\\IconClock.tga", fallback = "TEXT_MUTED" },
+    hudCoins = { file = "Interface\\AddOns\\Refactor\\Media\\IconCoins.tga", fallback = "TEXT_MUTED" },
+    hudBag = { file = "Interface\\AddOns\\Refactor\\Media\\IconBag.tga", fallback = "TEXT_MUTED" },
+    hudTrend = { file = "Interface\\AddOns\\Refactor\\Media\\IconTrend.tga", fallback = "TEXT_MUTED" },
+    hudReset = { file = "Interface\\AddOns\\Refactor\\Media\\IconReset.tga", fallback = "TEXT_MUTED" },
+    hudPause = { file = "Interface\\AddOns\\Refactor\\Media\\IconPause.tga", fallback = "TEXT_MUTED" },
+    hudSettings = { file = "Interface\\AddOns\\Refactor\\Media\\IconSettings.tga", fallback = "TEXT_MUTED" },
+    hudCollapse = { file = "Interface\\AddOns\\Refactor\\Media\\IconCollapse.tga", fallback = "TEXT_MUTED" },
 }
 
 -- Blizzard's Edit Mode selection nine-slice. EditModeSystemSelectionLayout is a local in
@@ -947,6 +983,9 @@ function Theme:Slider(parent, width, minimum, maximum, step, onChange)
     holder.valueText:SetJustifyH("RIGHT")
 
     local slider = CreateFrame("Slider", nil, holder)
+    -- MinimalSliderTemplate carries enableMouse="true"; a Slider built in Lua does not
+    -- inherit that, and without it the thumb cannot be dragged.
+    slider:EnableMouse(true)
     slider:SetOrientation("HORIZONTAL")
     slider:SetHeight(SLIDER_TRACK)
     slider:SetPoint("BOTTOMLEFT", SLIDER_CAP + SLIDER_STEPPER_GAP * 2, 2)
@@ -994,20 +1033,130 @@ function Theme:Slider(parent, width, minimum, maximum, step, onChange)
     end
 
     -- Writing a value back into the slider must not look like the player moved it, or
-    -- every refresh would write the setting again.
+    -- every refresh would write the setting again. While the thumb is actually being
+    -- dragged nothing is written back at all: each step of a drag saves the setting, and
+    -- whatever that redraws would otherwise push the thumb out from under the cursor.
     function holder:SetValue(value)
+        if self.dragging then
+            self:Display(value)
+            return
+        end
         self.updating = true
         self.slider:SetValue(value)
         self.updating = nil
         self:Display(value)
     end
 
+    slider:SetScript("OnMouseDown", function() holder.dragging = true end)
+    slider:SetScript("OnMouseUp", function() holder.dragging = false end)
+    -- Released off the slider, OnMouseUp never arrives; leaving the flag set would freeze
+    -- the thumb against every later refresh.
+    slider:SetScript("OnHide", function() holder.dragging = false end)
     slider:SetScript("OnValueChanged", function(_, value)
         holder:Display(value)
         if not holder.updating and onChange then
             onChange(value)
         end
     end)
+    return holder
+end
+
+-- A tinted dot for inline use in a FontString. The texture escape's vertex colour is the
+-- only way to tint art inside text, so this cannot be an atlas: the |A| escape takes none.
+-- The path lives here rather than in widget code, like every other asset (PRD 8.3).
+--
+-- The texture has to be white. A vertex colour multiplies, it cannot brighten, so tinting
+-- Indicator-Gray with a quality colour returned it darkened by that art's own grey and no
+-- tint could recover it. This is a mask circle: white, round, with a soft alpha edge.
+local DOT_SIZE = 12
+Theme.dotTexture = "Interface\\Common\\CommonMaskCircle"
+
+function Theme:Dot(r, g, b)
+    return string.format("|T%s:%d:%d:0:0:64:64:0:64:0:64:%d:%d:%d|t", self.dotTexture,
+        DOT_SIZE, DOT_SIZE, math.floor(r * 255), math.floor(g * 255), math.floor(b * 255))
+end
+
+local DROPDOWN_ROW_HEIGHT, DROPDOWN_WIDTH, DROPDOWN_HEIGHT = 30, 170, 26
+Theme.dropdownRowHeight = DROPDOWN_ROW_HEIGHT
+
+-- Blizzard's own dropdown button and the menu behind it (WowStyle1DropdownTemplate, from
+-- Blizzard_Menu; the pattern is the one in its 11_0_0_MenuImplementationGuide). This is the
+-- one widget Refactor inherits a template for instead of assembling from atlases: the art
+-- could be rebuilt, but the menu it opens could not, and reimplementing that is both a
+-- large surface and the part with a taint history. Nothing here touches a Blizzard frame.
+--
+-- entries is an ordered list of { value, text }. A radio per entry means the button labels
+-- itself from whichever one reports as selected.
+-- Both the DropdownButton frame type and this template come from Blizzard_Menu, which is
+-- not load-on-demand on this build, so they are there. Forever has not been seen, and the
+-- whole options window erroring at load over a missing template is not a trade worth
+-- taking: a client without it gets a button that steps through the same entries instead.
+Theme.dropdownTemplate = "WowStyle1DropdownTemplate"
+
+function Theme:DropdownButton(holder)
+    if not self.dropdownTemplate then return nil end
+    local ok, button = pcall(CreateFrame, "DropdownButton", nil, holder, self.dropdownTemplate)
+    if ok and button and button.SetupMenu then return button end
+    return nil
+end
+
+-- The fallback, wearing the same surface the dropdown button offers so nothing above it
+-- has to know which one it got: a click advances to the next entry and wraps.
+function Theme:SteppedChoice(holder, isSelected, setSelected)
+    local button = self:Button(holder, DROPDOWN_WIDTH, "", function()
+        local entries = holder.entries
+        for index, entry in ipairs(entries) do
+            if isSelected(entry.value) then
+                setSelected(entries[index % #entries + 1].value)
+                return
+            end
+        end
+        if entries[1] then setSelected(entries[1].value) end
+    end, DROPDOWN_HEIGHT)
+    function button:SetDefaultText(text) self.defaultText = text; self.label:SetText(text or "") end
+    function button:GetDefaultText() return self.defaultText end
+    function button:GenerateMenu() end
+    return button
+end
+
+function Theme:Dropdown(parent, width, entries, isSelected, setSelected)
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetSize(width, DROPDOWN_ROW_HEIGHT)
+    holder.label = self:Text(holder, "", "body", "TEXT_BODY")
+    holder.label:SetPoint("LEFT")
+    holder.entries = entries
+
+    local button = self:DropdownButton(holder)
+    if button then
+        button:SetupMenu(function(_, rootDescription)
+            for _, entry in ipairs(holder.entries) do
+                rootDescription:CreateRadio(entry.text, isSelected, setSelected, entry.value)
+            end
+        end)
+    else
+        button = self:SteppedChoice(holder, isSelected, setSelected)
+    end
+    button:SetSize(DROPDOWN_WIDTH, DROPDOWN_HEIGHT)
+    button:SetPoint("RIGHT")
+    holder.button = button
+
+    function holder:SetLabel(text)
+        self.label:SetText(text)
+    end
+
+    -- The menu lists whatever entries are current when it opens, so a dropdown whose
+    -- choices depend on another setting needs no rebuilding, only a new list.
+    function holder:SetEntries(list)
+        self.entries = list
+    end
+
+    function holder:SetValueText(text)
+        -- Both paths land on the same string: the selection names it when a radio reports
+        -- itself selected, and the default covers the pass before any menu was generated.
+        self.button:SetDefaultText(text or "")
+        self.button:GenerateMenu()
+    end
+
     return holder
 end
 
@@ -1037,6 +1186,16 @@ local function shadowed(label)
     label:SetShadowColor(0, 0, 0, 1)
     label:SetShadowOffset(ROW_SHADOW_X, ROW_SHADOW_Y)
     return label
+end
+
+-- Exported so the farm HUD gets the same one-pixel shadow without repeating black here or
+-- carrying a colour literal of its own (rule 12). Snow and Northrend ice are why it exists.
+function Theme:Shadow(label)
+    return shadowed(label)
+end
+
+function Theme:VerifyFile(texture, key)
+    return verifyFile(texture, key)
 end
 
 -- One row of the loot feed: a soft smudge behind an icon in a quality-tinted frame, the
@@ -1324,6 +1483,8 @@ function Theme:EditModeSelection(parent, labelText)
     return selection
 end
 
+local MINIMAP_ICON_NUDGE_X, MINIMAP_ICON_NUDGE_Y = 0.5, 0.5
+
 -- Refactor's own button, parented to the minimap but never altering it.
 function Theme:MinimapButton(parent, size, inset)
     local button = CreateFrame("Button", nil, parent)
@@ -1333,9 +1494,15 @@ function Theme:MinimapButton(parent, size, inset)
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     button:RegisterForDrag("LeftButton")
     button:SetMovable(true)
-    button.icon = self:Texture(button, "addonIcon", "ARTWORK")
-    button.icon:SetPoint("TOPLEFT", inset, -inset)
-    button.icon:SetPoint("BOTTOMRIGHT", -inset, inset)
+    -- IconMinimap.tga is already circle-masked with a transparent surround, so it is drawn
+    -- as it ships: no crop, no mask, no tint.
+    button.backdrop = self:Texture(button, "minimapIconBackdrop", "BACKGROUND")
+    button.backdrop:SetPoint("TOPLEFT", inset, -inset)
+    button.backdrop:SetPoint("BOTTOMRIGHT", -inset, inset)
+    button.icon = self:Texture(button, "minimapIcon", "ARTWORK")
+    -- The mark is not centred in its own texture, so it is nudged back into the ring.
+    button.icon:SetPoint("TOPLEFT", inset + MINIMAP_ICON_NUDGE_X, -inset + MINIMAP_ICON_NUDGE_Y)
+    button.icon:SetPoint("BOTTOMRIGHT", -inset + MINIMAP_ICON_NUDGE_X, inset + MINIMAP_ICON_NUDGE_Y)
     -- Match the Retail border used by BugSack's LibDBIcon; the old path missed a hyphen.
     button.border = self:Texture(button, "minimapBorder", "OVERLAY")
     button.border:SetSize(50, 50)

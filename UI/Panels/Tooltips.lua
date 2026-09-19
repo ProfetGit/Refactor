@@ -2,37 +2,46 @@ local _, R = ...
 local UI, L, Settings = R.UI, R.L, R.Settings
 local Theme = R.Theme
 
-local ANCHOR_MODES = { "cursor", "point" }
+local MODE_ENTRIES = {
+    { value = "cursor", labelKey = "UI_TOOLTIP_MODE_CURSOR" },
+    { value = "point", labelKey = "UI_TOOLTIP_MODE_POINT" },
+}
 local POINTS = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }
 local CURSOR_SIDES = { "RIGHT", "LEFT", "CENTER" }
 
-local function cycle(list, current)
-    for index, value in ipairs(list) do
-        if value == current then return list[index % #list + 1] end
-    end
-    return list[1]
+-- The nine screen anchors are not translated: they are the same names the API takes, and
+-- a player setting one is reading them as coordinates, not as prose.
+local POINT_ENTRIES, CURSOR_ENTRIES = {}, {}
+for index, point in ipairs(POINTS) do
+    POINT_ENTRIES[index] = { value = point, text = point }
+end
+for index, side in ipairs(CURSOR_SIDES) do
+    CURSOR_ENTRIES[index] = { value = side, labelKey = "UI_TOOLTIP_SIDE_" .. side }
 end
 
--- One section of the Options page. Everything here applies on click, except the typed
--- offsets, which wait for Save.
-function UI:BuildTooltips(parent)
-    local section = self.Widgets:Section(parent, L.UI_TOOLTIP_OPTIONS, L.UI_TOOLTIP_HELP)
+-- The settings block behind the tooltip anchor row. Everything here applies on click,
+-- except the typed offsets, which wait for Save.
+function UI:BuildTooltipSettings(parent)
+    local section = self.Widgets:SettingsBlock(parent, L.UI_TOOLTIP_HELP)
     local top = section.top
-    self.tooltipModeButton = Theme:Button(section, 300, "", function()
-        Settings:SetOption("tooltipAnchor", cycle(ANCHOR_MODES, Settings:GetOption("tooltipAnchor")))
-        self:LoadTooltips()
-    end)
-    self.tooltipModeButton:SetPoint("TOPLEFT", 0, top)
-    -- One button for both placement lists: which one it cycles follows the mode above.
-    self.tooltipPointButton = Theme:Button(section, 300, "", function()
-        if Settings:GetOption("tooltipAnchor") == "cursor" then
-            Settings:SetOption("tooltipCursorSide", cycle(CURSOR_SIDES, Settings:GetOption("tooltipCursorSide")))
-        else
-            Settings:SetOption("tooltipPoint", cycle(POINTS, Settings:GetOption("tooltipPoint")))
-        end
-        self:LoadTooltips()
-    end)
-    self.tooltipPointButton:SetPoint("TOPLEFT", 0, top - 30)
+    section:Index(L.UI_TOOLTIP_OPTIONS, L.UI_TOOLTIP_MODE, L.UI_TOOLTIP_POINT, L.UI_TOOLTIP_OFFSET,
+        L.UI_TOOLTIP_CURSOR_SIDE, L.UI_TOOLTIP_CURSOR_OFFSET)
+    self.tooltipModeDropdown = self:OptionDropdown(section, "tooltipAnchor", MODE_ENTRIES,
+        "UI_TOOLTIP_MODE", top)
+    -- One dropdown for both placement lists. The menu is generated when it opens, so
+    -- swapping the list is enough for it to offer whichever the current mode uses.
+    self.tooltipPointDropdown = Theme:Dropdown(section, 380, CURSOR_ENTRIES,
+        function(value) return self:TooltipPlacement() == value end,
+        function(value)
+            Settings:SetOption(self:TooltipPlacementKey(), value)
+            self:LoadTooltips()
+        end)
+    self.tooltipPointDropdown:SetPoint("TOPLEFT", 0, top - 34)
+    for index, entry in ipairs(CURSOR_ENTRIES) do
+        CURSOR_ENTRIES[index] = { value = entry.value, text = L[entry.labelKey] }
+        section:Index(L[entry.labelKey])
+    end
+    section:Index(L.UI_TOOLTIP_POINT, L.UI_TOOLTIP_CURSOR_SIDE)
     self.tooltipOffsetLabel = Theme:Text(section, L.UI_TOOLTIP_OFFSET, "small", "TEXT_MUTED")
     self.tooltipOffsetLabel:SetPoint("TOPLEFT", 0, top - 66)
     self.tooltipX = self.Widgets:Input(section, 90, 26)
@@ -61,21 +70,28 @@ function UI:BuildTooltips(parent)
     self.tooltipNote:SetHeight(40)
     self.tooltipNote:SetJustifyV("TOP")
     section:SetBodyHeight(160)
-    return section
+    self:RegisterModuleSettings("tooltips.anchor", section)
+end
+
+-- Which placement setting the one placement dropdown is standing in for.
+function UI:TooltipPlacementKey()
+    return Settings:GetOption("tooltipAnchor") == "point" and "tooltipPoint" or "tooltipCursorSide"
+end
+
+function UI:TooltipPlacement()
+    return Settings:GetOption(self:TooltipPlacementKey())
 end
 
 function UI:LoadTooltips()
-    if not self.tooltipModeButton then return end
+    if not self.tooltipModeDropdown then return end
     local cursor = Settings:GetOption("tooltipAnchor") ~= "point"
-    self.tooltipModeButton.label:SetText(string.format(L.UI_TOGGLE_FORMAT, L.UI_TOOLTIP_MODE,
-        cursor and L.UI_TOOLTIP_MODE_CURSOR or L.UI_TOOLTIP_MODE_POINT))
-    if cursor then
-        self.tooltipPointButton.label:SetText(string.format(L.UI_TOGGLE_FORMAT, L.UI_TOOLTIP_CURSOR_SIDE,
-            L["UI_TOOLTIP_SIDE_" .. (Settings:GetOption("tooltipCursorSide") or "RIGHT")]))
-    else
-        self.tooltipPointButton.label:SetText(string.format(L.UI_TOGGLE_FORMAT, L.UI_TOOLTIP_POINT,
-            Settings:GetOption("tooltipPoint") or "BOTTOMRIGHT"))
+    self.tooltipPointDropdown:SetEntries(cursor and CURSOR_ENTRIES or POINT_ENTRIES)
+    self.tooltipPointDropdown:SetLabel(cursor and L.UI_TOOLTIP_CURSOR_SIDE or L.UI_TOOLTIP_POINT)
+    local placement, text = self:TooltipPlacement(), nil
+    for _, entry in ipairs(cursor and CURSOR_ENTRIES or POINT_ENTRIES) do
+        if entry.value == placement then text = entry.text end
     end
+    self.tooltipPointDropdown:SetValueText(text or "")
     self.tooltipOffsetLabel:SetText(cursor and L.UI_TOOLTIP_CURSOR_OFFSET or L.UI_TOOLTIP_OFFSET)
     local keyX, keyY = cursor and "tooltipCursorX" or "tooltipX", cursor and "tooltipCursorY" or "tooltipY"
     if not self.tooltipX:HasFocus() then

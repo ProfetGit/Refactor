@@ -463,32 +463,132 @@ describe("M4 loot feed", function()
 end)
 
 describe("M4 quest automation", function()
-    it("accepts unless flagged, repeatable, paused, or limited to item quests", function()
+    local function questEnv()
         local env = base()
-        local accepted = 0
-        env.AcceptQuest = function() accepted = accepted + 1 end
+        env.accepted, env.selected, env.available, env.greeting = 0, {}, {}, {}
+        env.AcceptQuest = function() env.accepted = env.accepted + 1 end
         env.QuestGetAutoAccept = function() return env.autoAccept == true end
         env.QuestFlagsPVP = function() return env.pvp == true end
+        env.QuestIsFromAdventureMap = function() return env.adventureMap == true end
         env.GetQuestID = function() return 500 end
-        env.C_QuestLog = { IsRepeatableQuest = function() return env.repeatable == true end }
+        env.npc = "Creature-0-3061-1-42177-38038-002FAC4343"
+        env.UnitGUID = function() return env.npc end
+        env.C_QuestLog = {
+            IsRepeatableQuest = function() return env.repeatable == true end,
+            -- The accepted count comes second: the first return includes the log's headers.
+            GetNumQuestLogEntries = function() return (env.logQuests or 0) + 3, env.logQuests or 0 end,
+            GetMaxNumQuestsCanAccept = function() return env.logLimit or 35 end,
+        }
+        env.C_GossipInfo = {
+            GetAvailableQuests = function() return env.available end,
+            SelectAvailableQuest = function(questID) env.selected[#env.selected + 1] = questID end,
+        }
+        env.GetNumAvailableQuests = function() return #env.greeting end
+        env.GetAvailableQuestInfo = function(index)
+            local offer = env.greeting[index]
+            return offer.isTrivial, offer.frequency, offer.repeatable, false, offer.questID
+        end
+        -- Negative entries mark a greeting selection, which names a slot rather than a quest.
+        env.SelectAvailableQuest = function(index) env.selected[#env.selected + 1] = -index end
+        return env
+    end
+
+    it("accepts unless flagged, repeatable, paused, limited to item quests, or the log is full", function()
+        local env = questEnv()
         local module = enable(env, "Modules/Quest/AutoAccept.lua", "quest.autoAccept")
         env:Fire("QUEST_DETAIL")
-        assert.equal(1, accepted)
+        assert.equal(1, env.accepted)
         env.autoAccept = true
         env:Fire("QUEST_DETAIL")
         env.autoAccept, env.pvp = false, true
         env:Fire("QUEST_DETAIL")
         env.pvp, env.repeatable = false, true
         env:Fire("QUEST_DETAIL")
-        env.repeatable, env.control = false, true
+        env.repeatable, env.adventureMap = false, true
         env:Fire("QUEST_DETAIL")
-        assert.equal(1, accepted)
+        env.adventureMap, env.control = false, true
+        env:Fire("QUEST_DETAIL")
+        assert.equal(1, env.accepted)
         env.control = false
         env.R.Settings:SetOption("questAcceptItemsOnly", true)
         env:Fire("QUEST_DETAIL", nil)
-        assert.equal(1, accepted)
+        assert.equal(1, env.accepted)
         env:Fire("QUEST_DETAIL", 4321)
-        assert.equal(2, accepted)
+        assert.equal(2, env.accepted)
+        env.R.Settings:SetOption("questAcceptItemsOnly", false)
+        -- A full log is said once, not once per offer.
+        env.logQuests, env.logLimit = 35, 35
+        env:Fire("QUEST_DETAIL")
+        env:Fire("QUEST_DETAIL")
+        assert.equal(2, env.accepted)
+        assert.equal(1, #env.messages)
+        assert.matches("quest log is full", env.messages[1])
+        noResidue(env, module)
+    end)
+
+    it("works through an NPC's offers on the gossip list and on the greeting panel", function()
+        local env = questEnv()
+        local module = enable(env, "Modules/Quest/AutoAccept.lua", "quest.autoAccept")
+        env.available = { { questID = 10, isIgnored = true }, { questID = 11, repeatable = true },
+            { questID = 12 }, { questID = 13 } }
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 12 }, env.selected)
+        -- An accepted quest leaves the list, and the page that follows carries on down it.
+        env.available = { { questID = 10, isIgnored = true }, { questID = 11, repeatable = true },
+            { questID = 13 } }
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 12, 13 }, env.selected)
+        -- Nothing left that this visit has not opened.
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 12, 13 }, env.selected)
+        -- Same NPC on the greeting panel: slot 1 was opened as quest 13, slot 2 is repeatable.
+        env.greeting = { { questID = 13 }, { questID = 14, repeatable = true }, { questID = 15 } }
+        env:Fire("QUEST_GREETING")
+        assert.same({ 12, 13, -3 }, env.selected)
+        -- A different NPC starts its own list.
+        env.npc = "Creature-0-3061-1-42177-38039-002FAC4343"
+        env.greeting = { { questID = 13 } }
+        env:Fire("QUEST_GREETING")
+        assert.same({ 12, 13, -3, -1 }, env.selected)
+        noResidue(env, module)
+    end)
+
+    it("leaves a list alone when paused, in combat, limited to items, switched off, or the log is full", function()
+        local env = questEnv()
+        local module = enable(env, "Modules/Quest/AutoAccept.lua", "quest.autoAccept")
+        env.available = { { questID = 20 } }
+        env.control = true
+        env:Fire("GOSSIP_SHOW")
+        env.control, env.combat = false, true
+        env:Fire("GOSSIP_SHOW")
+        env.combat = false
+        env.R.Settings:SetOption("questAcceptItemsOnly", true)
+        env:Fire("GOSSIP_SHOW")
+        env.R.Settings:SetOption("questAcceptItemsOnly", false)
+        env.R.Settings:SetOption("questAcceptLists", false)
+        env:Fire("GOSSIP_SHOW")
+        env.R.Settings:SetOption("questAcceptLists", true)
+        env.logQuests, env.logLimit = 25, 25
+        env:Fire("GOSSIP_SHOW")
+        assert.same({}, env.selected)
+        assert.equal(1, #env.messages)
+        -- A refusal spends no offer, so making room is enough to carry on.
+        env.logQuests = 24
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 20 }, env.selected)
+        noResidue(env, module)
+    end)
+
+    it("stops after ten offers at one NPC", function()
+        local env = questEnv()
+        local module = enable(env, "Modules/Quest/AutoAccept.lua", "quest.autoAccept")
+        for index = 1, 12 do
+            env.greeting[index] = { questID = 100 + index }
+        end
+        for _ = 1, 12 do
+            env:Fire("QUEST_GREETING")
+        end
+        assert.equal(10, #env.selected)
         noResidue(env, module)
     end)
 
@@ -796,6 +896,41 @@ describe("M4 quest automation", function()
         assert.equal("quest.autoGossip", module.id)
         noResidue(env, module)
     end)
+
+    it("accept: leaves a gossip page the gossip module already acted on", function()
+        local env = gossipEnv()
+        env.AcceptQuest = function() end
+        env.QuestGetAutoAccept = function() return false end
+        env.QuestFlagsPVP = function() return false end
+        env.QuestIsFromAdventureMap = function() return false end
+        env.GetQuestID = function() return 500 end
+        env.GetNumAvailableQuests = function() return 0 end
+        env.GetAvailableQuestInfo = function() return false, nil, false, false, nil end
+        env.SelectAvailableQuest = function() end
+        env.C_QuestLog = {
+            IsRepeatableQuest = function() return false end,
+            GetNumQuestLogEntries = function() return 3, 0 end,
+            GetMaxNumQuestsCanAccept = function() return 35 end,
+        }
+        local gossip = enable(env, "Modules/Quest/AutoGossip.lua", "quest.autoGossip")
+        local accept = enable(env, "Modules/Quest/AutoAccept.lua", "quest.autoAccept")
+        env.available = { { questID = 10 } }
+        env:Fire("GOSSIP_SHOW")
+        -- The gossip module opens the only offer, and the page is selected once, not twice.
+        assert.same({ 10 }, env.quests)
+        env:Fire("GOSSIP_CLOSED", false)
+        -- Two offers are past the gossip module's rule, so the accept module takes the first.
+        env.available = { { questID = 11 }, { questID = 12 } }
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 10, 11 }, env.quests)
+        env:Fire("GOSSIP_CLOSED", false)
+        -- With the gossip module gone, the accept module handles the lone offer itself.
+        env.R.Registry:Disable(gossip)
+        env.available = { { questID = 13 } }
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 10, 11, 13 }, env.quests)
+        noResidue(env, accept)
+    end)
 end)
 
 describe("M4 chat and social", function()
@@ -982,6 +1117,7 @@ describe("M4 price providers and bench", function()
         local env = base()
         env:Load("Integrations/TSM.lua")
         env:Load("Integrations/Auctionator.lua")
+        env:Load("Integrations/Prices.lua")
         env.C_Item = { GetItemInfo = function() return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 5 end }
         env.R.Integrations:RegisterPriceProviders()
         assert.is_false(env.R.Integrations.tsmAvailable)

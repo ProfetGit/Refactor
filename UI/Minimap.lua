@@ -2,7 +2,7 @@ local _, R = ...
 local Theme = R.Theme
 local UI = R.UI
 
-local BUTTON_SIZE, ICON_INSET, ORBIT_MARGIN = 31, 6, 5
+local BUTTON_SIZE, ICON_INSET, ORBIT_MARGIN = 31, 3, 5
 local DEFAULT_ANGLE = 225
 
 -- Match BugSack's LibDBIcon rim spacing while keeping the saved angle.

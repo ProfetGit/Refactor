@@ -36,9 +36,14 @@ read_globals = {
     "C_FriendList", "C_BattleNet", "GetMerchantNumItems", "GetMerchantItemLink", "GetMerchantItemMaxStack",
     "BuyMerchantItem", "GetNumBuybackItems", "GetBuybackItemInfo", "BuybackItem", "AcceptQuest",
     "GetQuestReward", "CompleteQuest", "IsQuestCompletable", "GetNumQuestChoices", "QuestGetAutoAccept",
-    "QuestFlagsPVP", "GetQuestID", "CancelDuel", "AcceptGroup", "AcceptResurrect", "StaticPopup_Hide", "ConsoleExec", "EventRegistry", "NineSliceUtil",
+    "QuestFlagsPVP", "GetQuestID", "QuestIsFromAdventureMap", "GetNumAvailableQuests", "GetAvailableQuestInfo",
+    "SelectAvailableQuest", "CancelDuel", "AcceptGroup", "AcceptResurrect", "StaticPopup_Hide", "ConsoleExec", "EventRegistry", "NineSliceUtil",
     "IsGuildMember", "ChatFrameUtil", "SetItemRef", "SendMailNameEditBox", "SendMailFrame", "Screenshot",
     "GetFramerate", "GetAddOnCPUUsage", "UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage", "GetTimePreciseSec",
+    -- Blizzard_SharedXML/Mainline/UIDropDownMenu.lua, loaded by Blizzard_SharedXML.toc at
+    -- the installed build. Used by the farm HUD's right click menu only.
+    "UIDropDownMenu_Initialize", "UIDropDownMenu_CreateInfo", "UIDropDownMenu_AddButton",
+    "ToggleDropDownMenu", "CloseDropDownMenus",
 }
 
 files["Tests/"] = { std = "+busted" }

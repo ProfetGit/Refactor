@@ -7,7 +7,7 @@
 ## SavedVariablesPerCharacter: RefactorCharDB
 ## X-Category: Miscellaneous
 ## X-License: All Rights Reserved
-## IconTexture: Interface/AddOns/Refactor/Media/RefactorIcon
+## IconTexture: Interface\AddOns\Refactor\Media\IconList
 
 Libs/LibStub/LibStub.lua
 Libs/LibRefactorTheme-1.0/LibRefactorTheme-1.0.lua
@@ -31,6 +31,8 @@ Locales/Panels.enUS.lua
 Locales/Tooltips.enUS.lua
 Locales/Toasts.enUS.lua
 Locales/Features.enUS.lua
+Locales/Prices.enUS.lua
+Locales/Farm.enUS.lua
 
 Media/CustomTheme.lua
 
@@ -44,12 +46,15 @@ UI/Confirm.lua
 UI/FirstRun.lua
 UI/Minimap.lua
 UI/LootFeed.lua
+UI/FarmHud.lua
+UI/SessionSummary.lua
 UI/VendorPanel.lua
 UI/UrlCopy.lua
 UI/Panels/Display.lua
 UI/Panels/Tooltips.lua
 
 Modules/Loot/FastLoot.lua
+Modules/Loot/FarmSession.lua
 Modules/Vendor/AutoSell.lua
 Modules/Vendor/AutoRepair.lua
 Modules/Vendor/Summary.lua
@@ -71,6 +76,7 @@ Integrations/Questie.lua
 Integrations/Plater.lua
 Integrations/TSM.lua
 Integrations/Auctionator.lua
+Integrations/Prices.lua
 
 Modules_LoD/Nameplates/QuestProgress_Data.lua
 Modules_LoD/Nameplates/QuestProgress.lua

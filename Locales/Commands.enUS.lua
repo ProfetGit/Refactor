@@ -20,6 +20,8 @@ L.CMD_LOOT_TEST_PUSHED = "Pushed five test rows: a common item, a stack, an unco
 L.CMD_LOOT_TEST_TEXTURES = "Feed textures loaded: row, hover, icon frame, underline."
 L.CMD_LOOT_TEST_MISSING = "Feed textures the client would not load: %s. New art is read at startup, so quit "
     .. "the game and start it again; a /reload is not enough."
+L.CMD_HELP_FARM_TEST = "/refactor farmtest - fill the farm HUD with a fake session"
+L.CMD_FARM_TEST_OFF = "The farm session HUD is switched off, so there is no session to fill."
 L.BENCH_RUNNING = "A bench sample is already running."
 L.BENCH_SAMPLING = "Sampling for %d seconds. Stand still in a city for the idle figure."
 L.BENCH_LOAD = "Load time, ADDON_LOADED to PLAYER_LOGIN: %.1f ms (budget 30)"

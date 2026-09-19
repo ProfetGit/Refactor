@@ -58,7 +58,7 @@ describe("slash dispatch", function()
         local env = base()
         local lines = env.R.Commands:Dispatch("wat")
         assert.equal(env.R.L.CMD_HELP_HEADER, lines[1])
-        assert.equal(6, #lines)
+        assert.equal(7, #lines)
     end)
 
     it("says so when nothing is listening for the loot feed test", function()

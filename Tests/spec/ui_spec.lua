@@ -81,7 +81,6 @@ describe("sidebar groups", function()
         local _, R = loaded()
         local UI = R.UI
         UI:Toggle()
-        UI:SelectCategory("All")
         local seen = 0
         for _, category in ipairs(UI.categories) do
             local header, last = UI.sections[category], nil
@@ -90,14 +89,46 @@ describe("sidebar groups", function()
             for _, row in ipairs(UI.sectionRows[category]) do
                 if row:IsShown() then last = row; seen = seen + 1 end
             end
-            assert.is_not.equal(nil, last, category .. " has a heading but no rows")
+            -- General is the one section carrying settings instead of features, so it is
+            -- headed by its own block rather than by rows.
+            local block = UI.sectionBlocks[category]
+            assert.is_true(last ~= nil or (block ~= nil and block:IsShown()),
+                category .. " has a heading but nothing under it")
         end
         assert.equal(#R.modules, seen)
-        UI:SelectCategory("Vendor")
-        assert.is_true(UI.sections.Vendor:IsShown())
-        for _, category in ipairs(UI.categories) do
-            if category ~= "Vendor" then assert.is_false(UI.sections[category]:IsShown()) end
+    end)
+
+    it("jump to a section rather than filtering the list down to it", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        for _, entry in ipairs(UI.sidebar) do
+            assert.is_not.equal("All", entry.key)
         end
+        assert.equal(UI.categories[1], UI.category)
+        UI:SelectCategory("Vendor")
+        assert.equal("Vendor", UI.category)
+        for _, category in ipairs(UI.categories) do
+            assert.is_true(UI.sections[category]:IsShown(), category .. " was hidden by a jump")
+        end
+        -- A jump stops short of the heading by the lead-in, so no heading lands against
+        -- the border, and the sidebar still counts the section as arrived at.
+        local vendor = UI.scroll.slider:GetValue()
+        assert.is_true(vendor < UI.sectionOffset.Vendor)
+        UI.scroll.onScroll(vendor)
+        assert.equal("Vendor", UI.category)
+        -- The tail past the last section is what lets it reach the top of the view: without
+        -- it the bottom half of the sidebar would all land on the same scroll position.
+        local last = UI.categories[#UI.categories]
+        UI:SelectCategory(last)
+        assert.is_true(UI.sectionOffset[last] > 0)
+        UI.scroll.onScroll(UI.scroll.slider:GetValue())
+        assert.equal(last, UI.category)
+        -- Scrolling moves the sidebar with the view, not with the last click.
+        UI.scroll.onScroll(0)
+        assert.equal(UI.categories[1], UI.category)
+        UI.scroll.onScroll(UI.sectionOffset.Vendor)
+        assert.equal("Vendor", UI.category)
     end)
 
     it("keep search global regardless of the selected group", function()
@@ -124,19 +155,26 @@ describe("window chrome", function()
         assert.equal(1, selectedCount())
         assert.equal("character", UI.mode)
         assert.equal("", UI.help:GetText())
-        UI:SelectCategory("Options")
+        UI:SelectCategory("General")
         assert.equal(1, selectedCount())
-        assert.equal(string.format(R.L.UI_TOGGLE_FORMAT, R.L.UI_SCOPE, R.L.UI_CHARACTER),
-            UI.scopeButton.label:GetText())
-        UI.scopeButton:GetScript("OnClick")(UI.scopeButton)
+        assert.is_true(UI.general:IsShown())
+        assert.equal(R.L.UI_SCOPE, UI.scopeDropdown.label:GetText())
+        assert.equal(R.L.UI_CHARACTER, UI.scopeDropdown.button:GetDefaultText())
+        -- Opening the menu runs the real generator, so the entries and the setter behind
+        -- them are exercised rather than assumed.
+        local entries = UI.scopeDropdown.button:OpenMenu()
+        assert.equal(2, #entries)
+        assert.is_true(entries[1].selected)
+        for _, entry in ipairs(entries) do
+            if entry.value == "account" then entry.choose() end
+        end
         assert.equal("account", UI.mode)
-        assert.equal(string.format(R.L.UI_TOGGLE_FORMAT, R.L.UI_SCOPE, R.L.UI_ACCOUNT),
-            UI.scopeButton.label:GetText())
+        assert.equal(R.L.UI_ACCOUNT, UI.scopeDropdown.button:GetDefaultText())
         UI:SelectCategory("Profiles")
         assert.equal(1, selectedCount())
         assert.is_true(UI.panelTitle:IsShown())
         assert.equal(R.L.UI_PROFILES, UI.panelTitle:GetText())
-        UI:SelectCategory("All")
+        UI:SelectCategory("Vendor")
         assert.is_false(UI.panelTitle:IsShown())
     end)
 
@@ -168,14 +206,20 @@ describe("window chrome", function()
         assert.is_false(row.undo:IsShown())
     end)
 
-    it("toggles from anywhere on the row and lights the whole row while hovered", function()
+    it("toggles from the checkbox alone and lights the whole row while hovered", function()
         local _, R = loaded()
         local UI = R.UI
         UI:Toggle()
         local row = UI.rows[1]
         local before = R.Settings:Get(row.module.id)
-        row:GetScript("OnClick")(row)
+        -- WoW updates the tick before calling the handler, as the row does on Refresh.
+        row.toggle:SetChecked(not before)
+        row.toggle:GetScript("OnClick")(row.toggle)
         assert.equal(not before, R.Settings:Get(row.module.id))
+        row.toggle:SetChecked(before)
+        row.toggle:GetScript("OnClick")(row.toggle)
+        assert.equal(before, R.Settings:Get(row.module.id))
+        -- The rest of the row opens settings, so it must never flip the feature itself.
         row:GetScript("OnClick")(row)
         assert.equal(before, R.Settings:Get(row.module.id))
         -- The wash is one alpha animation on the row, not a texture per child. Headless
@@ -186,8 +230,12 @@ describe("window chrome", function()
         row:GetScript("OnEnter")(row)
         assert.equal(1, row.hover.to)
         settle(row.hover)
-        row.undo:GetScript("OnEnter")(row.undo)
-        assert.equal(1, row.hover.to)
+        -- Crossing into a child of the row is not leaving it: the checkbox now takes a
+        -- mouse of its own, so it has to hold the highlight the way undo always did.
+        for _, child in ipairs({ row.undo, row.toggle, row.chevron }) do
+            child:GetScript("OnEnter")(child)
+            assert.equal(1, row.hover.to)
+        end
         row:GetScript("OnLeave")(row)
         assert.equal(0, row.hover.to)
         settle(row.hover)
@@ -202,29 +250,215 @@ describe("window chrome", function()
         local row = UI.rows[1]
         local before = R.Settings:Get(row.module.id)
         row.toggle:SetEnabled(false)
-        row:GetScript("OnClick")(row)
+        row.toggle:GetScript("OnClick")(row.toggle)
         assert.equal(before, R.Settings:Get(row.module.id))
     end)
 
-    it("stacks every options section on one page with a known height", function()
+    it("opens a feature's settings under its own row, one at a time", function()
         local _, R = loaded()
         local UI = R.UI
-        UI:SelectCategory("Options")
-        assert.is_true(UI.options:IsShown())
+        UI:Toggle()
+        assert.is_nil(UI.panels.Options)
         assert.is_nil(UI.panels.Display)
         assert.is_nil(UI.panels.TooltipOptions)
-        assert.is_true(UI.options.contentHeight > 600)
-        assert.is_table(UI.toastQualityButton)
-        assert.is_table(UI.tooltipModeButton)
-        assert.is_table(UI.nameplateButtons[1])
-        UI.gossipLearnButton:GetScript("OnClick")(UI.gossipLearnButton)
+        -- Every block that has an owner is reachable from that owner's row.
+        for id in pairs(UI.moduleSettings) do
+            assert.is_table(R.moduleByID[id], id .. " owns a settings block but is not a module")
+        end
+        local function rowFor(id)
+            for _, row in ipairs(UI.rows) do
+                if row.module.id == id then return row end
+            end
+        end
+        -- Headless nothing drives OnUpdate, so the spec runs the animation out by hand:
+        -- one step past its 150 ms and the block is wherever it was heading.
+        local function settle(block)
+            local step = block:GetScript("OnUpdate")
+            if step then step(block, 1) end
+        end
+        local toastRow, gossipRow = rowFor("toasts.loot"), rowFor("quest.autoGossip")
+        local toasts, gossip = UI.moduleSettings["toasts.loot"], UI.moduleSettings["quest.autoGossip"]
+        assert.is_true(toastRow.chevron:IsShown())
+        assert.is_false(toasts:IsShown())
+        -- Clicking the row opens the block; only the checkbox flips the feature itself.
+        toastRow:GetScript("OnClick")(toastRow)
+        assert.equal("toasts.loot", UI.expanded)
+        assert.is_true(toasts:IsShown())
+        assert.is_table(UI.toastQualityDropdown)
+        settle(toasts)
+        assert.is_nil(toasts:GetScript("OnUpdate"), "the expand animation left its handler on")
+        -- One at a time: the blocks are tall enough that two open leaves nothing scannable.
+        gossipRow.chevron:GetScript("OnClick")(gossipRow.chevron)
+        assert.equal("quest.autoGossip", UI.expanded)
+        assert.is_false(toasts:IsShown())
+        assert.is_true(gossip:IsShown())
+        settle(gossip)
+        -- A collapse keeps the block laid out while it plays, and takes it out at the end.
+        gossipRow.chevron:GetScript("OnClick")(gossipRow.chevron)
+        assert.is_nil(UI.expanded)
+        assert.equal("quest.autoGossip", UI.collapsing)
+        assert.is_true(gossip:IsShown())
+        settle(gossip)
+        assert.is_nil(UI.collapsing)
+        assert.is_nil(gossip:GetScript("OnUpdate"), "the collapse animation left its handler on")
+        assert.is_false(gossip:IsShown())
+        -- A feature with no settings of its own gets no chevron to click.
+        assert.is_false(rowFor("loot.fastLoot").chevron:IsShown())
+        for _, entry in ipairs(UI.gossipLearnDropdown.button:OpenMenu()) do
+            if entry.value == "ALT" then entry.choose() end
+        end
         assert.equal("ALT", R.Settings:GetOption("gossipLearnModifier"))
-        assert.is_truthy(UI.gossipLearnButton.label:GetText():find("Alt", 1, true))
+        assert.equal(R.L.UI_ALT, UI.gossipLearnDropdown.button:GetDefaultText())
         R.Settings:SetOption("gossipLearned", { Creature = { [1] = 2 } })
         UI:LoadDisplay()
         assert.is_truthy(UI.gossipForgetButton.label:GetText():find("(1)", 1, true))
         UI.gossipForgetButton:GetScript("OnClick")(UI.gossipForgetButton)
         assert.same({}, R.Settings:GetOption("gossipLearned"))
+    end)
+
+    it("puts every numeric option on a slider the validator accepts end to end", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        assert.is_true(#UI.optionSliders > 0)
+        for _, slider in ipairs(UI.optionSliders) do
+            local spec = slider.spec
+            local low, high = slider.slider:GetMinMaxValues()
+            assert.equal(spec.minimum, low)
+            assert.equal(spec.maximum, high)
+            -- Every position the track can reach has to be a value Settings will store, or
+            -- dragging to one end would silently do nothing.
+            local value = low
+            while value <= high + 0.000001 do
+                local stored = spec.store and spec.store(value) or value
+                assert.is_true(Settings:SetOption(spec.key, stored),
+                    spec.key .. " refused " .. tostring(stored))
+                value = value + spec.step
+            end
+            -- And what is stored has to come back as the same position on the track.
+            local shown = spec.show and spec.show(Settings:GetOption(spec.key))
+                or Settings:GetOption(spec.key)
+            assert.equal(high, shown)
+            Settings:SetOption(spec.key, Settings.optionDefaults[spec.key])
+        end
+    end)
+
+    it("writes a dragged slider through, and undoes it back to the default", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        local opacity
+        for _, slider in ipairs(UI.optionSliders) do
+            if slider.spec.key == "farmOpacity" then opacity = slider end
+        end
+        assert.is_table(opacity)
+        -- Stored as a factor, shown as a percentage, the way Blizzard shows a scale.
+        opacity.slider:GetScript("OnValueChanged")(opacity.slider, 50)
+        assert.equal(0.5, Settings:GetOption("farmOpacity"))
+        assert.equal("50%", opacity.valueText:GetText())
+        assert.is_true(opacity.undo:IsShown())
+        opacity.onUndo()
+        assert.equal(Settings.optionDefaults.farmOpacity, Settings:GetOption("farmOpacity"))
+        assert.is_false(opacity.undo:IsShown())
+        -- Writing a value back in must not read as the player moving it, or a refresh
+        -- would write the setting again on every pass.
+        local writes = 0
+        local real = Settings.SetOption
+        Settings.SetOption = function(...) writes = writes + 1; return real(...) end
+        UI:LoadDisplay()
+        Settings.SetOption = real
+        assert.equal(0, writes)
+    end)
+
+    it("puts every named choice on a dropdown that reports and writes its setting", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        assert.is_true(#UI.optionDropdowns > 0)
+        for _, dropdown in ipairs(UI.optionDropdowns) do
+            local entries = dropdown.button:OpenMenu()
+            assert.equal(#dropdown.entryList, #entries)
+            local selected = 0
+            for _, entry in ipairs(entries) do
+                if entry.selected then selected = selected + 1 end
+            end
+            assert.equal(1, selected, dropdown.optionKey .. " has no one selected entry")
+            -- Every entry the menu offers has to be a value Settings will store.
+            for _, entry in ipairs(entries) do
+                entry.choose()
+                assert.equal(entry.value, Settings:GetOption(dropdown.optionKey),
+                    dropdown.optionKey .. " refused " .. tostring(entry.value))
+                assert.equal(entry.text, dropdown.button:GetDefaultText())
+            end
+            Settings:SetOption(dropdown.optionKey, Settings.optionDefaults[dropdown.optionKey])
+        end
+    end)
+
+    it("falls back to a stepped button when the client has no dropdown template", function()
+        local env, R = loaded()
+        local Theme = env.LibStub("LibRefactorTheme-1.0")
+        local template = Theme.dropdownTemplate
+        Theme.dropdownTemplate = nil
+        local chosen = "SHIFT"
+        local entries = {
+            { value = "CTRL", text = "Ctrl" }, { value = "SHIFT", text = "Shift" },
+            { value = "ALT", text = "Alt" },
+        }
+        local dropdown = Theme:Dropdown(env.CreateFrame("Frame"), 380, entries,
+            function(value) return chosen == value end,
+            function(value) chosen = value end)
+        Theme.dropdownTemplate = template
+        -- No menu to open, so the same surface has to step through the entries and wrap.
+        -- (Every mock frame answers SetupMenu, so the fallback is told apart by behaviour.)
+        assert.is_function(dropdown.button:GetScript("OnClick"))
+        dropdown.button:GetScript("OnClick")(dropdown.button)
+        assert.equal("ALT", chosen)
+        dropdown.button:GetScript("OnClick")(dropdown.button)
+        assert.equal("CTRL", chosen)
+        dropdown:SetValueText("Ctrl")
+        assert.equal("Ctrl", dropdown.button:GetDefaultText())
+        assert.is_table(R.UI.optionDropdowns)
+    end)
+
+    it("swaps the tooltip placement list with the anchor mode", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        Settings:SetOption("tooltipAnchor", "cursor")
+        UI:LoadTooltips()
+        assert.equal(R.L.UI_TOOLTIP_CURSOR_SIDE, UI.tooltipPointDropdown.label:GetText())
+        assert.equal(3, #UI.tooltipPointDropdown.button:OpenMenu())
+        Settings:SetOption("tooltipAnchor", "point")
+        UI:LoadTooltips()
+        assert.equal(R.L.UI_TOOLTIP_POINT, UI.tooltipPointDropdown.label:GetText())
+        local entries = UI.tooltipPointDropdown.button:OpenMenu()
+        assert.equal(9, #entries)
+        -- The one dropdown writes whichever placement setting the mode is using.
+        for _, entry in ipairs(entries) do
+            if entry.value == "TOPLEFT" then entry.choose() end
+        end
+        assert.equal("TOPLEFT", Settings:GetOption("tooltipPoint"))
+        assert.equal("RIGHT", Settings:GetOption("tooltipCursorSide"))
+    end)
+
+    it("reaches a setting by name and opens the block holding it", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        -- "Repair limit" is on no row: without the block index the only way to it is to
+        -- already know Auto repair owns it.
+        UI.search:SetText("repair limit")
+        UI:Refresh()
+        assert.is_true(UI.moduleSettings["vendor.autoRepair"]:IsShown())
+        for _, row in ipairs(UI.rows) do
+            if row.module.id == "vendor.autoRepair" then assert.is_true(row:IsShown()) end
+        end
+        -- General is a section of the list, so a query that reaches none of it hides it.
+        assert.is_false(UI.general:IsShown())
+        UI.search:SetText("")
+        UI:Refresh()
+        assert.is_true(UI.general:IsShown())
+        assert.is_false(UI.moduleSettings["vendor.autoRepair"]:IsShown())
     end)
 end)
 

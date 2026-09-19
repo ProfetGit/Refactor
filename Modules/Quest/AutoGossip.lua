@@ -6,7 +6,8 @@
 ---     C_GossipInfo.GetActiveQuests, C_GossipInfo.ForceGossip, C_GossipInfo.SelectOptionByIndex,
 ---     C_GossipInfo.SelectAvailableQuest, C_GossipInfo.SelectActiveQuest, Enum.GossipOptionStatus.Available,
 ---     Enum.GossipOptionRecFlags.QuestLabelPrepend, Enum.GossipOptionRecFlags.PlayMovieLabelPrepend
---- Events: GOSSIP_SHOW, GOSSIP_CLOSED, and a post-hook on the gossip option button click
+--- Events: GOSSIP_SHOW, GOSSIP_CLOSED, a post-hook on the gossip option button click, and
+---     REFACTOR_GOSSIP_HANDLED emitted for whichever module reads the page next
 --- Hot: no
 local _, R = ...
 local AutoGossip = R:RegisterModule({
@@ -161,6 +162,9 @@ end
 function AutoGossip:Act(page)
     self.steps = self.steps + 1
     self.pages[#self.pages + 1] = page
+    -- Announced because the pick replaces this page: a module still to read it would be
+    -- acting on a list the server is already taking away.
+    R.Broker:Emit("REFACTOR_GOSSIP_HANDLED")
 end
 
 function AutoGossip:Pick(page, option)

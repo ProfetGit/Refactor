@@ -29,7 +29,9 @@ local BOOLEAN_OPTIONS = {
     toastShowPrice = true, toastGold = true, toastCurrency = true,
     toastShowSource = true, toastAggregate = true,
     priceTSM = true, priceAuctionator = true,
-    questAcceptItemsOnly = true,
+    farmShowHud = true, farmLocked = true, farmShowMeter = true, farmExpand = true,
+    farmShowRates = true,
+    questAcceptItemsOnly = true, questAcceptLists = true,
     gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = true, gossipInInstances = true,
 }
 local ANCHOR_POINTS = {
@@ -48,7 +50,15 @@ local OPTION_DEFAULTS = {
     toastOpacity = 0.85, toastLifetime = 5, toastMaxRows = 5, toastScale = 1,
     -- Auction providers are opt-in (PRD 5.5): on launch day no realm has auction data.
     priceTSM = false, priceAuctionator = false, tsmPriceString = "dbMarket",
-    questAcceptItemsOnly = false,
+    priceSource = "auto",
+    -- The farm HUD works with none of these touched: it shows up, starts on the first loot,
+    -- and prices with whatever the chain already resolves to.
+    farmShowHud = true, farmLocked = false, farmOpacity = 0.9, farmIdleSeconds = 180,
+    -- Starts collapsed: the HUD is a glance, and the chevron is one press away when it is not.
+    farmGoalGold = 0, farmShowMeter = true, farmExpand = false,
+    -- Off by default: items and mobs per hour answer a question nobody asked mid-pull.
+    farmShowRates = false,
+    questAcceptItemsOnly = false, questAcceptLists = true,
     gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = false, gossipInInstances = false,
     gossipLearnModifier = "SHIFT", gossipLearned = {},
 }
@@ -106,6 +116,17 @@ local function validOption(key, value)
         return type(value) == "number" and value >= 1 and value <= 10 and value % 1 == 0
     elseif key == "toastScale" then
         return type(value) == "number" and value >= 0.7 and value <= 1.5
+    elseif key == "priceSource" then
+        return value == "auto" or value == "tsm" or value == "auctionator" or value == "vendor"
+    elseif key == "farmOpacity" then
+        return type(value) == "number" and value >= 0.2 and value <= 1
+    elseif key == "farmIdleSeconds" then
+        -- Half a minute is the shortest gap that is not just a slow pull; an hour is the
+        -- longest that still means "you stopped farming".
+        return type(value) == "number" and value >= 30 and value <= 3600 and value % 1 == 0
+    elseif key == "farmGoalGold" then
+        -- Whole gold, and zero means no goal, which is what hides the meter.
+        return type(value) == "number" and value >= 0 and value <= 10000000 and value % 1 == 0
     elseif key == "tsmPriceString" then
         return type(value) == "string" and #value > 0 and #value <= 64 and not value:find("[%c]")
     elseif key == "gossipLearnModifier" then
@@ -137,6 +158,7 @@ function Settings:Init(account, character, guid)
     character.window = type(character.window) == "table" and character.window or {}
     character.minimap = type(character.minimap) == "table" and character.minimap or {}
     character.toast = type(character.toast) == "table" and character.toast or {}
+    character.farmHud = type(character.farmHud) == "table" and character.farmHud or {}
     -- Left over from the mail modules, which are gone: drop it so saved variables shrink.
     character.lastMailRecipient = nil
     local profiles = {}

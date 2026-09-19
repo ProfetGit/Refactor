@@ -8,6 +8,8 @@ ignore:
   - .tools
   - .release
   - Makefile
+  - Icon512.png
+  - Icon256.png
   - .luacheckrc
   - CLAUDE.md
   - CONTRIBUTING.md

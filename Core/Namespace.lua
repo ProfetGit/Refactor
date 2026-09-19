@@ -4,6 +4,9 @@ _G.Refactor = R
 -- Libs load before Core, so the theme is available to every file through the namespace.
 R.Theme = LibStub("LibRefactorTheme-1.0")
 R.Price = LibStub("LibRefactorPrice-1.0")
+-- The one place the addon's own icon paths are spelled out lives in the theme; this is the
+-- namespace handle onto it. The .toc IconTexture is Blizzard's copy of icons.app.
+R.Media = { icons = R.Theme.icons }
 R.name = addonName
 R.modules = {}
 R.moduleByID = {}

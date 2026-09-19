@@ -162,10 +162,10 @@ describe("conflict panel", function()
     end)
 end)
 
-describe("options page", function()
-    it("uses checkboxes that reflect and write the stored option", function()
+describe("settings blocks", function()
+    it("use checkboxes that reflect and write the stored option", function()
         local _, R = loaded({})
-        R.UI:LoadOptions()
+        R.UI:RefreshNameplateOptions()
         local box = R.UI.nameplateButtons[1]
         assert.equal("nameplateShowRing", box.optionKey)
         assert.is_true(box:GetChecked())

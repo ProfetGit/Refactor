@@ -17054,6 +17054,11 @@
       "line": 30,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TargetScriptDocumentation.lua"
     },
+    "CloseDropDownMenus": {
+      "kind": "source-reference",
+      "line": 1285,
+      "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+    },
     "ClosestGameObjectPosition": {
       "line": 34,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua"
@@ -17341,6 +17346,11 @@
     "GetAvailableLocales": {
       "line": 25,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/LocaleDocumentation.lua"
+    },
+    "GetAvailableQuestInfo": {
+      "kind": "source-reference",
+      "line": 375,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
     },
     "GetAvoidance": {
       "line": 237,
@@ -17752,6 +17762,11 @@
     "GetNormalizedRealmName": {
       "line": 540,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
+    },
+    "GetNumAvailableQuests": {
+      "kind": "source-reference",
+      "line": 320,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
     },
     "GetNumBuybackItems": {
       "kind": "source-reference",
@@ -18675,6 +18690,11 @@
       "line": 53,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
     },
+    "QuestIsFromAdventureMap": {
+      "kind": "source-reference",
+      "line": 40,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+    },
     "Quit": {
       "line": 91,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ConnectionDocumentation.lua"
@@ -18767,6 +18787,11 @@
     "Screenshot": {
       "line": 86,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ClientDocumentation.lua"
+    },
+    "SelectAvailableQuest": {
+      "kind": "source-reference",
+      "line": 453,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
     },
     "SelectedRealmName": {
       "line": 95,
@@ -19107,6 +19132,11 @@
       "line": 31,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/DebugToggleDocumentation.lua"
     },
+    "ToggleDropDownMenu": {
+      "kind": "source-reference",
+      "line": 1049,
+      "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+    },
     "ToggleGravity": {
       "line": 35,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/DebugToggleDocumentation.lua"
@@ -19140,6 +19170,21 @@
       "kind": "source-reference",
       "line": 9,
       "path": "Interface/AddOns/Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua"
+    },
+    "UIDropDownMenu_AddButton": {
+      "kind": "source-reference",
+      "line": 414,
+      "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+    },
+    "UIDropDownMenu_CreateInfo": {
+      "kind": "source-reference",
+      "line": 338,
+      "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+    },
+    "UIDropDownMenu_Initialize": {
+      "kind": "source-reference",
+      "line": 77,
+      "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
     },
     "UIParent": {
       "kind": "source-reference",

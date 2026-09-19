@@ -65,10 +65,17 @@ function Commands:Dispatch(input)
         R.Broker:Emit("REFACTOR_LOOT_TEST")
         return nil
     end
+    if command == "farmtest" then
+        if not R.Broker.events.REFACTOR_FARM_TEST then
+            return { R.L.CMD_FARM_TEST_OFF }
+        end
+        R.Broker:Emit("REFACTOR_FARM_TEST")
+        return nil
+    end
     if command == "bench" and R.Bench then
         R.Bench:Start(function(line) R:Print(line) end)
         return nil
     end
     return { R.L.CMD_HELP_HEADER, R.L.CMD_HELP_OPEN, R.L.CMD_HELP_ERRORS, R.L.CMD_HELP_ERRORS_CLEAR,
-        R.L.CMD_HELP_BENCH, R.L.CMD_HELP_LOOT_TEST }
+        R.L.CMD_HELP_BENCH, R.L.CMD_HELP_LOOT_TEST, R.L.CMD_HELP_FARM_TEST }
 end

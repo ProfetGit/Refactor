@@ -5,6 +5,11 @@ R.UI.Widgets = Widgets
 
 local INPUT_HEIGHT, INFO_SIZE, CHECK_SIZE = 26, 18, 26
 Widgets.ROW_HEIGHT = 34
+local CHEVRON_SIZE = 14
+-- A settings block is inset from its row's left edge and separated from the next row by a
+-- rule, so an open block reads as belonging to the row above it rather than to the list.
+local BLOCK_TOP_GAP, BLOCK_BOTTOM_GAP, BLOCK_HELP_HEIGHT = 10, 16, 30
+Widgets.BLOCK_INDENT = 34
 
 -- Exponential catch-up rather than a fixed tween: a new wheel tick moves the target at
 -- once and the view is always chasing it, so input never waits for an animation to end.
@@ -85,6 +90,48 @@ function Widgets:Section(parent, title, help)
     return section
 end
 
+-- What a search has to match to reach a setting that is not on a row of its own. Without
+-- it the only way to reach "repair limit" is to already know it lives under Auto repair.
+local function indexBlock(block, ...)
+    for index = 1, select("#", ...) do
+        local text = select(index, ...)
+        if type(text) == "string" and text ~= "" then
+            block.searchText = block.searchText .. " " .. text:lower()
+        end
+    end
+end
+
+-- A headerless block of settings for one feature, opened from that feature's row. It
+-- carries the same surface as Section (top, SetBodyHeight, height) so a builder can be
+-- moved between the two without rewriting where it puts its widgets. The feature's name
+-- is already on the row above, so repeating it in a banner would only take space.
+function Widgets:SettingsBlock(parent, help)
+    local block = CreateFrame("Frame", nil, parent)
+    -- Opening and closing animates the block's height, so its contents have to be cut off
+    -- at whatever is revealed rather than spilling over the rows below it.
+    block:SetClipsChildren(true)
+    block.top = -BLOCK_TOP_GAP
+    block.searchText = ""
+    block.Index = indexBlock
+    if help then
+        block.help = Theme:Text(block, help, "small", "TEXT_MUTED")
+        block.help:SetPoint("TOPLEFT", 0, block.top)
+        block.help:SetPoint("RIGHT")
+        block.help:SetHeight(BLOCK_HELP_HEIGHT)
+        block.help:SetJustifyV("TOP")
+        block.top = block.top - BLOCK_HELP_HEIGHT - 4
+        block:Index(help)
+    end
+    block.line = Theme:Divider(block)
+    function block:SetBodyHeight(height)
+        self.height = -self.top + height + BLOCK_BOTTOM_GAP
+        self:SetHeight(self.height)
+        self.line:SetPoint("BOTTOMLEFT", 0, BLOCK_BOTTOM_GAP * 0.5)
+        self.line:SetPoint("BOTTOMRIGHT", 0, BLOCK_BOTTOM_GAP * 0.5)
+    end
+    return block
+end
+
 -- barTop shortens the bar from the top without shortening the list: the feature list runs
 -- to the window border and the close button sits over where the upper stepper would be.
 function Widgets:Scroll(parent, barTop)
@@ -103,7 +150,11 @@ function Widgets:Scroll(parent, barTop)
     slider:SetScript("OnLeave", function(widget) Theme:ScrollThumbState(widget.thumb, "normal") end)
     -- Dragging the thumb is direct manipulation and must track the hand exactly; a wheel
     -- tick, an arrow or a filter reset is a jump and gets the glide.
-    slider:SetScript("OnValueChanged", function(widget, value) scroll:ScrollTo(value, widget.dragging) end)
+    slider:SetScript("OnValueChanged", function(widget, value)
+        scroll:ScrollTo(value, widget.dragging)
+        -- The sidebar tracks the view, so every move of the bar reports where it went.
+        if scroll.onScroll then scroll.onScroll(value) end
+    end)
     slider:SetScript("OnMouseDown", function(widget)
         widget.dragging = true
         Theme:ScrollThumbState(widget.thumb, "down")
@@ -168,43 +219,56 @@ function Widgets:Scroll(parent, barTop)
 end
 
 -- One feature on one line: toggle, name, the slot that reports a warning state, and undo.
--- The whole row is the click target, so the checkbox takes no mouse of its own and the
--- pointer never falls into a gap. Hovering the row is what shows the detail, so there is
--- neither a description line nor an info icon to hunt for.
+-- The checkbox turns the feature on and off; the rest of the row opens the feature's own
+-- settings, because a row that both toggled and expanded had no way to say which a click
+-- meant. Hovering the row is what shows the detail, so there is neither a description line
+-- nor an info icon to hunt for.
 function Widgets:ModuleRow(parent, module)
     local row = CreateFrame("Button", nil, parent)
     row:SetHeight(Widgets.ROW_HEIGHT)
     row.module = module
     row.hover = Theme:RowHighlight(row)
+    -- Every child of the row that takes a mouse of its own would otherwise read as leaving
+    -- it: the pointer crossing into the checkbox must not drop the highlight or the detail.
+    local function enterRow()
+        row.hover:To(1)
+        R.UI:ShowDetails(module, row)
+    end
+    local function leaveRow()
+        if row:IsMouseOver() then return end
+        row.hover:To(0)
+        R.UI:HideDetails()
+    end
     row.toggle = Theme:Checkbox(row, CHECK_SIZE, "", function(widget)
         R.UI:SetModuleEnabled(module, widget:GetChecked() == true)
     end)
-    row.toggle:EnableMouse(false)
     row.toggle:SetPoint("LEFT", 6, 0)
+    row.toggle:SetScript("OnEnter", enterRow)
+    row.toggle:SetScript("OnLeave", leaveRow)
     row.undo = Theme:UndoButton(row, INFO_SIZE + 2, function() R.UI:ResetModule(module) end)
     row.undo:SetPoint("RIGHT", -10, 0)
-    -- Undo sits inside the row, so entering it must not read as leaving the row.
-    row.undo:SetScript("OnEnter", function() row.hover:To(1) end)
-    row.undo:SetScript("OnLeave", function()
-        if not row:IsMouseOver() then row.hover:To(0) end
-    end)
+    row.undo:SetScript("OnEnter", enterRow)
+    row.undo:SetScript("OnLeave", leaveRow)
+    -- The scrollbar's own arrow, as the loot feed already uses it for the same job. It
+    -- keeps its slot whether or not this feature has settings, so the meta column lines up
+    -- down the whole list instead of stepping in and out by a chevron's width.
+    row.chevron = CreateFrame("Button", nil, row)
+    row.chevron:SetSize(CHEVRON_SIZE, CHEVRON_SIZE)
+    row.chevron:SetPoint("RIGHT", row.undo, "LEFT", -8, 0)
+    row.chevron.art = Theme:Texture(row.chevron, "scrollDown", "OVERLAY")
+    row.chevron.art:SetAllPoints()
+    row.chevron:Hide()
+    row.chevron:SetScript("OnEnter", enterRow)
+    row.chevron:SetScript("OnLeave", leaveRow)
+    row.chevron:SetScript("OnClick", function() R.UI:ToggleExpanded(module.id) end)
     row.meta = Theme:Text(row, "", "small", "TEXT_MUTED")
-    row.meta:SetPoint("RIGHT", row.undo, "LEFT", -10, 0)
+    row.meta:SetPoint("RIGHT", row.chevron, "LEFT", -10, 0)
     row.meta:SetWidth(180)
     row.meta:SetJustifyH("RIGHT")
     row.name = Theme:Text(row, "", "body", "TEXT_BODY")
     row.name:SetPoint("LEFT", row.toggle, "RIGHT", 8, 0)
-    row:SetScript("OnEnter", function(widget)
-        widget.hover:To(1)
-        R.UI:ShowDetails(module, widget)
-    end)
-    row:SetScript("OnLeave", function(widget)
-        widget.hover:To(0)
-        R.UI:HideDetails()
-    end)
-    row:SetScript("OnClick", function(widget)
-        if not widget.toggle:IsEnabled() then return end
-        R.UI:Cycle(module)
-    end)
+    row:SetScript("OnEnter", enterRow)
+    row:SetScript("OnLeave", leaveRow)
+    row:SetScript("OnClick", function() R.UI:ToggleExpanded(module.id) end)
     return row
 end

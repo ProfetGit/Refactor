@@ -27,7 +27,7 @@ describe("the real load sequence", function()
             end
         end
         assert.is_table(env.LibStub)
-        assert.equal(21, #R.modules)
+        assert.equal(22, #R.modules)
         env:Fire("PLAYER_LOGIN")
         assert.is_function(env.SlashCmdList.REFACTOR)
         assert.is_table(R.UI.frame)
@@ -54,16 +54,25 @@ describe("the real load sequence", function()
         env:Fire("PLAYER_LOGIN")
         local UI = R.UI
         UI:Toggle()
-        local optionsButton
+        local generalButton
         for _, button in ipairs(UI.categoryButtons) do
             button:GetScript("OnClick")(button)
-            if button.category == "Options" then optionsButton = button end
+            if button.category == "General" then generalButton = button end
         end
         assert.is_true(UI.panels.Diagnostics:IsShown())
-        optionsButton:GetScript("OnClick")(optionsButton)
-        assert.is_true(UI.options:IsShown())
-        UI:SaveOptions()
-        UI.modifierButton:GetScript("OnClick")(UI.modifierButton)
+        generalButton:GetScript("OnClick")(generalButton)
+        assert.is_true(UI.general:IsShown())
+        UI:SaveNeverSell()
+        UI:SaveRepairCap()
+        for _, entry in ipairs(UI.modifierDropdown.button:OpenMenu()) do
+            entry.choose()
+        end
+        -- Every settings block opens and its controls are laid out at least once.
+        for id, block in pairs(UI.moduleSettings) do
+            UI:ToggleExpanded(id)
+            assert.is_true(block:IsShown(), id .. " has a block that never opened")
+            UI:ToggleExpanded(id)
+        end
         -- No GameTooltip in this environment, so the hover detail must degrade to a no-op
         -- while the text it would show is still built for every module.
         for _, module in ipairs(R.modules) do

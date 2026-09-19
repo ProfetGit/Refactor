@@ -37,6 +37,17 @@ function UI:Matches(module, query, filter)
     return true
 end
 
+-- Plain, word-by-word matching over a settings block's collected labels. Same rules as
+-- Matches: the query is never treated as a Lua pattern.
+function UI:MatchesText(haystack, query)
+    if not haystack or haystack == "" then return false end
+    haystack = haystack:lower()
+    for word in (query or ""):lower():gmatch("%S+") do
+        if not haystack:find(word, 1, true) then return false end
+    end
+    return true
+end
+
 function UI:ParseNeverSell(text)
     local result = {}
     for token in (text or ""):gmatch("[^,%s]+") do

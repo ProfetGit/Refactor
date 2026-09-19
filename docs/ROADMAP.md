@@ -175,8 +175,14 @@ taught choices apply.
 
 Deferred out of M4, raised for a later milestone: hide talking head, boss banner and
 UI element visibility (7.4), auto select reward by vendor value (7.1), auto accept summon
-and auto release (7.5), aggressive tooltip anchoring (7.7.1), session loot log and gold
-per hour (7.2).
+and auto release (7.5), aggressive tooltip anchoring (7.7.1).
+
+Pulled back into M4 on 19 Sep 2026 at the owner's request: the session loot log and gold
+per hour (7.2), as `loot.farmSession`, together with the rest of the price provider chain
+(5.5). Tier manual, risk safe, in no preset, off by default. Kills per hour is counted from
+loot windows rather than the combat log: `C_CombatLog.GetCurrentEventInfo` is gone at this
+build, `CombatLogGetCurrentEventInfo` survives only behind the `loadDeprecationFallbacks`
+CVar, and `Blizzard_CombatLogProcessor` reads `C_CombatLogSecure`, which addons cannot call.
 
 Status 18 Sep 2026: every deliverable above is written and specced headless except the
 native ones listed. Manual checklist for the in-game pass, none of it done yet:
@@ -192,6 +198,11 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   expands and pauses its timer
 - Vendor list search, usable filter, buy one, Shift buy stack, buyback row, junk readout
 - Auto accept and auto turn in on an ordinary quest; a reward-choice quest stays open
+- Auto accept at an NPC with several offers, on both the gossip list and the greeting panel
+  the hand-in leaves behind: each offer opens and is accepted in turn, a repeatable or
+  ignored one is skipped, and nothing is selected twice with auto gossip also enabled
+- Auto accept with a full quest log: one chat line, no popup loop, and it carries on after
+  abandoning a quest
 - Auto gossip: `/dump C_GossipInfo.GetOptions()` at a vendor, trainer and flight master
   shows icon file IDs 132060, 132058 and 132057 and a plain dialogue line shows 132053 or
   1019848; Shift click an option and it is picked on the next visit; a quest-only NPC opens
@@ -201,6 +212,17 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
 - `AcceptGroup()` from a `/run` on a friend's invite: if it works, remove
   `unavailableReasonKey` from `Modules/Chat/AcceptInvites.lua`
 - Camera CVars set on enable and restored on disable; screenshot 1.5 s after level up
+- `/refactor farmtest` over a dark and a snow-bright zone after a full client restart:
+  every HUD texture loads, the text shadows keep both lines readable, the hold to reset
+  fills the meter and cancels on an early release, and the chevron opens and closes the
+  details panel while turning over to face the way the next press goes. Check the shipped
+  caret's own orientation: if it points down rather than up, the two angles swap
+- A real farm session: the clock starts on the first loot, pauses after the idle timeout,
+  resumes on the next drop, and vendor sales never land in the looted gold figure
+- The session summary lists every item by value, and the Copy block pastes as plain text
+  with no texture escapes
+- With TSM or Auctionator installed and opted into, the HUD names that provider, and the
+  summary notes a source that changed mid session
 - `/refactor bench` with `scriptProfile` on, idle in a capital city
 - Conflict panel with Leatrix Plus installed (carried from M3)
 
