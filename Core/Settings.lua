@@ -69,6 +69,9 @@ local OPTION_DEFAULTS = {
     -- Blizzard's window is two by five. Three by six nearly doubles the page and stays
     -- inside the left panel area at the default UI scale.
     vendorColumns = 3, vendorRows = 6,
+    -- The active ActionCam profile: a built-in id or a custom name behind its prefix, and
+    -- the custom profiles themselves, name to values. Their shape lives in CameraProfiles.
+    cameraProfile = R.CameraProfiles.default, cameraProfiles = {},
 }
 Settings.optionDefaults = OPTION_DEFAULTS
 
@@ -146,6 +149,10 @@ local function validOption(key, value)
         return value == "CTRL" or value == "SHIFT" or value == "ALT"
     elseif key == "gossipLearned" then
         return validLearned(value)
+    elseif key == "cameraProfile" then
+        return R.CameraProfiles:ValidReference(value)
+    elseif key == "cameraProfiles" then
+        return R.CameraProfiles:ValidCustom(value)
     elseif key == "neverSellIDs" then
         if type(value) ~= "table" then
             return false
@@ -199,6 +206,10 @@ function Settings:Init(account, character, guid)
         if not validOption(key, account.options[key]) then
             account.options[key] = default
         end
+    end
+    -- The selection is only a name, and the custom profile behind it may be gone.
+    if not R.CameraProfiles:Exists(account.options.cameraProfile, account.options.cameraProfiles) then
+        account.options.cameraProfile = OPTION_DEFAULTS.cameraProfile
     end
     for _, module in ipairs(R.modules) do
         self:RegisterDefaults(module.id, module.defaultEnabled)

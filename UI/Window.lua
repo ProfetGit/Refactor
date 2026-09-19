@@ -467,6 +467,7 @@ function UI:Refresh()
     self:LoadGeneral()
     self:LoadDisplay()
     self:LoadTooltips()
+    self:LoadCamera()
     self:RefreshNameplateOptions()
     -- One block per category, headed by its name: the list carries the same structure as
     -- the sidebar, and a search result says which category each row came from.
@@ -896,6 +897,7 @@ function UI:Initialize()
     self:BuildGossipSettings(self.scroll.child)
     self:BuildResurrectSettings(self.scroll.child)
     self:BuildTooltipSettings(self.scroll.child)
+    self:BuildCameraSettings(self.scroll.child)
     self.panels = {}
     self:BuildProfiles(frame)
     self:BuildConflicts(frame)

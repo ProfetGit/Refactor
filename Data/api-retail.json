@@ -16944,6 +16944,16 @@
       "line": 10,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ConsoleDocumentation.lua"
     },
+    "CameraZoomIn": {
+      "kind": "source-reference",
+      "line": 1511,
+      "path": "Interface/AddOns/Blizzard_FrameXML/Bindings_Standard.xml"
+    },
+    "CameraZoomOut": {
+      "kind": "source-reference",
+      "line": 1518,
+      "path": "Interface/AddOns/Blizzard_FrameXML/Bindings_Standard.xml"
+    },
     "CanAffordMerchantItem": {
       "kind": "source-reference",
       "line": 290,

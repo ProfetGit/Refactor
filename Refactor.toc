@@ -18,6 +18,7 @@ Core/Capabilities.lua
 Core/Broker.lua
 Core/Registry.lua
 Core/Codec.lua
+Core/CameraProfiles.lua
 Core/Settings.lua
 Core/Pools.lua
 Core/Safety.lua
@@ -33,6 +34,7 @@ Locales/Toasts.enUS.lua
 Locales/Features.enUS.lua
 Locales/Prices.enUS.lua
 Locales/Farm.enUS.lua
+Locales/Camera.enUS.lua
 
 Media/CustomTheme.lua
 
@@ -55,6 +57,7 @@ UI/MerchantFilter.lua
 UI/UrlCopy.lua
 UI/Panels/Display.lua
 UI/Panels/Tooltips.lua
+UI/Panels/Camera.lua
 
 Modules/Loot/FastLoot.lua
 Modules/Loot/FarmSession.lua

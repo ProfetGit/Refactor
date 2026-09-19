@@ -75,6 +75,16 @@ local function decode(data)
     return table.concat(out)
 end
 
+-- The same base64 the feature profiles use, for anything else that has to survive a chat
+-- paste: a camera profile carries numbers, so it cannot go through EncodeProfile.
+function Codec:EncodeText(text)
+    return encode(text)
+end
+
+function Codec:DecodeText(data)
+    return decode(data)
+end
+
 function Codec:EncodeProfile(name, values)
     if not self:ValidName(name) or not self:ValidateValues(values) then
         return nil, "invalid_profile"

@@ -51,6 +51,9 @@ read_globals = {
     -- the installed build. Used by the farm HUD's right click menu only.
     "UIDropDownMenu_Initialize", "UIDropDownMenu_CreateInfo", "UIDropDownMenu_AddButton",
     "ToggleDropDownMenu", "CloseDropDownMenus",
+    -- ActionCam profiles: situation queries and the two camera zoom calls
+    "IsIndoors", "IsResting", "IsMounted", "UnitOnTaxi", "UnitInVehicle", "IsPlayerInWorld",
+    "CameraZoomIn", "CameraZoomOut",
 }
 
 files["Tests/"] = { std = "+busted" }

@@ -101,7 +101,8 @@ function Runtime.new()
     env:Load("Libs/LibRefactorPrice-1.0/LibRefactorPrice-1.0.lua")
     for _, path in ipairs({
         "Core/Namespace.lua", "Core/Capabilities.lua", "Core/Broker.lua", "Core/Registry.lua",
-        "Core/Codec.lua", "Core/Settings.lua", "Core/Pools.lua", "Core/Safety.lua", "Core/Presets.lua",
+        "Core/Codec.lua", "Core/CameraProfiles.lua", "Core/Settings.lua", "Core/Pools.lua", "Core/Safety.lua",
+        "Core/Presets.lua",
     }) do env:Load(path) end
     env.R.Settings:Init({}, {}, "Player-test")
     return env

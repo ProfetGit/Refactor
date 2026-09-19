@@ -40,6 +40,14 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
 - Chat and social: clickable web addresses with a copy box; auto decline duels; auto
   accept resurrection out of combat. Auto accept party invites is written but ships
   unavailable until AcceptGroup is confirmed callable from an addon.
+- ActionCam profiles: Blizzard's Basic, On and Full run through the console command that
+  defines them; Refactor's Immersive (close, over the shoulder, tilting as it comes in, a
+  faint head sway, tuned for mouse and keyboard) and Controller (target and NPC focus, no
+  sway, a little further back). Immersive and Controller move and recentre the camera
+  as you go indoors, into a city or inn, onto a mount or into combat. Save a copy of any
+  profile and tune it on sliders; export and import a profile as a string. The Keep
+  Character Centered accessibility option, which overrides ActionCam, is off while a
+  profile is on and back at its default when the feature is off.
 - Interface: maximum camera distance, ActionCam through its three CVars, screenshot on
   level up. Mail: remember last recipient per character.
 - Price providers: TradeSkillMaster (custom price string) and Auctionator, opt-in under

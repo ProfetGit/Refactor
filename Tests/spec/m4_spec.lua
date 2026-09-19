@@ -1042,31 +1042,133 @@ describe("M4 chat and social", function()
 end)
 
 describe("M4 interface, mail, vendor", function()
-    it("camera modules set CVars on enable and restore defaults on disable", function()
+    local function cameraEnv()
         local env = base()
-        local cvars = {}
+        env.cvars, env.console, env.zoom, env.hidden = {}, {}, {}, {}
         env.C_CVar = {
-            SetCVar = function(name, value) cvars[name] = value end,
-            GetCVarDefault = function(name) return name == "cameraDistanceMaxZoomFactor" and "1.9" or "0" end,
+            SetCVar = function(name, value) env.cvars[name] = value end,
+            GetCVarDefault = function(name)
+                if name == "cameraDistanceMaxZoomFactor" then return "1.9" end
+                if name == "CameraKeepCharacterCentered" then return "1" end
+                return "0"
+            end,
         }
-        local hidden = {}
-        local console = {}
-        env.ConsoleExec = function(command) console[#console + 1] = command end
-        env.StaticPopup_Hide = function(which) hidden[which] = true end
+        env.ConsoleExec = function(command) env.console[#env.console + 1] = command end
+        env.StaticPopup_Hide = function(which) env.hidden[which] = true end
+        -- One list for both directions: a zoom out is a negative entry.
+        env.CameraZoomIn = function(yards) env.zoom[#env.zoom + 1] = yards end
+        env.CameraZoomOut = function(yards) env.zoom[#env.zoom + 1] = -yards end
+        env.inWorld, env.indoors, env.resting, env.mounted = true, false, false, false
+        env.taxi, env.vehicle = false, false
+        env.IsPlayerInWorld = function() return env.inWorld end
+        env.IsIndoors = function() return env.indoors end
+        env.IsResting = function() return env.resting end
+        env.IsMounted = function() return env.mounted end
+        env.UnitOnTaxi = function() return env.taxi end
+        env.UnitInVehicle = function() return env.vehicle end
+        return env
+    end
+
+    it("camera distance sets its CVar on enable and restores the default on disable", function()
+        local env = cameraEnv()
         local camera = enable(env, "Modules/Interface/CameraDistance.lua", "interface.cameraDistance")
-        local action = enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
-        assert.equal("2.6", cvars.cameraDistanceMaxZoomFactor)
-        assert.is_true(hidden.EXPERIMENTAL_CVAR_WARNING)
-        assert.same({ "actioncam basic" }, console)
+        assert.equal("2.6", env.cvars.cameraDistanceMaxZoomFactor)
         env.R.Registry:Disable(camera)
-        env.R.Registry:Disable(action)
-        assert.equal("1.9", cvars.cameraDistanceMaxZoomFactor)
-        -- The preset is the client's, so disable restores every test_camera CVar it could touch.
-        assert.equal("0", cvars.test_cameraOverShoulder)
-        assert.equal("0", cvars.test_cameraTargetFocusEnemyEnable)
-        assert.equal("0", cvars.test_cameraHeadMovementStrength)
+        assert.equal("1.9", env.cvars.cameraDistanceMaxZoomFactor)
         noResidue(env, camera)
+    end)
+
+    it("ActionCam applies Immersive, follows the situation, and reverts everything", function()
+        local env = cameraEnv()
+        local action = enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        local cvars = env.cvars
+        assert.is_true(env.hidden.EXPERIMENTAL_CVAR_WARNING)
+        assert.same({}, env.console)
+        assert.equal("1", cvars.test_cameraDynamicPitch)
+        assert.equal("0.60", cvars.test_cameraOverShoulder)
+        assert.equal("0.30", cvars.test_cameraHeadMovementStrength)
+        assert.equal("1", cvars.test_cameraTargetFocusInteractEnable)
+        assert.equal("0", cvars.test_cameraTargetFocusEnemyEnable)
+        -- Blizzard's motion sickness guard overrides every ActionCam CVar, so it is off.
+        assert.equal("0", cvars.CameraKeepCharacterCentered)
+        assert.same({ 4 }, env.zoom)
+        -- Indoors: centred and closer. The same situation again moves nothing.
+        env.indoors = true
+        env:Fire("ZONE_CHANGED_INDOORS")
+        assert.equal("0.00", cvars.test_cameraOverShoulder)
+        assert.same({ 4, 3 }, env.zoom)
+        env:Fire("ZONE_CHANGED")
+        assert.same({ 4, 3 }, env.zoom)
+        -- Mounted wins over indoors: six back from the base, so nine out from where it was.
+        env.mounted = true
+        env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+        assert.equal("0.00", cvars.test_cameraOverShoulder)
+        assert.same({ 4, 3, -9 }, env.zoom)
+        -- Another unit's vehicle event is not ours; the player's is.
+        env.mounted, env.indoors, env.resting = false, false, true
+        env:Fire("UNIT_EXITED_VEHICLE", "party1")
+        assert.same({ 4, 3, -9 }, env.zoom)
+        env:Fire("UNIT_EXITED_VEHICLE", "player")
+        assert.equal("0.30", cvars.test_cameraOverShoulder)
+        assert.same({ 4, 3, -9, 2 }, env.zoom)
+        -- Combat wins over everything and leans into the shoulder.
+        env.combat = true
+        env:Fire("PLAYER_REGEN_DISABLED")
+        assert.equal("0.90", cvars.test_cameraOverShoulder)
+        assert.same({ 4, 3, -9, 2, 4 }, env.zoom)
+        -- Off: every CVar back to the client's default, the guard back on, the pull undone.
+        env.R.Registry:Disable(action)
+        assert.equal("0", cvars.test_cameraOverShoulder)
+        assert.equal("0", cvars.test_cameraDynamicPitch)
+        assert.equal("0", cvars.test_cameraTargetFocusInteractEnable)
+        assert.equal("0", cvars.test_cameraHeadMovementStrength)
+        assert.equal("1", cvars.CameraKeepCharacterCentered)
+        assert.same({ 4, 3, -9, 2, 4, -4 }, env.zoom)
         noResidue(env, action)
+    end)
+
+    it("ActionCam enabled at login records the profile without moving the camera", function()
+        local env = cameraEnv()
+        env.inWorld = false
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        assert.is_nil(env.cvars.test_cameraDynamicPitch)
+        assert.same({}, env.zoom)
+        env:Fire("PLAYER_ENTERING_WORLD", true, false)
+        assert.equal("1", env.cvars.test_cameraDynamicPitch)
+        assert.equal("0.60", env.cvars.test_cameraOverShoulder)
+        assert.same({}, env.zoom)
+        env.indoors = true
+        env:Fire("ZONE_CHANGED_INDOORS")
+        assert.same({ 3 }, env.zoom)
+        -- A loading screen that is not a login is a zone change: the situation is re-read.
+        env.indoors = false
+        env:Fire("PLAYER_ENTERING_WORLD", false, false)
+        assert.same({ 3, -3 }, env.zoom)
+    end)
+
+    it("ActionCam runs a Blizzard preset by console and switches profiles cleanly", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        local Settings, Profiles = env.R.Settings, env.R.CameraProfiles
+        assert.is_true(Settings:SetOption("cameraProfile", "blizzardFull"))
+        assert.same({ "actioncam full" }, env.console)
+        assert.same({ 4, -4 }, env.zoom)
+        -- A preset knows nothing of situations: nothing moves and the shoulder is the
+        -- client's own value, not one this module wrote.
+        env.indoors = true
+        env:Fire("ZONE_CHANGED_INDOORS")
+        assert.same({ 4, -4 }, env.zoom)
+        assert.equal("0", env.cvars.test_cameraOverShoulder)
+        assert.is_true(Settings:SetOption("cameraProfile", "controller"))
+        assert.same({ 4, -4, 4 }, env.zoom)
+        assert.equal("0.20", env.cvars.test_cameraOverShoulder)
+        assert.equal("0.00", env.cvars.test_cameraHeadMovementStrength)
+        assert.equal("1", env.cvars.test_cameraTargetFocusEnemyEnable)
+        -- A copy edits live: the number written into it reaches the camera at once.
+        assert.is_true(Profiles:SaveCopy("Mine", Profiles:Active().values))
+        assert.is_true(Profiles:SetField("indoorsShoulder", 1.2))
+        assert.equal("1.20", env.cvars.test_cameraOverShoulder)
+        assert.same({ 4, -4, 4 }, env.zoom)
     end)
 
     it("screenshots after a delay and cancels the timer on disable", function()

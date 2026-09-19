@@ -316,6 +316,65 @@ describe("window chrome", function()
         assert.same({}, R.Settings:GetOption("gossipLearned"))
     end)
 
+    it("camera block lists the profiles, locks the built-in ones, and edits a copy", function()
+        local _, R = loaded()
+        local UI, Settings, Profiles = R.UI, R.Settings, R.CameraProfiles
+        UI:Toggle()
+        UI:ToggleExpanded("interface.actionCam")
+        assert.is_true(UI.moduleSettings["interface.actionCam"]:IsShown())
+        local entries = UI.cameraProfileDropdown.button:OpenMenu()
+        assert.equal(#Profiles.builtIn, #entries)
+        assert.equal(R.L.CAMERA_PROFILE_IMMERSIVE, UI.cameraProfileDropdown.button:GetDefaultText())
+        for _, slider in ipairs(UI.cameraSliders) do
+            assert.is_false(slider.slider:IsEnabled(), "a built-in profile's slider is live")
+        end
+        assert.is_false(UI.cameraDelete:IsEnabled())
+        -- A copy under a new name is selected and unlocked.
+        UI.cameraName:SetText("Mine")
+        UI.cameraSaveCopy:GetScript("OnClick")(UI.cameraSaveCopy)
+        assert.equal("custom:Mine", Settings:GetOption("cameraProfile"))
+        assert.equal(#Profiles.builtIn + 1, #UI.cameraProfileDropdown.button:OpenMenu())
+        assert.equal("Mine", UI.cameraProfileDropdown.button:GetDefaultText())
+        assert.is_true(UI.cameraDelete:IsEnabled())
+        local shoulder, situationZoom
+        for _, slider in ipairs(UI.cameraSliders) do
+            assert.is_true(slider.slider:IsEnabled())
+            if slider.spec.key == "shoulder" then shoulder = slider end
+            if slider.spec.suffix == "Zoom" then situationZoom = slider end
+        end
+        shoulder.slider:GetScript("OnValueChanged")(shoulder.slider, 1.2)
+        assert.equal(1.2, Settings:GetOption("cameraProfiles").Mine.shoulder)
+        assert.equal("1.2 right", shoulder.valueText:GetText())
+        -- The situation dropdown swaps which field the two sliders under it show.
+        assert.equal("3 yards closer", situationZoom.valueText:GetText())
+        for _, entry in ipairs(UI.cameraSituationDropdown.button:OpenMenu()) do
+            if entry.value == "mounted" then entry.choose() end
+        end
+        assert.equal("6 yards further", situationZoom.valueText:GetText())
+        situationZoom.slider:GetScript("OnValueChanged")(situationZoom.slider, -2)
+        assert.equal(-2, Settings:GetOption("cameraProfiles").Mine.mountedZoom)
+        -- Export fills the box; importing the same string is a name clash, so it is
+        -- imported under the built-in's name instead and selected.
+        UI.cameraExport:GetScript("OnClick")(UI.cameraExport)
+        assert.is_true(#UI.cameraString:GetText() > 0)
+        assert.equal(R.L.UI_CAMERA_EXPORTED, UI.cameraStatus:GetText())
+        UI.cameraImport:GetScript("OnClick")(UI.cameraImport)
+        assert.equal(R.L.UI_CAMERA_ERR_profile_exists, UI.cameraStatus:GetText())
+        Profiles:Select("immersive")
+        UI:LoadCamera()
+        UI.cameraExport:GetScript("OnClick")(UI.cameraExport)
+        UI.cameraImport:GetScript("OnClick")(UI.cameraImport)
+        assert.equal("custom:" .. R.L.CAMERA_PROFILE_IMMERSIVE, Settings:GetOption("cameraProfile"))
+        assert.equal("", UI.cameraString:GetText())
+        UI.cameraDelete:GetScript("OnClick")(UI.cameraDelete)
+        assert.equal("immersive", Settings:GetOption("cameraProfile"))
+        assert.is_nil(Settings:GetOption("cameraProfiles")[R.L.CAMERA_PROFILE_IMMERSIVE])
+        -- Garbage in the box is refused in words.
+        UI.cameraString:SetText("not a profile")
+        UI.cameraImport:GetScript("OnClick")(UI.cameraImport)
+        assert.equal(R.L.UI_CAMERA_ERR_invalid_encoding, UI.cameraStatus:GetText())
+    end)
+
     it("puts every numeric option on a slider the validator accepts end to end", function()
         local _, R = loaded()
         local UI, Settings = R.UI, R.Settings

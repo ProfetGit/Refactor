@@ -47,6 +47,14 @@
     "needle": "C_ToyBox.GetToyInfo(self.itemID)",
     "path": "Interface/AddOns/Blizzard_Collections/Mainline/Blizzard_ToyBox.lua"
   },
+  "CameraZoomIn": {
+    "needle": "CameraZoomIn(1.0);",
+    "path": "Interface/AddOns/Blizzard_FrameXML/Bindings_Standard.xml"
+  },
+  "CameraZoomOut": {
+    "needle": "CameraZoomOut(1.0);",
+    "path": "Interface/AddOns/Blizzard_FrameXML/Bindings_Standard.xml"
+  },
   "CanAffordMerchantItem": {
     "needle": "CanAffordMerchantItem(index)",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
