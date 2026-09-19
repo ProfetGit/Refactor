@@ -61,6 +61,9 @@ local OPTION_DEFAULTS = {
     questAcceptItemsOnly = false, questAcceptLists = true,
     gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = false, gossipInInstances = false,
     gossipLearnModifier = "SHIFT", gossipLearned = {},
+    -- Blizzard's window is two by five. Three by six nearly doubles the page and stays
+    -- inside the left panel area at the default UI scale.
+    vendorColumns = 3, vendorRows = 6,
 }
 Settings.optionDefaults = OPTION_DEFAULTS
 
@@ -129,6 +132,11 @@ local function validOption(key, value)
         return type(value) == "number" and value >= 0 and value <= 10000000 and value % 1 == 0
     elseif key == "tsmPriceString" then
         return type(value) == "string" and #value > 0 and #value <= 64 and not value:find("[%c]")
+    elseif key == "vendorColumns" then
+        -- One column would leave the page buttons and repair row overlapping.
+        return type(value) == "number" and value >= 2 and value <= 5 and value % 1 == 0
+    elseif key == "vendorRows" then
+        return type(value) == "number" and value >= 2 and value <= 8 and value % 1 == 0
     elseif key == "gossipLearnModifier" then
         return value == "CTRL" or value == "SHIFT" or value == "ALT"
     elseif key == "gossipLearned" then

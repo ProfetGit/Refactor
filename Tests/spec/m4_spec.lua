@@ -1072,42 +1072,82 @@ describe("M4 interface, mail, vendor", function()
         return env
     end
 
-    it("extended vendor list filters stock and buys one or a stack", function()
+    local function gridEnv()
         local env = merchantEnv()
-        env.stock = {
-            { name = "Bread", texture = 1, price = 50, stackCount = 5, numAvailable = -1, isUsable = true },
-            { name = "Plate Helm", texture = 2, price = 5000, stackCount = 1, numAvailable = -1, isUsable = false },
-            { name = "Badge Thing", texture = 3, price = 0, hasExtendedCost = true, isUsable = true },
-        }
-        env.GetMerchantNumItems = function() return #env.stock end
-        env.C_MerchantFrame = { GetItemInfo = function(index) return env.stock[index] end }
-        env.GetMerchantItemLink = function(index) return "|Hitem:" .. index .. ":|h" end
-        env.GetMerchantItemMaxStack = function() return 20 end
-        env.purchases = {}
-        env.BuyMerchantItem = function(index, quantity) env.purchases[#env.purchases + 1] = { index, quantity } end
-        env.GetNumBuybackItems = function() return 2 end
-        env.GetBuybackItemInfo = function(index) return "Sold " .. index, 9, 10 * index, 1 end
-        env.bought = {}
-        env.BuybackItem = function(index) env.bought[#env.bought + 1] = index end
-        env.IsShiftKeyDown = function() return env.shift == true end
+        env:Load("UI/MerchantGrid.lua")
+        for index = 1, 12 do
+            env.CreateFrame("Frame", "MerchantItem" .. index, env.MerchantFrame)
+        end
+        env.CreateFrame("Frame", "MerchantBuyBackItem", env.MerchantFrame)
+        env.CreateFrame("Button", "MerchantNextPageButton", env.MerchantFrame)
+        env.MerchantFrameBottomLeftBorder = env.MerchantFrame:CreateTexture()
+        env.MERCHANT_ITEMS_PER_PAGE, env.BUYBACK_ITEMS_PER_PAGE = 10, 12
+        env.MerchantFrame.selectedTab, env.MerchantFrame.page = 1, 3
+        env.hooks, env.updates = {}, 0
+        env.hooksecurefunc = function(name, fn) env.hooks[name] = fn end
+        env.MerchantFrame_Update = function()
+            env.updates = env.updates + 1
+            env.hooks.MerchantFrame_Update()
+        end
+        return env
+    end
+
+    it("reshapes Blizzard's merchant window from the options and puts it back on disable", function()
+        local env = gridEnv()
         local module = enable(env, "Modules/Vendor/ExtendedUI.lua", "vendor.extendedUI")
-        env:Fire("MERCHANT_SHOW")
-        assert.is_true(module.panel:IsShown())
-        assert.equal(2, #module.items)
-        assert.equal("Sold 2", module.buyback[1].name)
-        module.panel.usable:SetChecked(true)
-        module:Refresh()
-        assert.equal(1, #module.items)
-        assert.equal("Bread", module.items[1].name)
-        module.panel.rows[1]:GetScript("OnClick")(module.panel.rows[1])
-        env.shift = true
-        module.panel.rows[1]:GetScript("OnClick")(module.panel.rows[1])
-        assert.same({ { 1, 1 }, { 1, 20 } }, env.purchases)
-        module.panel.buybackRows[1]:GetScript("OnClick")(module.panel.buybackRows[1])
-        assert.same({ 2 }, env.bought)
-        env:Fire("MERCHANT_CLOSED")
-        assert.is_false(module.panel:IsShown())
-        assert.is_nil(env.R.Broker.events.MERCHANT_UPDATE)
+        local grid = module.grid
+        -- Three by six: eighteen a page, one column wider than Blizzard's, a row taller.
+        assert.equal(18, env.MERCHANT_ITEMS_PER_PAGE)
+        assert.equal(501, grid.width)
+        assert.equal(496, grid.height)
+        assert.equal("MerchantItemTemplate", env.MerchantItem40.template)
+        assert.is_nil(env.MerchantItem41)
+        -- Open at enable: back to page one through Blizzard's own update, then the hook.
+        assert.equal(1, env.updates)
+        assert.equal(1, env.MerchantFrame.page)
+        assert.is_true(env.MerchantItem18:IsShown())
+        assert.is_false(env.MerchantItem19:IsShown())
+        -- The buyback tab fills twelve cells whatever the page size.
+        env.MerchantFrame.selectedTab = 2
+        env.MerchantFrame_Update()
+        assert.is_true(env.MerchantItem12:IsShown())
+        assert.is_false(env.MerchantItem13:IsShown())
+        env.MerchantFrame.selectedTab = 1
+        assert.is_true(env.R.Settings:SetOption("vendorColumns", 2))
+        assert.equal(12, env.MERCHANT_ITEMS_PER_PAGE)
+        assert.equal(336, grid.width)
+        assert.equal(496, grid.height)
+        assert.is_true(env.MerchantItem12:IsShown())
+        assert.is_false(env.MerchantItem13:IsShown())
+        assert.is_false(env.R.Settings:SetOption("vendorColumns", 1))
+        assert.is_false(env.R.Settings:SetOption("vendorColumns", 6))
+        assert.is_false(env.R.Settings:SetOption("vendorRows", 9))
+        assert.is_false(env.R.Settings:SetOption("vendorRows", 2.5))
+        env.R.Registry:Disable(module)
+        assert.equal(10, env.MERCHANT_ITEMS_PER_PAGE)
+        assert.is_false(env.MerchantItem13:IsShown())
+        assert.is_false(grid.active)
+        -- The hook stays installed and does nothing while the module is off.
+        env.MerchantFrame_Update()
+        assert.is_false(grid.active)
+        noResidue(env, module)
+        assert.equal(10, env.MERCHANT_ITEMS_PER_PAGE)
+    end)
+
+    it("waits for combat to end before reshaping the merchant window", function()
+        local env = gridEnv()
+        local module = enable(env, "Modules/Vendor/ExtendedUI.lua", "vendor.extendedUI")
+        env.combat = true
+        assert.is_true(env.R.Settings:SetOption("vendorRows", 8))
+        assert.is_true(env.R.Settings:SetOption("vendorColumns", 4))
+        assert.equal(18, env.MERCHANT_ITEMS_PER_PAGE)
+        env.combat = false
+        env:Fire("PLAYER_REGEN_ENABLED")
+        assert.equal(32, env.MERCHANT_ITEMS_PER_PAGE)
+        assert.equal(666, module.grid.width)
+        for _, entry in ipairs(env.R.Broker.events.PLAYER_REGEN_ENABLED or {}) do
+            assert.is_not.equal(module, entry.owner)
+        end
         noResidue(env, module)
     end)
 end)

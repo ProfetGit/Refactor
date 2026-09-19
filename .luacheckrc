@@ -11,6 +11,8 @@ read_globals = {
     -- Frames and widgets
     "CreateFrame", "CreateColor", "UIParent", "UISpecialFrames", "DEFAULT_CHAT_FRAME", "Minimap", "GameTooltip",
     "GetCursorPosition", "GetPhysicalScreenSize",
+    -- Blizzard's merchant window, reshaped by vendor.extendedUI
+    "MerchantBuyBackItem", "MerchantNextPageButton", "MerchantFrameBottomLeftBorder", "MerchantFrame_Update", "MERCHANT_ITEMS_PER_PAGE", "BUYBACK_ITEMS_PER_PAGE",
     -- Slash command registration
     "SlashCmdList",
     -- Blizzard settings panel namespace

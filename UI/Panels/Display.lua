@@ -65,6 +65,14 @@ local function minutesText(value)
     return string.format(L.UI_FARM_MINUTES, value)
 end
 
+local function columnsText(value)
+    return string.format(L.UI_VENDOR_COLUMN_COUNT, value)
+end
+
+local function vendorRowsText(value)
+    return string.format(L.UI_VENDOR_ROW_COUNT, value)
+end
+
 local function toPercent(stored) return math.floor((stored or 1) * 100 + 0.5) end
 local function fromPercent(value) return value / 100 end
 
@@ -83,6 +91,11 @@ local FARM_IDLE = { key = "farmIdleSeconds", minimum = 1, maximum = 60, step = 1
     labelKey = "UI_FARM_IDLE", formatter = minutesText,
     show = function(stored) return math.floor((stored or 180) / SECONDS_PER_MINUTE) end,
     store = function(value) return value * SECONDS_PER_MINUTE end }
+-- The same caps the merchant grid builds its cell pool to and Settings validates.
+local VENDOR_COLUMNS = { key = "vendorColumns", minimum = 2, maximum = 5, step = 1,
+    labelKey = "UI_VENDOR_COLUMNS", formatter = columnsText }
+local VENDOR_ROWS = { key = "vendorRows", minimum = 2, maximum = 8, step = 1,
+    labelKey = "UI_VENDOR_ROWS", formatter = vendorRowsText }
 -- Automatic is the whole chain in order. The rest name one provider and stay on it, which
 -- is what a player with two price addons installed and an opinion is asking for.
 local function learnedCount()
@@ -248,6 +261,15 @@ function UI:BuildPriceControls(block, top)
     self.priceNote:SetHeight(40)
     self.priceNote:SetJustifyV("TOP")
     return 192
+end
+
+function UI:BuildVendorListSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_VENDOR_HELP)
+    local top = block.top
+    self.vendorColumnsSlider = self:OptionSlider(block, VENDOR_COLUMNS, top)
+    self.vendorRowsSlider = self:OptionSlider(block, VENDOR_ROWS, top - SLIDER_STEP)
+    block:SetBodyHeight(SLIDER_STEP * 2)
+    self:RegisterModuleSettings("vendor.extendedUI", block)
 end
 
 function UI:BuildQuestSettings(parent)

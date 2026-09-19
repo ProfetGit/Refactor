@@ -24,7 +24,7 @@ Violating any of these is a bug even if the code works.
 
 1. **No taint.** Never touch `SecureActionButtonTemplate`, never `SetAttribute` on a secure frame, never hook a protected function. If a feature seems to need this, it is not built.
 2. **No protected actions and no changes to secure or protected frames during combat lockdown.** Modules that would need it are not built. Changing Refactor's own non-secure frames in combat (hiding a tooltip, disabling a button) is fine, and so is declining to act in combat.
-3. **One global.** The only write to `_G` in the entire addon is the namespace in `Core/Namespace.lua`. Everything else is `local`.
+3. **One file writes globals.** Every write to `_G` lives in `Core/Namespace.lua`: the namespace, SavedVariables, the slash command, and `R:SetBlizzardTunable` for the short allowlist of Blizzard layout constants a module may change and must restore on disable (today only `MERCHANT_ITEMS_PER_PAGE`). Everything else is `local`.
 4. **Every API symbol a module uses appears in its `requires` list.** No exceptions. This is what `make api-check` verifies and it is the main defence against invented functions.
 5. **No allocation in files marked `-- @hot`.** No table literals, no `..` concatenation, no closures created per call. Use pools and caches.
 6. **Every `SetScript("OnUpdate", fn)` has a matching `SetScript("OnUpdate", nil)` in the same file.** `OnUpdate` is only for something actively animating, and it removes itself when the animation ends. Zero active `OnUpdate` handlers while idle is a release gate.
@@ -33,7 +33,7 @@ Violating any of these is a bug even if the code works.
 9. **No user-facing strings outside `Locales/`.**
 10. **No new dependencies.** Ace3 is deliberately not used, see PRD 9.7. The complete list of embedded libraries: `LibStub`, `CallbackHandler-1.0`, `LibDataBroker-1.1`, `LibDBIcon-1.0`, and our own `LibRefactorPrice-1.0` and `LibRefactorTheme-1.0` (in-tree under `Libs/` until extracted). Anything else needs approval first.
 11. **No frame creation inside an event handler.** Frames are created once at module enable and pooled.
-12. **Never reskin Blizzard frames.** Refactor styles its own frames only, through `LibRefactorTheme` and the visual style in PRD 8.3. No colour literals or texture paths in module or widget code, only theme tokens.
+12. **Never reskin Blizzard frames.** Refactor styles its own frames only, through `LibRefactorTheme` and the visual style in PRD 8.3. No colour literals or texture paths in module or widget code, only theme tokens. One layout exception, decided 19 Sep 2026: `vendor.extendedUI` resizes Blizzard's merchant window and adds cells from Blizzard's own `MerchantItemTemplate`. It changes where things sit, never how they look, and undoes all of it on disable.
 13. **Animation uses `AnimationGroup`.** `OnUpdate` only when an animation cannot be expressed that way.
 
 ## API ground truth

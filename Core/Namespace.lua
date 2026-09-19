@@ -115,6 +115,15 @@ function R:CancelTimers(owner)
     end
 end
 
+-- Blizzard layout constants a module may change, each restored on disable. Kept here so
+-- every global write in the addon stays in this one file (rule 3).
+local BLIZZARD_TUNABLES = { MERCHANT_ITEMS_PER_PAGE = true }
+
+function R:SetBlizzardTunable(name, value)
+    assert(BLIZZARD_TUNABLES[name], "not an approved Blizzard tunable")
+    _G[name] = value
+end
+
 -- SavedVariables and slash registration are the required Blizzard global exceptions.
 function R:InitSavedVariables(guid)
     if type(_G.RefactorDB) ~= "table" then

@@ -11,6 +11,10 @@
     "needle": "AcceptQuest();",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
   },
+  "BUYBACK_ITEMS_PER_PAGE": {
+    "needle": "BUYBACK_ITEMS_PER_PAGE = 12;",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
   "BuyMerchantItem": {
     "needle": "BuyMerchantItem(",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
@@ -196,9 +200,37 @@
     "needle": "LootSlot(",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua"
   },
+  "MERCHANT_ITEMS_PER_PAGE": {
+    "needle": "MERCHANT_ITEMS_PER_PAGE = 10;",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "MerchantBuyBackItem": {
+    "needle": "name=\"MerchantBuyBackItem\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
   "MerchantFrame": {
     "needle": "MerchantFrame",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "MerchantFrameBottomLeftBorder": {
+    "needle": "name=\"MerchantFrameBottomLeftBorder\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "MerchantFrame_Update": {
+    "needle": "function MerchantFrame_Update()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "MerchantItem1": {
+    "needle": "name=\"MerchantItem1\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "MerchantItem12": {
+    "needle": "name=\"MerchantItem12\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "MerchantNextPageButton": {
+    "needle": "name=\"MerchantNextPageButton\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
   },
   "NUM_TOTAL_EQUIPPED_BAG_SLOTS": {
     "path": "Interface/AddOns/Blizzard_FrameXMLBase/Constants.lua"

@@ -1,106 +1,57 @@
 --- @module vendor.extendedUI
---- Purpose: a searchable, filterable list of a merchant's stock beside the merchant window.
---- Requires: InCombatLockdown, IsShiftKeyDown, MerchantFrame, GetMerchantNumItems, C_MerchantFrame.GetItemInfo,
----     GetMerchantItemLink, GetMerchantItemMaxStack, BuyMerchantItem, GetNumBuybackItems,
----     GetBuybackItemInfo, BuybackItem, C_Item.GetItemQualityByID
---- Events: MERCHANT_SHOW; MERCHANT_CLOSED, MERCHANT_UPDATE (contextual)
+--- Purpose: more rows and columns in Blizzard's merchant window, drawn with Blizzard's own art.
+--- Requires: InCombatLockdown, hooksecurefunc, MerchantFrame, MerchantItem1, MerchantItem12, MerchantBuyBackItem,
+---     MerchantNextPageButton, MerchantFrameBottomLeftBorder, MerchantFrame_Update, MERCHANT_ITEMS_PER_PAGE,
+---     BUYBACK_ITEMS_PER_PAGE
+--- Events: REFACTOR_SETTINGS_CHANGED; PLAYER_REGEN_ENABLED (contextual)
 --- Hot: no
 local _, R = ...
 local ExtendedUI = R:RegisterModule({
     id = "vendor.extendedUI", category = "Vendor", nameKey = "VENDOR_UI_NAME",
     descriptionKey = "VENDOR_UI_DESC", detailKey = "VENDOR_UI_DETAIL",
-    requires = { "InCombatLockdown", "IsShiftKeyDown", "MerchantFrame", "GetMerchantNumItems",
-        "C_MerchantFrame.GetItemInfo", "GetMerchantItemLink", "GetMerchantItemMaxStack", "BuyMerchantItem",
-        "GetNumBuybackItems", "GetBuybackItemInfo", "BuybackItem", "C_Item.GetItemQualityByID" },
+    -- MerchantItem1 and MerchantItem12 stand for the twelve cells Blizzard's XML ships; the
+    -- grid reaches the ones between by name. A client with fewer leaves the module unavailable.
+    requires = { "InCombatLockdown", "hooksecurefunc", "MerchantFrame", "MerchantItem1", "MerchantItem12",
+        "MerchantBuyBackItem", "MerchantNextPageButton", "MerchantFrameBottomLeftBorder", "MerchantFrame_Update",
+        "MERCHANT_ITEMS_PER_PAGE", "BUYBACK_ITEMS_PER_PAGE" },
     tier = "standard", risk = "visible", defaultEnabled = false,
 })
 
-local MAX_BUYBACK = 3
-
--- Rebuilds the flat list the panel shows: only gold-priced stock, filtered by the search
--- text and the usable toggle. Rows are reused, never created here.
-function ExtendedUI:Collect()
-    local panel, items = self.panel, self.items
-    for index = #items, 1, -1 do
-        items[index] = nil
-    end
-    local query = panel:GetQuery()
-    local usableOnly = panel:UsableOnly()
-    for index = 1, GetMerchantNumItems() do
-        local info = C_MerchantFrame.GetItemInfo(index)
-        if info and info.price and info.price > 0 and not info.hasExtendedCost and (not usableOnly or info.isUsable)
-            and (query == "" or (info.name or ""):lower():find(query, 1, true)) then
-            local link = GetMerchantItemLink(index)
-            local itemID = link and tonumber(link:match("item:(%d+)"))
-            items[#items + 1] = {
-                index = index, name = info.name, texture = info.texture, price = info.price,
-                stackCount = info.stackCount, numAvailable = info.numAvailable,
-                quality = itemID and C_Item.GetItemQualityByID(itemID) or nil,
-            }
+-- The merchant window is not a protected frame, so reshaping it in combat is allowed. It
+-- is still put off until the fight ends: a window changing shape mid-pull helps nobody.
+function ExtendedUI:Apply()
+    if InCombatLockdown() then
+        if not self.pending then
+            self.pending = true
+            R.Broker:Subscribe("PLAYER_REGEN_ENABLED", self.OnCombatEnded, self)
         end
-    end
-    local buyback = self.buyback
-    for index = #buyback, 1, -1 do
-        buyback[index] = nil
-    end
-    local total = GetNumBuybackItems()
-    for index = total, math.max(1, total - MAX_BUYBACK + 1), -1 do
-        local name, texture, price, quantity = GetBuybackItemInfo(index)
-        if name then
-            buyback[#buyback + 1] = { index = index, name = name, texture = texture, price = price,
-                stackCount = quantity }
-        end
-    end
-end
-
-function ExtendedUI:Refresh()
-    if not MerchantFrame:IsShown() then
         return
     end
-    self:Collect()
-    self.panel:Render(self.items, self.buyback)
+    self.grid:Apply(R.Settings:GetOption("vendorColumns"), R.Settings:GetOption("vendorRows"))
 end
 
-function ExtendedUI:Buy(index, stack)
-    if InCombatLockdown() or not MerchantFrame:IsShown() then
-        return
+function ExtendedUI:OnCombatEnded()
+    self.pending = nil
+    R.Broker:Unsubscribe("PLAYER_REGEN_ENABLED", self)
+    self:Apply()
+end
+
+function ExtendedUI:OnSettingsChanged(_, key)
+    if key == "vendorColumns" or key == "vendorRows" then
+        self:Apply()
     end
-    local quantity = 1
-    if stack or IsShiftKeyDown() then
-        quantity = math.max(1, GetMerchantItemMaxStack(index) or 1)
-    end
-    BuyMerchantItem(index, quantity)
-end
-
-function ExtendedUI:Buyback(index)
-    if InCombatLockdown() or not MerchantFrame:IsShown() then
-        return
-    end
-    BuybackItem(index)
-end
-
-function ExtendedUI:OnClosed()
-    self.panel:Hide()
-    R.Broker:Unsubscribe("MERCHANT_CLOSED", self)
-    R.Broker:Unsubscribe("MERCHANT_UPDATE", self)
-end
-
-function ExtendedUI:OnShow()
-    R.Broker:Subscribe("MERCHANT_CLOSED", self.OnClosed, self)
-    R.Broker:Subscribe("MERCHANT_UPDATE", self.Refresh, self, 0.1)
-    self.panel:Show()
-    self:Refresh()
 end
 
 function ExtendedUI:OnEnable()
-    self.items, self.buyback = {}, {}
-    self.panel = R.UI:CreateVendorPanel(self)
-    R.Broker:Subscribe("MERCHANT_SHOW", self.OnShow, self)
+    self.grid = R.UI:CreateMerchantGrid(self)
+    R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.OnSettingsChanged, self)
+    self:Apply()
 end
 
 function ExtendedUI:OnDisable()
-    if self.panel then
-        self.panel:Hide()
-    end
+    self.pending = nil
     R.Broker:UnsubscribeAll(self)
+    if self.grid then
+        self.grid:Restore()
+    end
 end

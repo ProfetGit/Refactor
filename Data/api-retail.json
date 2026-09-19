@@ -71,6 +71,11 @@
       "line": 38,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
     },
+    "BUYBACK_ITEMS_PER_PAGE": {
+      "kind": "source-reference",
+      "line": 2,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
     "BeginTrade": {
       "line": 42,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
@@ -18586,14 +18591,49 @@
       "line": 53,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua"
     },
+    "MERCHANT_ITEMS_PER_PAGE": {
+      "kind": "source-reference",
+      "line": 1,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
     "MakeModifiers": {
       "line": 244,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/InputDocumentation.lua"
+    },
+    "MerchantBuyBackItem": {
+      "kind": "source-reference",
+      "line": 402,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
     },
     "MerchantFrame": {
       "kind": "source-reference",
       "line": 7,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
+    "MerchantFrameBottomLeftBorder": {
+      "kind": "source-reference",
+      "line": 118,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
+    "MerchantFrame_Update": {
+      "kind": "source-reference",
+      "line": 189,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
+    "MerchantItem1": {
+      "kind": "source-reference",
+      "line": 127,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
+    "MerchantItem12": {
+      "kind": "source-reference",
+      "line": 182,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
+    "MerchantNextPageButton": {
+      "kind": "source-reference",
+      "line": 548,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
     },
     "Mixin": {
       "line": 298,

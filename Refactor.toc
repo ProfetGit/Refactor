@@ -49,6 +49,7 @@ UI/LootFeed.lua
 UI/FarmHud.lua
 UI/SessionSummary.lua
 UI/VendorPanel.lua
+UI/MerchantGrid.lua
 UI/UrlCopy.lua
 UI/Panels/Display.lua
 UI/Panels/Tooltips.lua

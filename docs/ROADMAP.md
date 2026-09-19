@@ -196,7 +196,12 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
 - Loot feed textures load after a full client restart, checked with `/refactor loottest`
   over both a dark and a snow-bright zone; a multi-slot loot collapses into one row that
   expands and pauses its timer
-- Vendor list search, usable filter, buy one, Shift buy stack, buyback row, junk readout
+- Merchant window at three by six: eighteen slots a page with Blizzard's art, paging and the
+  wheel step by eighteen, page text reads the new page count, buyback tab lays its twelve out
+  in the same columns, the buyback slot and next-page button sit in the bottom-right corner,
+  the bottom border art stretches cleanly, the class filter still works, and the sliders
+  reshape the window while it is open. Off again: the window is Blizzard's 336 by 444 with ten
+  a page. Five by eight still fits beside the bags at the default UI scale. Junk readout
 - Auto accept and auto turn in on an ordinary quest; a reward-choice quest stays open
 - Auto accept at an NPC with several offers, on both the gossip list and the greeting panel
   the hand-in leaves behind: each offer opens and is accepted in turn, a repeatable or
