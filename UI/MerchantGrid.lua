@@ -50,6 +50,9 @@ function R.UI:CreateMerchantGrid(owner)
         cell:Hide()
         R:OwnFrame(cell)
         grid.cells[index] = cell
+        -- A cell born here gets its extra cost buttons here too, so the costs module
+        -- never has to create frames after its own enable.
+        self:PrepareMerchantCostRow(index)
     end
     local original = grid.original
     original.width, original.height = frame:GetWidth(), frame:GetHeight()

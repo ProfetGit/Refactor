@@ -47,6 +47,11 @@
       "line": 10,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FrameScriptDocumentation.lua"
     },
+    "AltCurrencyFrame_Update": {
+      "kind": "source-reference",
+      "line": 425,
+      "path": "Interface/AddOns/Blizzard_MoneyFrame/Mainline/MoneyFrame.lua"
+    },
     "Ambiguate": {
       "line": 22,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
@@ -16914,6 +16919,11 @@
       "line": 10,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ConsoleDocumentation.lua"
     },
+    "CanAffordMerchantItem": {
+      "kind": "source-reference",
+      "line": 290,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
     "CanBeRaidTarget": {
       "line": 10,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/RaidMarkersDocumentation.lua"
@@ -17692,6 +17702,16 @@
     "GetMeleeHaste": {
       "line": 511,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
+    },
+    "GetMerchantItemCostInfo": {
+      "kind": "source-reference",
+      "line": 471,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
+    "GetMerchantItemCostItem": {
+      "kind": "source-reference",
+      "line": 479,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
     },
     "GetMerchantItemLink": {
       "kind": "source-reference",
@@ -18591,6 +18611,16 @@
       "line": 53,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua"
     },
+    "MAX_ITEM_COST": {
+      "kind": "source-reference",
+      "line": 3,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
+    "MAX_MERCHANT_CURRENCIES": {
+      "kind": "source-reference",
+      "line": 4,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
     "MERCHANT_ITEMS_PER_PAGE": {
       "kind": "source-reference",
       "line": 1,
@@ -18603,6 +18633,16 @@
     "MerchantBuyBackItem": {
       "kind": "source-reference",
       "line": 402,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
+    "MerchantExtraCurrencyBg": {
+      "kind": "source-reference",
+      "line": 495,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
+    "MerchantExtraCurrencyInset": {
+      "kind": "source-reference",
+      "line": 489,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
     },
     "MerchantFrame": {
@@ -18620,6 +18660,11 @@
       "line": 189,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
     },
+    "MerchantFrame_UpdateCurrencies": {
+      "kind": "source-reference",
+      "line": 969,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
     "MerchantItem1": {
       "kind": "source-reference",
       "line": 127,
@@ -18630,6 +18675,11 @@
       "line": 182,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
     },
+    "MerchantMoneyFrame": {
+      "kind": "source-reference",
+      "line": 515,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+    },
     "MerchantNextPageButton": {
       "kind": "source-reference",
       "line": 548,
@@ -18638,6 +18688,16 @@
     "Mixin": {
       "line": 298,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FrameScriptDocumentation.lua"
+    },
+    "MoneyFrame_SetMaxDisplayWidth": {
+      "kind": "source-reference",
+      "line": 129,
+      "path": "Interface/AddOns/Blizzard_MoneyFrame/Mainline/MoneyFrame.lua"
+    },
+    "MoneyFrame_Update": {
+      "kind": "source-reference",
+      "line": 221,
+      "path": "Interface/AddOns/Blizzard_MoneyFrame/Mainline/MoneyFrame.lua"
     },
     "MouseOverrideCinematicDisable": {
       "line": 52,
@@ -18939,6 +18999,11 @@
     "SetLootSpecialization": {
       "line": 1492,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
+    },
+    "SetMoneyFrameColor": {
+      "kind": "source-reference",
+      "line": 329,
+      "path": "Interface/AddOns/Blizzard_MoneyFrame/Shared/MoneyFrame.lua"
     },
     "SetPortraitTexture": {
       "line": 563,

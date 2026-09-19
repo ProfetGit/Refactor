@@ -1074,6 +1074,7 @@ describe("M4 interface, mail, vendor", function()
 
     local function gridEnv()
         local env = merchantEnv()
+        env:Load("UI/MerchantCosts.lua")
         env:Load("UI/MerchantGrid.lua")
         for index = 1, 12 do
             env.CreateFrame("Frame", "MerchantItem" .. index, env.MerchantFrame)
@@ -1148,6 +1149,170 @@ describe("M4 interface, mail, vendor", function()
         for _, entry in ipairs(env.R.Broker.events.PLAYER_REGEN_ENABLED or {}) do
             assert.is_not.equal(module, entry.owner)
         end
+        noResidue(env, module)
+    end)
+end)
+
+describe("M4 merchant costs", function()
+    local Runtime2 = require("Tests.mock.runtime")
+    local Widgets2 = require("Tests.mock.widgets")
+
+    local function costEnv()
+        local env = Runtime2.new()
+        Widgets2.install(env)
+        for _, path in ipairs({ "Locales/Modules.enUS.lua", "Locales/UI.enUS.lua", "Locales/Features.enUS.lua" }) do
+            env:Load(path)
+        end
+        env.R.UI = env.R.UI or {}
+        env:Load("UI/MerchantCosts.lua")
+        env.MerchantFrame = env.CreateFrame("Frame", "MerchantFrame")
+        env.MerchantFrame:Show()
+        env.MerchantFrame.selectedTab, env.MerchantFrame.page = 1, 1
+        for index = 1, 12 do
+            local cell = env.CreateFrame("Frame", "MerchantItem" .. index, env.MerchantFrame)
+            local alt = env.CreateFrame("Frame", "MerchantItem" .. index .. "AltCurrencyFrame", cell)
+            for cost = 1, 3 do
+                env.CreateFrame("Button", "MerchantItem" .. index .. "AltCurrencyFrameItem" .. cost, alt)
+            end
+            env.CreateFrame("Frame", "MerchantItem" .. index .. "MoneyFrame", cell)
+        end
+        env.MERCHANT_ITEMS_PER_PAGE, env.MAX_ITEM_COST = 10, 3
+        env.hooks, env.updates, env.money = {}, 0, 1000
+        env.hooksecurefunc = function(name, fn) env.hooks[name] = fn end
+        env.MerchantFrame_Update = function()
+            env.updates = env.updates + 1
+            env.hooks.MerchantFrame_Update()
+        end
+        env.currencyUpdates, env.currencyList = 0, {}
+        env.MerchantFrame_UpdateCurrencies = function() env.currencyUpdates = env.currencyUpdates + 1 end
+        env.MAX_MERCHANT_CURRENCIES = 6
+        env.GameTooltip = env.CreateFrame("GameTooltip", "GameTooltip")
+        for _, name in ipairs({ "MerchantMoneyFrame", "MerchantExtraCurrencyInset", "MerchantExtraCurrencyBg" }) do
+            env.CreateFrame("Frame", name, env.MerchantFrame)
+        end
+        env.stock = {}
+        env.GetMerchantNumItems = function() return #env.stock end
+        env.C_MerchantFrame = {
+            GetItemInfo = function(index) return env.stock[index] end,
+            GetMerchantCurrencies = function() return env.currencyList end,
+        }
+        env.CanAffordMerchantItem = function(index) return env.stock[index].canAfford end
+        env.GetMerchantItemCostInfo = function(index) return #env.stock[index].costs end
+        env.GetMerchantItemCostItem = function(index, cost)
+            local entry = env.stock[index].costs[cost]
+            if not entry then return nil end
+            return entry.texture, entry.value, entry.link, entry.currency
+        end
+        env.GetMoney = function() return env.money end
+        env.currencies, env.items = {}, {}
+        env.C_CurrencyInfo = { GetCurrencyInfoFromLink = function(link) return env.currencies[link] end }
+        env.C_Item = { GetItemCount = function(link) return env.items[link] or 0 end }
+        env.shown, env.moneyColor = {}, {}
+        env.AltCurrencyFrame_Update = function(name, _, _, canAfford) env.shown[name] = canAfford end
+        env.SetMoneyFrameColor = function(name, color) env.moneyColor[name] = color or "default" end
+        env.MoneyFrame_SetMaxDisplayWidth = function() end
+        env.MoneyFrame_Update = function() end
+        return env
+    end
+
+    local function cost(texture, value, link, currency)
+        return { texture = texture, value = value, link = link, currency = currency }
+    end
+
+    it("greys only the cost that is short and shows a fourth and fifth cost", function()
+        local env = costEnv()
+        env.currencies["currency:1"] = { quantity = 5 }
+        env.currencies["currency:2"] = { quantity = 50 }
+        env.items["item:9"] = 3
+        env.stock = {
+            -- Short of one currency, has the item and the gold: only that currency greys.
+            { hasExtendedCost = true, price = 500, canAfford = false,
+                costs = { cost(1, 10, "currency:1", "Marks"), cost(2, 2, "item:9") } },
+            -- Affordable with five costs: all white, two of them past Blizzard's three.
+            { hasExtendedCost = true, price = 0, canAfford = true,
+                costs = { cost(1, 1, "currency:2", "Marks"), cost(1, 1, "currency:2", "Marks"),
+                    cost(1, 1, "currency:2", "Marks"), cost(2, 1, "item:9"), cost(2, 1, "item:9") } },
+            -- Unaffordable and nothing can be told short: everything greys, as Blizzard does.
+            { hasExtendedCost = true, price = 0, canAfford = false,
+                costs = { cost(3, 1, nil, "Unknown"), cost(2, 1, "item:9") } },
+            -- Short of gold only: the currency stays white, the money greys.
+            { hasExtendedCost = true, price = 5000, canAfford = false,
+                costs = { cost(1, 1, "currency:2", "Marks") } },
+            { hasExtendedCost = false, price = 10, canAfford = true, costs = {} },
+        }
+        local module = enable(env, "Modules/Vendor/ItemCosts.lua", "vendor.itemCosts")
+        assert.equal(0, env.updates)
+        assert.is_false(env.shown.MerchantItem1AltCurrencyFrameItem1)
+        assert.is_true(env.shown.MerchantItem1AltCurrencyFrameItem2)
+        assert.equal("default", env.moneyColor.MerchantItem1MoneyFrame)
+        assert.is_true(env.shown.MerchantItem2AltCurrencyFrameItem5)
+        assert.is_true(env.MerchantItem2AltCurrencyFrameItem5:IsShown())
+        assert.equal("SmallDenominationTemplate", env.MerchantItem2AltCurrencyFrameItem5.template)
+        assert.equal(2, env.MerchantItem2AltCurrencyFrameItem5.index)
+        assert.equal(5, env.MerchantItem2AltCurrencyFrameItem5.item)
+        assert.is_false(env.MerchantItem1AltCurrencyFrameItem4:IsShown())
+        assert.is_false(env.shown.MerchantItem3AltCurrencyFrameItem1)
+        assert.is_false(env.shown.MerchantItem3AltCurrencyFrameItem2)
+        assert.is_true(env.shown.MerchantItem4AltCurrencyFrameItem1)
+        assert.equal("gray", env.moneyColor.MerchantItem4MoneyFrame)
+        assert.is_nil(env.shown.MerchantItem5AltCurrencyFrameItem1)
+        -- The one item this merchant takes sits in the coin box with the carried count,
+        -- in Blizzard's first slot, and the money frame moves over to share the row.
+        local token = env.RefactorMerchantToken1
+        assert.is_true(token:IsShown())
+        assert.equal("item:9", token.itemLink)
+        assert.equal(1, token.slot)
+        assert.equal(3, token.Count.text)
+        assert.is_false(env.RefactorMerchantToken2:IsShown())
+        assert.is_true(env.MerchantExtraCurrencyInset:IsShown())
+        assert.is_true(env.MerchantMoneyFrame:IsShown())
+        -- A later page maps cells to the items on it, and the buyback tab is left alone.
+        for index = 6, 10 do
+            env.stock[index] = env.stock[5]
+        end
+        env.stock[11] = env.stock[1]
+        env.MerchantFrame.page = 2
+        env.shown = {}
+        env.MerchantFrame_Update()
+        assert.is_false(env.shown.MerchantItem1AltCurrencyFrameItem1)
+        assert.is_nil(env.shown.MerchantItem2AltCurrencyFrameItem1)
+        env.MerchantFrame.selectedTab, env.shown = 2, {}
+        env.MerchantFrame_Update()
+        assert.same({}, env.shown)
+        env.MerchantFrame.selectedTab = 1
+        env.R.Registry:Disable(module)
+        assert.is_false(env.MerchantItem2AltCurrencyFrameItem5:IsShown())
+        assert.is_false(env.RefactorMerchantToken1:IsShown())
+        assert.equal(3, env.updates)
+        assert.equal(1, env.currencyUpdates)
+        noResidue(env, module)
+    end)
+
+    it("chains item tokens after the merchant's currencies and gives the money frame way past three", function()
+        local env = costEnv()
+        env.currencyList = { 101, 102 }
+        env.CreateFrame("Button", "MerchantToken1", env.MerchantFrame)
+        env.CreateFrame("Button", "MerchantToken2", env.MerchantFrame)
+        env.items["item:1"], env.items["item:2"], env.items["item:3"] = 1, 200000, 0
+        env.stock = {
+            { hasExtendedCost = true, price = 0, canAfford = true,
+                costs = { cost(1, 1, "item:1"), cost(1, 1, "item:2") } },
+            { hasExtendedCost = true, price = 0, canAfford = true,
+                costs = { cost(1, 1, "item:1"), cost(1, 1, "item:3"), cost(9, 1, "currency:101", "Marks") } },
+        }
+        local module = enable(env, "Modules/Vendor/ItemCosts.lua", "vendor.itemCosts")
+        assert.same({ 3, 4, 5 }, { env.RefactorMerchantToken1.slot, env.RefactorMerchantToken2.slot,
+            env.RefactorMerchantToken3.slot })
+        assert.equal("*", env.RefactorMerchantToken2.Count.text)
+        assert.equal(0, env.RefactorMerchantToken3.Count.text)
+        assert.is_false(env.RefactorMerchantToken4:IsShown())
+        assert.is_false(env.MerchantMoneyFrame:IsShown())
+        -- Six currencies leave no slot, and Blizzard's own layout is left standing.
+        env.currencyList = { 1, 2, 3, 4, 5, 6 }
+        env.MerchantMoneyFrame:Show()
+        env.MerchantFrame_Update()
+        assert.is_false(env.RefactorMerchantToken1:IsShown())
+        assert.is_true(env.MerchantMoneyFrame:IsShown())
         noResidue(env, module)
     end)
 end)

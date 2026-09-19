@@ -11,6 +11,10 @@
     "needle": "AcceptQuest();",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
   },
+  "AltCurrencyFrame_Update": {
+    "needle": "function AltCurrencyFrame_Update(",
+    "path": "Interface/AddOns/Blizzard_MoneyFrame/Mainline/MoneyFrame.lua"
+  },
   "BUYBACK_ITEMS_PER_PAGE": {
     "needle": "BUYBACK_ITEMS_PER_PAGE = 12;",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
@@ -21,6 +25,10 @@
   },
   "BuybackItem": {
     "needle": "BuybackItem(self:GetID())",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "CanAffordMerchantItem": {
+    "needle": "CanAffordMerchantItem(index)",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
   },
   "CanMerchantRepair": {
@@ -130,6 +138,14 @@
     "needle": "GetLootSlotInfo(",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua"
   },
+  "GetMerchantItemCostInfo": {
+    "needle": "GetMerchantItemCostInfo(index)",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "GetMerchantItemCostItem": {
+    "needle": "GetMerchantItemCostItem(index, i)",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
   "GetMerchantItemLink": {
     "needle": "GetMerchantItemLink(index)",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
@@ -200,12 +216,28 @@
     "needle": "LootSlot(",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/LootFrame.lua"
   },
+  "MAX_ITEM_COST": {
+    "needle": "MAX_ITEM_COST = 3;",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "MAX_MERCHANT_CURRENCIES": {
+    "needle": "MAX_MERCHANT_CURRENCIES = 6;",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
   "MERCHANT_ITEMS_PER_PAGE": {
     "needle": "MERCHANT_ITEMS_PER_PAGE = 10;",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
   },
   "MerchantBuyBackItem": {
     "needle": "name=\"MerchantBuyBackItem\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "MerchantExtraCurrencyBg": {
+    "needle": "name=\"MerchantExtraCurrencyBg\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "MerchantExtraCurrencyInset": {
+    "needle": "name=\"MerchantExtraCurrencyInset\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
   },
   "MerchantFrame": {
@@ -220,6 +252,10 @@
     "needle": "function MerchantFrame_Update()",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
   },
+  "MerchantFrame_UpdateCurrencies": {
+    "needle": "function MerchantFrame_UpdateCurrencies()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
   "MerchantItem1": {
     "needle": "name=\"MerchantItem1\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
@@ -228,9 +264,21 @@
     "needle": "name=\"MerchantItem12\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
   },
+  "MerchantMoneyFrame": {
+    "needle": "name=\"MerchantMoneyFrame\"",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
   "MerchantNextPageButton": {
     "needle": "name=\"MerchantNextPageButton\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "MoneyFrame_SetMaxDisplayWidth": {
+    "needle": "function MoneyFrame_SetMaxDisplayWidth(",
+    "path": "Interface/AddOns/Blizzard_MoneyFrame/Mainline/MoneyFrame.lua"
+  },
+  "MoneyFrame_Update": {
+    "needle": "function MoneyFrame_Update(",
+    "path": "Interface/AddOns/Blizzard_MoneyFrame/Mainline/MoneyFrame.lua"
   },
   "NUM_TOTAL_EQUIPPED_BAG_SLOTS": {
     "path": "Interface/AddOns/Blizzard_FrameXMLBase/Constants.lua"
@@ -266,6 +314,10 @@
   "SetItemRef": {
     "needle": "function SetItemRef",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/ItemRef.lua"
+  },
+  "SetMoneyFrameColor": {
+    "needle": "function SetMoneyFrameColor(",
+    "path": "Interface/AddOns/Blizzard_MoneyFrame/Shared/MoneyFrame.lua"
   },
   "SetTooltipMoney": {
     "needle": "function SetTooltipMoney",

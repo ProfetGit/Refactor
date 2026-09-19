@@ -12,6 +12,8 @@ read_globals = {
     "CreateFrame", "CreateColor", "UIParent", "UISpecialFrames", "DEFAULT_CHAT_FRAME", "Minimap", "GameTooltip",
     "GetCursorPosition", "GetPhysicalScreenSize",
     -- Blizzard's merchant window, reshaped by vendor.extendedUI
+    "MAX_MERCHANT_CURRENCIES", "MerchantFrame_UpdateCurrencies", "MerchantMoneyFrame", "MerchantExtraCurrencyInset", "MerchantExtraCurrencyBg",
+    "CanAffordMerchantItem", "GetMerchantItemCostInfo", "GetMerchantItemCostItem", "MAX_ITEM_COST", "AltCurrencyFrame_Update", "SetMoneyFrameColor", "MoneyFrame_SetMaxDisplayWidth", "MoneyFrame_Update",
     "MerchantBuyBackItem", "MerchantNextPageButton", "MerchantFrameBottomLeftBorder", "MerchantFrame_Update", "MERCHANT_ITEMS_PER_PAGE", "BUYBACK_ITEMS_PER_PAGE",
     -- Slash command registration
     "SlashCmdList",

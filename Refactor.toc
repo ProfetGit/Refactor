@@ -49,6 +49,7 @@ UI/LootFeed.lua
 UI/FarmHud.lua
 UI/SessionSummary.lua
 UI/VendorPanel.lua
+UI/MerchantCosts.lua
 UI/MerchantGrid.lua
 UI/UrlCopy.lua
 UI/Panels/Display.lua
@@ -61,6 +62,7 @@ Modules/Vendor/AutoRepair.lua
 Modules/Vendor/Summary.lua
 Modules/Items/DeleteFill.lua
 Modules/Vendor/ExtendedUI.lua
+Modules/Vendor/ItemCosts.lua
 Modules/Quest/AutoAccept.lua
 Modules/Quest/AutoTurnIn.lua
 Modules/Quest/AutoGossip.lua

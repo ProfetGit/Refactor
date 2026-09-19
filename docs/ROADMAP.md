@@ -202,6 +202,14 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   the bottom border art stretches cleanly, the class filter still works, and the sliders
   reshape the window while it is open. Off again: the window is Blizzard's 336 by 444 with ten
   a page. Five by eight still fits beside the bags at the default UI scale. Junk readout
+- Merchant costs: at a vendor taking two currencies, short of one, only that one is grey;
+  short of gold only, the coins grey and the currency does not; an item costing more than
+  three things shows them all, the row shrinks rather than spills, and hovering a fourth cost
+  opens its tooltip; the buyback tab and gold-only items look as Blizzard draws them; off
+  again, Blizzard's grey-all returns on the next update. At the Sporeggar tabard vendor the
+  coin box lists Glowcap with the carried count and its tooltip on hover, the gold display
+  moves left beside it, and a vendor taking four items hides the gold as Blizzard does past
+  three currencies; the BackpackTokenTemplate tokens draw with icon and count
 - Auto accept and auto turn in on an ordinary quest; a reward-choice quest stays open
 - Auto accept at an NPC with several offers, on both the gossip list and the greeting panel
   the hand-in leaves behind: each offer opens and is accepted in turn, a repeatable or

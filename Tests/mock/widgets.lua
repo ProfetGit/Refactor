@@ -172,6 +172,9 @@ function Widgets.install(env)
         if type(template) == "string" and template:find("BasicFrameTemplate", 1, true) then
             frame.TitleText = region(env, "FontString")
             frame.CloseButton = region(env, "Button")
+        elseif template == "BackpackTokenTemplate" then
+            frame.Icon = region(env, "Texture")
+            frame.Count = region(env, "FontString")
         end
         return frame
     end
