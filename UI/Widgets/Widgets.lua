@@ -204,7 +204,7 @@ function Widgets:ModuleRow(parent, module)
     end)
     row:SetScript("OnClick", function(widget)
         if not widget.toggle:IsEnabled() then return end
-        R.UI:SetModuleEnabled(module, not widget.toggle:GetChecked())
+        R.UI:Cycle(module)
     end)
     return row
 end

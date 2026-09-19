@@ -7,10 +7,10 @@ function UI:ModuleText(module, field)
     return key and R.L[key] or module[field] or module.id
 end
 
+-- Automation lists under its own category: the confirmation dialog and preset exclusion
+-- (PRD 6.3) already keep it apart, and a separate Automation entry hid what a feature was for.
 function UI:Category(module)
-    -- Anything that decides for the player is shown in one place, never mixed in with
-    -- the harmless settings of its own category (PRD 6.3).
-    return module.risk == "automation" and "Automation" or module.category
+    return module.category
 end
 
 -- The filter is one category name, or a set of them for a sidebar group. A search query

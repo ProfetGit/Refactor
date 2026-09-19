@@ -17197,6 +17197,21 @@
       "line": 81,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua"
     },
+    "Enum.GossipOptionRecFlags.PlayMovieLabelPrepend": {
+      "kind": "source-reference",
+      "line": 103,
+      "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipConstantsDocumentation.lua"
+    },
+    "Enum.GossipOptionRecFlags.QuestLabelPrepend": {
+      "kind": "source-reference",
+      "line": 101,
+      "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipConstantsDocumentation.lua"
+    },
+    "Enum.GossipOptionStatus.Available": {
+      "kind": "source-reference",
+      "line": 308,
+      "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua"
+    },
     "Enum.ItemQuality.Common": {
       "kind": "source-reference",
       "line": 14,
@@ -18143,6 +18158,11 @@
     "GetZoneText": {
       "line": 52,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ZoneScriptDocumentation.lua"
+    },
+    "GossipOptionButtonMixin": {
+      "kind": "source-reference",
+      "line": 66,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Shared/GossipFrameShared.lua"
     },
     "HasAPEffectsSpellPower": {
       "line": 969,

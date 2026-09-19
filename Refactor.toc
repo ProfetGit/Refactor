@@ -57,6 +57,7 @@ Modules/Items/DeleteFill.lua
 Modules/Vendor/ExtendedUI.lua
 Modules/Quest/AutoAccept.lua
 Modules/Quest/AutoTurnIn.lua
+Modules/Quest/AutoGossip.lua
 Modules/Chat/Urls.lua
 Modules/Chat/DeclineDuels.lua
 Modules/Chat/AcceptResurrect.lua

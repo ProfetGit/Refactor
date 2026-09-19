@@ -2,7 +2,6 @@ local _, R = ...
 R.L = R.L or {}
 local L = R.L
 
-L.UI_Automation = "Automation"
 L.UI_Profiles = "Profiles"
 L.UI_Conflicts = "Conflicts"
 L.UI_Diagnostics = "Diagnostics"

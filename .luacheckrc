@@ -16,11 +16,11 @@ read_globals = {
     -- Blizzard settings panel namespace
     "Settings",
     -- Core client API
-    "C_AddOns", "C_CVar", "C_Container", "C_Item", "C_Mail", "C_NamePlate", "C_QuestLog",
+    "C_AddOns", "C_CVar", "C_Container", "C_GossipInfo", "C_Item", "C_Mail", "C_NamePlate", "C_QuestLog",
     "C_Texture", "C_Timer", "C_TooltipInfo",
     "Enum", "GetBuildInfo", "GetTime", "UnitGUID", "debugstack",
     -- Input and combat state
-    "InCombatLockdown", "IsAltKeyDown", "IsControlKeyDown", "IsModifiedClick", "IsShiftKeyDown",
+    "InCombatLockdown", "IsAltKeyDown", "IsControlKeyDown", "IsInInstance", "IsModifiedClick", "IsShiftKeyDown",
     -- Loot
     "GetLootSlotInfo", "GetNumLootItems", "LootSlot",
     -- Vendor and money
@@ -31,7 +31,7 @@ read_globals = {
     -- Items
     "DELETE_ITEM_CONFIRM_STRING", "NUM_TOTAL_EQUIPPED_BAG_SLOTS", "StaticPopup_FindVisible",
     -- M4: tooltips, toasts, quest, social, merchant, bench
-    "hooksecurefunc", "TooltipDataProcessor", "TooltipUtil", "SetTooltipMoney", "GameTooltip_SetDefaultAnchor",
+    "hooksecurefunc", "GossipOptionButtonMixin", "TooltipDataProcessor", "TooltipUtil", "SetTooltipMoney", "GameTooltip_SetDefaultAnchor",
     "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "C_CurrencyInfo", "C_MerchantFrame",
     "C_FriendList", "C_BattleNet", "GetMerchantNumItems", "GetMerchantItemLink", "GetMerchantItemMaxStack",
     "BuyMerchantItem", "GetNumBuybackItems", "GetBuybackItemInfo", "BuybackItem", "AcceptQuest",

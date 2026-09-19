@@ -117,11 +117,14 @@ describe("automation gate", function()
         end
     end)
 
-    it("lists under Automation rather than its own category", function()
+    it("lists under its own category, not a separate Automation one", function()
         local _, R, module = withAutomation()
-        assert.equal("Automation", R.UI:Category(module))
-        assert.is_true(R.UI:Matches(module, "", "Automation"))
-        assert.is_false(R.UI:Matches(module, "", "Quest"))
+        assert.equal("Quest", R.UI:Category(module))
+        assert.is_true(R.UI:Matches(module, "", "Quest"))
+        assert.is_false(R.UI:Matches(module, "", "Automation"))
+        for _, entry in ipairs(R.UI.sidebar) do
+            assert.is_not.equal("Automation", entry.key)
+        end
     end)
 end)
 

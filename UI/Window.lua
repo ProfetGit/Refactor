@@ -5,12 +5,10 @@ local unpack = unpack
 
 -- One sidebar entry per category, in a fixed order, and only for categories that own a
 -- module: a stacked group ("Quests & loot") hid which category a row belonged to and left
--- the list with no structure of its own. Panels are the tool pages. Automation is its own
--- category (PRD 6.3), so a module that decides for the player is never listed under the
--- category it would otherwise sit in.
+-- the list with no structure of its own. Panels are the tool pages.
 local CATEGORY_ORDER = {
     "Quest", "Loot", "Vendor", "Items", "Interface", "Chat", "Social",
-    "Nameplates", "Tooltips", "Toasts", "Automation",
+    "Nameplates", "Tooltips", "Toasts",
 }
 local TOOL_ENTRIES = {
     { key = "Options", labelKey = "UI_OPTIONS", tools = true },
@@ -50,7 +48,6 @@ function UI:BuildSidebar()
             labelKey = "UI_" .. category,
             categories = { category },
             set = { [category] = true },
-            tone = category == "Automation" and "TEXT_WARNING" or nil,
         }
     end
     for _, entry in ipairs(TOOL_ENTRIES) do list[#list + 1] = entry end
@@ -114,8 +111,18 @@ function UI:ResetModule(module)
     self:Refresh()
 end
 
+-- The value the row's checkbox shows: the account default in account mode, the resolved
+-- per-character value otherwise. Cycle and Refresh read it from here so a click always
+-- flips the setting itself, never a checkbox tick that drifted out of sync with it.
+function UI:DisplayedValue(module)
+    if self.mode == "account" then
+        return accountValue(module)
+    end
+    return Settings:Get(module.id) == true
+end
+
 function UI:Cycle(module)
-    self:SetModuleEnabled(module, not Settings:Get(module.id))
+    self:SetModuleEnabled(module, not self:DisplayedValue(module))
 end
 
 -- Dropped between two pixels, the window puts every rule inside it between two pixels too.
@@ -233,6 +240,13 @@ function UI:Refresh()
         return
     end
     local filter = entry and entry.set or nil
+    -- Every checkbox tracks its setting, visible or not: Refresh used to sync only the rows
+    -- it was laying out, so a value changed while its row was off-page left the tick stale
+    -- and the next click read the stale tick instead of the setting.
+    for _, row in ipairs(self.rows) do
+        row.toggle:SetChecked(self:DisplayedValue(row.module))
+        row.toggle:SetEnabled(Settings.account ~= nil and not row.module.unavailableReasonKey)
+    end
     -- One block per category, headed by its name: the list carries the same structure as
     -- the sidebar, and a search result says which category each row came from.
     local count, offset = 0, 0
@@ -259,13 +273,10 @@ function UI:Refresh()
                 offset = offset + ROW_HEIGHT
                 count, shown = count + 1, shown + 1
                 row.name:SetText(self:ModuleText(module, "name"))
-                local value = self.mode == "account" and accountValue(module) or Settings:Get(module.id)
-                row.toggle:SetChecked(value == true)
                 local reason = self:StatusReason(module)
                 row.meta:SetText(reason and (module.state == "failed" and L.UI_FAILED_SHORT or L.UI_UNAVAILABLE_SHORT)
                     or module.state == "unconfirmed" and L.UI_STATE_UNCONFIRMED or "")
                 Theme:Color(row.meta, reason and "TEXT_WARNING" or "TEXT_MUTED", true)
-                row.toggle:SetEnabled(Settings.account ~= nil and not module.unavailableReasonKey)
                 row.undo:SetShown(self:IsModified(module))
             end
         end

@@ -1,5 +1,6 @@
 local lfs = require("lfs")
 local failures = {}
+local DEFINITION_FIELDS = { "id", "category", "requires", "tier", "risk" }
 local function fail(path, message) failures[#failures + 1] = path .. ": " .. message end
 local function check(path)
     local file = assert(io.open(path, "r"))
@@ -46,6 +47,19 @@ local function check(path)
         if not text:match("^%-%-%- @module ") then fail(path, "missing module contract header") end
         if not text:match("function .-:OnDisable%s*%(") then fail(path, "missing lifecycle cleanup") end
         if code:match("R%.moduleByID") or code:match("R%.modules") then fail(path, "cross-module access") end
+        -- Module state lives on the definition table the registry reads, so reusing one of its
+        -- identity fields for runtime state breaks settings lookup for that module. Checked on
+        -- the left of each assignment, comparisons stripped, so a multiple assignment counts.
+        for line in code:gmatch("[^\n]+") do
+            local lhs = line:gsub("[~<>=]=", ""):match("^([^=]*)=")
+            if lhs then
+                for _, field in ipairs(DEFINITION_FIELDS) do
+                    if (lhs .. " "):match("self%." .. field .. "[^%w_]") then
+                        fail(path, "module state must not overwrite the definition's " .. field)
+                    end
+                end
+            end
+        end
         if code:find("CreateFrame", 1, true) then
             fail(path, "module frames must use a theme builder at enable, never game events")
         end

@@ -30,6 +30,7 @@ local BOOLEAN_OPTIONS = {
     toastShowSource = true, toastAggregate = true,
     priceTSM = true, priceAuctionator = true,
     questAcceptItemsOnly = true,
+    gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = true, gossipInInstances = true,
 }
 local ANCHOR_POINTS = {
     TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true,
@@ -48,8 +49,35 @@ local OPTION_DEFAULTS = {
     -- Auction providers are opt-in (PRD 5.5): on launch day no realm has auction data.
     priceTSM = false, priceAuctionator = false, tsmPriceString = "dbMarket",
     questAcceptItemsOnly = false,
+    gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = false, gossipInInstances = false,
+    gossipLearnModifier = "SHIFT", gossipLearned = {},
 }
 Settings.optionDefaults = OPTION_DEFAULTS
+
+local LEARNED_KINDS = { Creature = true, GameObject = true, Vehicle = true }
+local function positiveInteger(value)
+    return type(value) == "number" and value > 0 and value % 1 == 0
+end
+
+-- Remembered gossip choices: unit kind, then NPC ID to gossip option ID.
+local function validLearned(value)
+    if type(value) ~= "table" then
+        return false
+    end
+    local count = 0
+    for kind, entries in pairs(value) do
+        if not LEARNED_KINDS[kind] or type(entries) ~= "table" then
+            return false
+        end
+        for id, optionID in pairs(entries) do
+            count = count + 1
+            if count > 2000 or not positiveInteger(id) or not positiveInteger(optionID) then
+                return false
+            end
+        end
+    end
+    return true
+end
 
 local function validOption(key, value)
     if BOOLEAN_OPTIONS[key] then
@@ -80,6 +108,10 @@ local function validOption(key, value)
         return type(value) == "number" and value >= 0.7 and value <= 1.5
     elseif key == "tsmPriceString" then
         return type(value) == "string" and #value > 0 and #value <= 64 and not value:find("[%c]")
+    elseif key == "gossipLearnModifier" then
+        return value == "CTRL" or value == "SHIFT" or value == "ALT"
+    elseif key == "gossipLearned" then
+        return validLearned(value)
     elseif key == "neverSellIDs" then
         if type(value) ~= "table" then
             return false

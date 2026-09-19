@@ -50,6 +50,18 @@
   "DELETE_ITEM_CONFIRM_STRING": {
     "path": "Interface/AddOns/Blizzard_StaticPopup_Game/Mainline/GameDialogDefs.lua"
   },
+  "Enum.GossipOptionRecFlags.PlayMovieLabelPrepend": {
+    "needle": "Name = \"PlayMovieLabelPrepend\", Type = \"GossipOptionRecFlags\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipConstantsDocumentation.lua"
+  },
+  "Enum.GossipOptionRecFlags.QuestLabelPrepend": {
+    "needle": "Name = \"QuestLabelPrepend\", Type = \"GossipOptionRecFlags\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipConstantsDocumentation.lua"
+  },
+  "Enum.GossipOptionStatus.Available": {
+    "needle": "Name = \"Available\", Type = \"GossipOptionStatus\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua"
+  },
   "Enum.ItemQuality.Common": {
     "needle": "Name = \"Common\", Type = \"ItemQuality\"",
     "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ItemQualitiesDocumentation.lua"
@@ -141,6 +153,10 @@
   "GetRepairAllCost": {
     "needle": "GetRepairAllCost",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "GossipOptionButtonMixin": {
+    "needle": "GossipOptionButtonMixin = { };",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Shared/GossipFrameShared.lua"
   },
   "HasInboxItem": {
     "needle": "HasInboxItem",

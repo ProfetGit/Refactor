@@ -17,6 +17,8 @@ local Loot = R:RegisterModule({
 
 local MONEY_GRACE = 0.5
 local COIN_FONT_HEIGHT = 12
+-- inv_misc_coin_01: the coin-pile icon, so the looted-gold row reads like the currency rows.
+local GOLD_ICON = 133784
 -- A multi-slot loot arrives as one burst of messages. Everything inside this window is one
 -- group; the next click of a manual loot window lands after it and gets its own row.
 local GROUP_WINDOW = 0.35
@@ -196,6 +198,7 @@ function Loot:OnMoney()
     self.host:Push({
         key = self, count = total, name = R.L.TOAST_GOLD,
         detail = string.format(R.L.TOAST_GOLD_DETAIL, moneyText(total)),
+        icon = GOLD_ICON, framed = false,
     })
 end
 
@@ -251,7 +254,8 @@ function Loot:Test()
     self:PushItem(row(2, "TOAST_TEST_STACK", 1, 20, 2400))
     self:PushItem(row(3, "TOAST_TEST_UNCOMMON", 2, 1, 41500))
     self.host:Push({ key = "refactor-test-gold", count = 32000, name = R.L.TOAST_GOLD,
-        detail = string.format(R.L.TOAST_GOLD_DETAIL, moneyText(32000)) })
+        detail = string.format(R.L.TOAST_GOLD_DETAIL, moneyText(32000)),
+        icon = GOLD_ICON, framed = false })
     self.pending = nil
     for index = 3, 6 do
         self:Collect(row(index, "TOAST_TEST_GROUP_" .. (index - 2), index - 2, 1, 1200 * index))

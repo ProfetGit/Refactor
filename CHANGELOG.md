@@ -30,6 +30,13 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   it with search, usable filter, click to buy one, Shift click for a stack, and buyback.
 - Quest automation: auto accept (skips PvP, repeatable and game-auto-accepted quests,
   optional items-only) and auto turn in when there is no reward choice.
+- Auto gossip: Shift click an option at an NPC and it is picked there from then on; an
+  NPC's only quest or a finished hand-in is opened; the one shop, trainer, flight, bank,
+  auction or transmog option is opened when the rest is small talk; a lone unflagged line
+  of dialogue can be skipped (off by default). Nothing that costs, casts, rewards or starts
+  a quest is picked, inside instances only remembered choices apply, a menu that loops back
+  on itself stops, and the pause modifier keeps the frame. Learn modifier and a forget
+  button under Display options.
 - Chat and social: clickable web addresses with a copy box; auto decline duels; auto
   accept resurrection out of combat. Auto accept party invites is written but ships
   unavailable until AcceptGroup is confirmed callable from an addon.
@@ -42,7 +49,7 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
 - Display options panel. Diagnostics list scrolls. Window categories: Quest, Chat, Social,
   Tooltips, Toasts, Display.
 - Not built because Retail does it natively: bag quality borders, auto track quests, chat
-  timestamps, sell-all-junk, skip single-option gossip.
+  timestamps, sell-all-junk, the client's own flagged single-option gossip skip.
 
 - First Retail build: module registry, capability probing, event broker, settings with
   three-state resolution and profiles, theme library on Dragonflight atlases.
@@ -55,8 +62,9 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   Questie and Plater. Reads your own progress only.
 - First-run preset picker: Minimal, Standard, Full, or browse. Writes account defaults, so
   every later character inherits the choice with no clicks.
-- Automation features are their own category, are in no preset, and need a one-time
-  confirmation dialog naming the pause modifier before they can be switched on.
+- Automation features list under their own category (Quest, Social), are in no preset,
+  and need a one-time confirmation dialog naming the pause modifier before they can be
+  switched on.
 - Profiles panel: create from what this character uses, assign, delete, import and export
   as a string.
 - Conflicts panel: names an installed neighbour, the feature it overlaps, and offers to

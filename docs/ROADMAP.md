@@ -163,9 +163,15 @@ Hot modules must be done here, because there is no client after 21 Oct.
 Native on Retail 12.1, so not built (PRD R2, "deleted rather than kept for feature count"):
 bag quality borders (`SetItemButtonQuality` in Blizzard's ItemButtonTemplate), auto track
 new quests (`autoQuestWatch` CVar), chat timestamps (`showTimestamps` CVar), sell-all-junk
-button (`C_MerchantFrame.SellAllJunkItems`), skip single-option gossip (Blizzard selects
-options flagged `selectOptionWhenOnlyOption`; the unflagged ones are the payment and
-quest triggers the PRD says never to skip). Re-check each on the Forever client.
+button (`C_MerchantFrame.SellAllJunkItems`), and the flagged single-option gossip skip
+(Blizzard selects options flagged `selectOptionWhenOnlyOption`). Re-check each on the
+Forever client.
+
+Auto gossip (`quest.autoGossip`, 18 Sep 2026) covers only what is not native: a choice the
+player taught with a modifier click, an NPC's only quest or a finished hand-in, the one
+service option among small talk, and an opt-in skip of a lone unflagged dialogue option.
+Payment, spell, reward and quest-labelled options are never picked; inside an instance only
+taught choices apply.
 
 Deferred out of M4, raised for a later milestone: hide talking head, boss banner and
 UI element visibility (7.4), auto select reward by vendor value (7.1), auto accept summon
@@ -186,6 +192,11 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   expands and pauses its timer
 - Vendor list search, usable filter, buy one, Shift buy stack, buyback row, junk readout
 - Auto accept and auto turn in on an ordinary quest; a reward-choice quest stays open
+- Auto gossip: `/dump C_GossipInfo.GetOptions()` at a vendor, trainer and flight master
+  shows icon file IDs 132060, 132058 and 132057 and a plain dialogue line shows 132053 or
+  1019848; Shift click an option and it is picked on the next visit; a quest-only NPC opens
+  its quest; a dungeon NPC is left alone until taught; the flagged single option is still
+  skipped by the client alone, once, with no double selection
 - Chat link click opens the copy box; duel declined; resurrection accepted out of combat
 - `AcceptGroup()` from a `/run` on a friend's invite: if it works, remove
   `unavailableReasonKey` from `Modules/Chat/AcceptInvites.lua`

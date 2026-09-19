@@ -220,8 +220,8 @@ describe("M4 loot feed", function()
         assert.equal(1, #module.host.items)
         local gold = module.host.items[1].row
         assert.equal("+1|TSilver|t 50|TCopper|t", gold.detail:GetText())
-        -- Gold has no icon at all, so it has no icon frame either.
-        assert.is_false(gold.icon:IsShown())
+        -- Gold shows the coin icon, unframed like a currency row.
+        assert.is_true(gold.icon:IsShown())
         assert.is_false(gold.iconFrame:IsShown())
         env:Fire("LOOT_CLOSED")
         env:Advance(0.6)
@@ -513,6 +513,287 @@ describe("M4 quest automation", function()
         env.choices, env.combat = 0, true
         env:Fire("QUEST_COMPLETE")
         assert.equal(1, rewarded)
+        noResidue(env, module)
+    end)
+    local function gossipEnv()
+        local env = base()
+        env.shift, env.instance, env.force = false, false, false
+        env.IsShiftKeyDown = function() return env.shift end
+        env.IsAltKeyDown = function() return false end
+        env.IsInInstance = function() return env.instance end
+        env.npc = "Creature-0-3061-1-42177-38038-002FAC4343"
+        env.UnitGUID = function(unit) return unit == "npc" and env.npc or "Player-test" end
+        env.Enum = {
+            GossipOptionStatus = { Available = 0, Locked = 2 },
+            GossipOptionRecFlags = { QuestLabelPrepend = 1, HideOptionIDFromClient = 2, PlayMovieLabelPrepend = 4 },
+        }
+        env.hookCount = 0
+        env.hooksecurefunc = function(target, name, fn)
+            local original = target[name]
+            target[name] = function(...) original(...); fn(...) end
+            env.hookCount = env.hookCount + 1
+        end
+        env.options, env.available, env.active, env.picked, env.quests = {}, {}, {}, {}, {}
+        -- Blizzard's option button: the mixin is copied onto each button, and its OnClick
+        -- selects by the button's ID, which is the option's order index.
+        env.GossipOptionButtonMixin = {
+            OnClick = function(button) env.C_GossipInfo.SelectOptionByIndex(button:GetID()) end,
+        }
+        function env.click(index)
+            env.GossipOptionButtonMixin.OnClick({ GetID = function() return index end }, "LeftButton")
+        end
+        env.C_GossipInfo = {
+            GetOptions = function()
+                local copy = {}
+                for index, option in ipairs(env.options) do copy[index] = option end
+                return copy
+            end,
+            GetAvailableQuests = function() return env.available end,
+            GetActiveQuests = function() return env.active end,
+            ForceGossip = function() return env.force end,
+            SelectOptionByIndex = function(index) env.picked[#env.picked + 1] = index end,
+            SelectAvailableQuest = function(id) env.quests[#env.quests + 1] = id end,
+            SelectActiveQuest = function(id) env.quests[#env.quests + 1] = -id end,
+        }
+        function env.option(index, icon, fields)
+            local option = { gossipOptionID = 1000 + index, orderIndex = index, name = "Option " .. index,
+                icon = icon, status = 0, flags = 0, rewards = {}, selectOptionWhenOnlyOption = false }
+            for key, value in pairs(fields or {}) do option[key] = value end
+            return option
+        end
+        function env.visit(...)
+            env:Fire("GOSSIP_SHOW", ...)
+            env:Fire("GOSSIP_CLOSED", false)
+        end
+        return env
+    end
+    local VENDOR, TRAINER, TALK, INNKEEPER = 132060, 132058, 132053, 4955461
+
+    it("gossip: remembers a modifier click per NPC, picks it next visit, forgets on a paused click", function()
+        local env = gossipEnv()
+        local module = enable(env, "Modules/Quest/AutoGossip.lua", "quest.autoGossip")
+        env.options = { env.option(1, VENDOR), env.option(2, TALK), env.option(3, TALK) }
+        env.available = { { questID = 10 } }
+        env:Fire("GOSSIP_SHOW")
+        assert.same({}, env.picked)
+        env.shift = true
+        env.click(2)
+        env.shift = false
+        assert.same({ 2 }, env.picked)
+        assert.equal(1002, env.R.Settings:GetOption("gossipLearned").Creature[38038])
+        assert.is_truthy(env.messages[#env.messages]:find("Option 2", 1, true))
+        env:Fire("GOSSIP_CLOSED", false)
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 2, 2 }, env.picked)
+        -- Its own pick passes through the hook without re-teaching.
+        assert.equal(1002, env.R.Settings:GetOption("gossipLearned").Creature[38038])
+        env:Fire("GOSSIP_CLOSED", false)
+        -- A locked memory shows the frame rather than guessing another option.
+        env.options[2].status = 2
+        env.visit()
+        assert.same({ 2, 2 }, env.picked)
+        env.options[2].status = 0
+        -- Paused, the frame stays; a learn click on the remembered option forgets it.
+        env.control, env.shift = true, true
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 2, 2 }, env.picked)
+        env.click(2)
+        assert.is_nil(env.R.Settings:GetOption("gossipLearned").Creature)
+        assert.is_truthy(env.messages[#env.messages]:find("Forgot", 1, true))
+        -- An option whose ID the server hides cannot be remembered.
+        env.options[3].gossipOptionID = nil
+        env.click(3)
+        assert.is_nil(env.R.Settings:GetOption("gossipLearned").Creature)
+        env.control, env.shift = false, false
+        env:Fire("GOSSIP_CLOSED", false)
+        -- Nor can a player.
+        env.npc = "Player-1-000000AB"
+        env.shift = true
+        env:Fire("GOSSIP_SHOW")
+        env.click(1)
+        assert.same({}, env.R.Settings:GetOption("gossipLearned"))
+        env.shift = false
+        env:Fire("GOSSIP_CLOSED", false)
+        -- A learn modifier other than Shift, and a game object.
+        env.npc = "GameObject-0-3061-1-42177-555-002FAC4343"
+        env.R.Settings:SetOption("gossipLearnModifier", "CTRL")
+        env:Fire("GOSSIP_SHOW")
+        env.shift = true
+        env.click(1)
+        assert.same({}, env.R.Settings:GetOption("gossipLearned"))
+        env.shift, env.control = false, true
+        env.click(1)
+        env.control = false
+        assert.equal(1001, env.R.Settings:GetOption("gossipLearned").GameObject[555])
+        -- The hook is installed once at load and is inert while the module is off.
+        noResidue(env, module)
+        assert.equal(1, env.hookCount)
+        env.shift = true
+        env:Fire("GOSSIP_SHOW")
+        env.click(2)
+        env.shift = false
+        assert.equal(1001, env.R.Settings:GetOption("gossipLearned").GameObject[555])
+        assert.equal(0, #env.R.errors)
+    end)
+
+    it("gossip: opens an NPC's only quest or a finished hand-in, leaves a real choice open", function()
+        local env = gossipEnv()
+        local module = enable(env, "Modules/Quest/AutoGossip.lua", "quest.autoGossip")
+        env.available = { { questID = 10 } }
+        env.visit()
+        assert.same({ 10 }, env.quests)
+        env.available = { { questID = 10 }, { questID = 11 } }
+        env.visit()
+        assert.same({ 10 }, env.quests)
+        env.available = { { questID = 10 }, { questID = 11, isIgnored = true } }
+        env.visit()
+        assert.same({ 10, 10 }, env.quests)
+        env.available, env.active = { { questID = 10 } }, { { questID = 12 } }
+        env.visit()
+        assert.same({ 10, 10 }, env.quests)
+        env.active = { { questID = 12 }, { questID = 13, isComplete = true } }
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 10, 10, -13 }, env.quests)
+        -- The hand-in changes the page, so the next one follows within the same visit.
+        env:Fire("GOSSIP_CLOSED", true)
+        env.active = { { questID = 12 }, { questID = 14, isComplete = true } }
+        env.visit()
+        assert.same({ 10, 10, -13, -14 }, env.quests)
+        env.active = {}
+        env.R.Settings:SetOption("gossipOpenQuests", false)
+        env.visit()
+        assert.same({ 10, 10, -13, -14 }, env.quests)
+        env.R.Settings:SetOption("gossipOpenQuests", true)
+        -- A gossip option next to a quest is a choice, whichever rule would cover it.
+        env.options = { env.option(1, VENDOR) }
+        env.visit()
+        assert.same({ 10, 10, -13, -14 }, env.quests)
+        assert.same({}, env.picked)
+        noResidue(env, module)
+    end)
+
+    it("gossip: opens the one service among small talk and nothing when the choice is real", function()
+        local env = gossipEnv()
+        local module = enable(env, "Modules/Quest/AutoGossip.lua", "quest.autoGossip")
+        local function show(options)
+            env.options = options
+            env.visit()
+        end
+        show({ env.option(1, TALK), env.option(2, VENDOR), env.option(3, TALK) })
+        assert.same({ 2 }, env.picked)
+        show({ env.option(1, VENDOR) })
+        show({ env.option(1, VENDOR), env.option(2, TALK, { flags = 2 }) })
+        assert.same({ 2, 1, 1 }, env.picked)
+        show({ env.option(1, VENDOR), env.option(2, TRAINER) })
+        show({ env.option(1, VENDOR), env.option(2, INNKEEPER) })
+        show({ env.option(1, VENDOR), env.option(2, TALK, { rewards = { { id = 1 } } }) })
+        show({ env.option(1, VENDOR), env.option(2, TALK, { spellID = 5 }) })
+        show({ env.option(1, VENDOR), env.option(2, TALK, { flags = 1 }) })
+        show({ env.option(1, VENDOR), env.option(2, TALK, { flags = 6 }) })
+        show({ env.option(1, VENDOR), env.option(2, TALK, { overrideIconID = 99 }) })
+        show({ env.option(1, VENDOR, { status = 2 }), env.option(2, TALK) })
+        assert.same({ 2, 1, 1 }, env.picked)
+        env.R.Settings:SetOption("gossipOpenServices", false)
+        show({ env.option(1, VENDOR), env.option(2, TALK) })
+        assert.same({ 2, 1, 1 }, env.picked)
+        noResidue(env, module)
+    end)
+
+    it("gossip: skips a lone line of dialogue only when asked, never the client's flagged option", function()
+        local env = gossipEnv()
+        local module = enable(env, "Modules/Quest/AutoGossip.lua", "quest.autoGossip")
+        env.options = { env.option(1, TALK) }
+        env.visit()
+        assert.same({}, env.picked)
+        env.R.Settings:SetOption("gossipSkipDialogue", true)
+        env.visit()
+        assert.same({ 1 }, env.picked)
+        env.options = { env.option(1, TALK, { selectOptionWhenOnlyOption = true }) }
+        env.visit()
+        env.options = { env.option(1, TALK, { spellID = 7 }) }
+        env.visit()
+        env.options = { env.option(1, TALK), env.option(2, TALK) }
+        env.visit()
+        env.options = { env.option(1, INNKEEPER) }
+        env.visit()
+        assert.same({ 1 }, env.picked)
+        noResidue(env, module)
+    end)
+
+    it("gossip: stands down for custom frames, forced gossip, combat, pause and instances", function()
+        local env = gossipEnv()
+        local module = enable(env, "Modules/Quest/AutoGossip.lua", "quest.autoGossip")
+        env.options = { env.option(1, VENDOR), env.option(2, TALK) }
+        env.visit("npe-guide")
+        env.force = true
+        env.visit()
+        env.force = false
+        env.combat = true
+        env.visit()
+        env.combat = false
+        env.control = true
+        env.visit()
+        env.control = false
+        env.instance = true
+        env.visit()
+        assert.same({}, env.picked)
+        -- Inside an instance only a taught choice applies, unless the option says otherwise.
+        env.R.Settings:SetOption("gossipLearned", { Creature = { [38038] = 1002 } })
+        env.visit()
+        assert.same({ 2 }, env.picked)
+        env.R.Settings:SetOption("gossipLearned", {})
+        env.R.Settings:SetOption("gossipInInstances", true)
+        env.visit()
+        assert.same({ 2, 1 }, env.picked)
+        env.instance = false
+        env.visit()
+        assert.same({ 2, 1, 1 }, env.picked)
+        noResidue(env, module)
+    end)
+
+    it("gossip: acts once per page and gives up on a visit that keeps going", function()
+        local env = gossipEnv()
+        local module = enable(env, "Modules/Quest/AutoGossip.lua", "quest.autoGossip")
+        env.R.Settings:SetOption("gossipSkipDialogue", true)
+        env.options = { env.option(1, TALK) }
+        env:Fire("GOSSIP_SHOW")
+        env:Fire("GOSSIP_CLOSED", true)
+        env:Fire("GOSSIP_SHOW")
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 1 }, env.picked)
+        -- Another page within the visit is fine; the first one coming back is a loop.
+        env.options = { env.option(2, TALK) }
+        env:Fire("GOSSIP_SHOW")
+        env.options = { env.option(1, TALK) }
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 1, 2 }, env.picked)
+        -- A real close starts a fresh visit, and so does another NPC.
+        env:Fire("GOSSIP_CLOSED", false)
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 1, 2, 1 }, env.picked)
+        env.npc = "Creature-0-3061-1-42177-777-002FAC4343"
+        env:Fire("GOSSIP_SHOW")
+        assert.same({ 1, 2, 1, 1 }, env.picked)
+        env:Fire("GOSSIP_CLOSED", false)
+        for index = 1, 12 do
+            env.options = { env.option(index, TALK) }
+            env:Fire("GOSSIP_SHOW")
+            env:Fire("GOSSIP_CLOSED", true)
+        end
+        assert.equal(4 + 8, #env.picked)
+        noResidue(env, module)
+    end)
+
+    it("gossip: keeps its registry id through a visit, so the window toggle keeps working", function()
+        local env = gossipEnv()
+        local module = enable(env, "Modules/Quest/AutoGossip.lua", "quest.autoGossip")
+        env.options = { env.option(1, VENDOR) }
+        env.visit()
+        assert.equal("quest.autoGossip", module.id)
+        env.R.Settings:SetOverride("quest.autoGossip", false)
+        env.R.Registry:Reconcile(module)
+        assert.equal("disabled", module.state)
+        assert.equal("quest.autoGossip", module.id)
         noResidue(env, module)
     end)
 end)

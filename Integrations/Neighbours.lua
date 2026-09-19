@@ -12,7 +12,7 @@ R.Integrations = R.Integrations or {}
 -- concrete instead of "an addon may conflict".
 R.Integrations.neighbours = {
     { addon = "Leatrix_Plus", labelKey = "NEIGHBOUR_LEATRIX",
-        modules = { "loot.fastLoot", "vendor.autoSell", "vendor.autoRepair" } },
+        modules = { "loot.fastLoot", "vendor.autoSell", "vendor.autoRepair", "quest.autoGossip" } },
     { addon = "Questie", labelKey = "NEIGHBOUR_QUESTIE",
         modules = { "nameplates.questProgress" } },
     { addon = "Plater", labelKey = "NEIGHBOUR_PLATER",
