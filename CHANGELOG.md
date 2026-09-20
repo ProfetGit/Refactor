@@ -77,7 +77,7 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   profile as a string. The Keep Character Centered accessibility option, which overrides
   ActionCam, is off while a profile is on and back at its default when the feature is off.
 - UI visibility: chat windows, tabs, buttons and input box art, the eight action bars, pet
-  and stance bars, player and target frames, experience bars, micro menu, bags bar, quest
+  and stance bars, player, target, party and raid frames, experience bars, micro menu, bags bar, quest
   list, minimap and its buttons can be
   visible, visible on mouseover, or hidden, with conditions that always show or always hide
   a group (combat, mounted, resting, target, group, instance, stealth, dead) and a fade time
@@ -88,8 +88,12 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   shared player state service and `Core/Fade.lua` the one OnUpdate driver. The minimap's
   quest areas can follow it (opt-in, the game exposes no way to read their defaults); the
   player arrow cannot be faded on this client. Each element has an opacity for shown and for
-  hidden. The panel lists every element as a checkbox with a per-kind tick-all; one editor
-  writes to every ticked element at once.
+  hidden. Elements are tuned in Edit Mode: select one and Refactor's settings for it open
+  beside Blizzard's dialog, with the element previewing its shown opacity; "same for all"
+  pushes a rule to the whole kind. Refactor's window keeps the preset. Hover comes from the
+  tooltip an element shows, so no secure button is ever hooked; leaving is watched, not
+  trusted to an event; elements in the same zone reveal together; a spell on the cursor
+  shows everything.
 - Interface: maximum camera distance, ActionCam through its three CVars, screenshot on
   level up. Mail: remember last recipient per character.
 - Price providers: TradeSkillMaster (custom price string) and Auctionator, opt-in under

@@ -5,7 +5,11 @@ local MODULE = "interface.visibility"
 
 -- A Blizzard frame as the module sees it: alpha, script hooks, children and a mouse flag.
 local function fakeFrame(name, alpha, children)
-    local frame = { name = name, alpha = alpha or 1, scripts = {}, children = children or {}, mouseOver = false }
+    local frame = { name = name, alpha = alpha or 1, scripts = {}, children = children or {}, mouseOver = false,
+        shown = false, protected = false }
+    function frame:IsShown() return self.shown end
+    function frame:IsProtected() return self.protected end
+    function frame:IsForbidden() return false end
     function frame:GetAlpha() return self.alpha end
     function frame:SetAlpha(value) self.alpha = value end
     function frame:HookScript(script, fn)
@@ -13,6 +17,7 @@ local function fakeFrame(name, alpha, children)
         table.insert(self.scripts[script], fn)
     end
     function frame:GetChildren() return unpack(self.children) end
+    function frame:GetParent() return self.parentFrame end
     function frame:IsMouseOver() return self.mouseOver end
     function frame:GetName() return self.name end
     function frame:Fire(script)
@@ -48,7 +53,9 @@ local function base(options)
     env.IsStealthed = function() return false end
     env.UnitIsDeadOrGhost = function() return false end
     env.FCF_FadeInChatFrame = function() end
-    env.FCF_FadeOutChatFrame = function() end
+    env.GameTooltip = fakeFrame("GameTooltip")
+    env.GameTooltip.SetOwner = function(tip, owner) tip.owner, tip.shown = owner, true end
+    env.GetCursorInfo = function() return env.cursor end
     env.EventRegistry = { callbacks = {} }
     function env.EventRegistry:RegisterCallback(event, fn) self.callbacks[event] = fn end
     env.fakes = {}
@@ -64,7 +71,7 @@ local function base(options)
         env.fakes[key] = holder[key]
     end
     for _, group in ipairs(R.Visibility.groups) do
-        for _, list in ipairs({ group.frames, group.optional }) do
+        for _, list in ipairs({ group.frames, group.optional, R.Visibility.systems[group.id] }) do
             for _, name in ipairs(list) do
                 if not options.missing or not options.missing[name] then
                     install(name)
@@ -72,6 +79,16 @@ local function base(options)
             end
         end
     end
+    -- Blizzard's Edit Mode dialog, and the companion the module asks the UI layer for.
+    env.EditModeSystemSettingsDialog = fakeFrame("EditModeSystemSettingsDialog")
+    env.EditModeSystemSettingsDialog.AttachToSystemFrame = function() end
+    env.companion = { openCount = 0 }
+    function env.companion:Open(dialog, ids)
+        self.openCount = self.openCount + 1
+        self.dialog, self.ids = dialog, { unpack(ids) }
+    end
+    function env.companion:Close() self.ids = nil end
+    R.UI = { CreateVisibilityCompanion = function() return env.companion end }
     -- The calendar sits inside the minimap cluster, so it belongs to two groups at once.
     env.MinimapCluster.children = { env.GameTimeFrame }
     env.blobs = {}
@@ -85,7 +102,22 @@ local function base(options)
         env.ChatFrame1.editBox = fakeFrame("ChatFrame1EditBox")
     end
     if env.MainActionBar then
+        -- Action bars and their buttons are protected, as are unit frames: no script goes on them.
+        env.MainActionBar.protected = true
         env.MainActionBar.children = { fakeFrame("ActionButton1"), fakeFrame("ActionButton2") }
+        for _, button in ipairs(env.MainActionBar.children) do
+            button.protected = true
+            button.parentFrame = env.MainActionBar
+        end
+    end
+    if env.PlayerFrame then
+        for _, name in ipairs({ "PlayerFrame", "TargetFrame", "PartyFrame" }) do env[name].protected = true end
+        env.PlayerFrame.children = { fakeFrame("PlayerFrameContent") }
+        env.PlayerFrame.children[1].parentFrame = env.PlayerFrame
+        -- The pet frame is a secure unit button two levels under the player frame.
+        env.PetFrame = fakeFrame("PetFrame")
+        env.PetFrame.protected = true
+        env.PetFrame.parentFrame = env.PlayerFrame.children[1]
     end
     for _, path in ipairs({ "Integrations/Neighbours.lua", "Integrations/Questie.lua", "Integrations/Plater.lua",
         "Integrations/FrameOwners.lua",
@@ -98,6 +130,22 @@ end
 local function step(R, seconds)
     local handler = R.Fade.driver:GetScript("OnUpdate")
     if handler then handler(R.Fade.driver, seconds) end
+end
+
+-- A tooltip naming its owner is what hovering a secure button looks like from outside.
+local function tooltipOn(env, owner)
+    env.hooks[env.GameTooltip].SetOwner(env.GameTooltip, owner)
+    env.GameTooltip.owner, env.GameTooltip.shown = owner, true
+end
+
+local function tooltipOff(env)
+    env.GameTooltip.shown = false
+end
+
+-- One tick of the hover watch, then enough of a fade to land.
+local function settle(env, R)
+    env:Advance(0.1)
+    step(R, 5)
 end
 
 describe("visibility rules", function()
@@ -162,6 +210,8 @@ describe("visibility rules", function()
         assert.is_false(Rules:ValidRule(broken({ shownAlpha = 1.5 })))
         assert.is_false(Rules:ValidRule(broken({ hiddenAlpha = -0.1 })))
         assert.is_true(Rules:ValidRule(broken({ hiddenAlpha = 0.5, shownAlpha = 0.1 })))
+        assert.is_false(Rules:ValidRule(broken({ zone = "middle" })))
+        assert.is_true(Rules:ValidRule(broken({ zone = "right" })))
         assert.is_false(Rules:ValidRule(broken({ extra = true })))
         local short = Rules:DefaultRule()
         short.fadeIn = nil
@@ -200,7 +250,17 @@ describe("visibility rules", function()
             assert.same({}, rule.hideWhen)
             assert.equal(0.15, rule.fadeIn)
             assert.equal(0.4, rule.fadeOut)
+            assert.equal(Rules.zoneDefaults[group.id] or "none", rule.zone, group.id)
         end
+        assert.equal("bottom", Rules:Rule("bars.pet").zone)
+        assert.equal("bottom", Rules:Rule("hud.bags").zone)
+        assert.equal("left", Rules:Rule("chat.tabs").zone)
+        assert.equal("top", Rules:Rule("unit.raid").zone)
+        assert.equal("right", Rules:Rule("hud.objectives").zone)
+        -- A zone is part of the rule, so changing it is a hand edit.
+        assert.is_true(Rules:SetRule("hud.objectives", { zone = "none" }))
+        assert.equal("custom", Rules:Settings().preset)
+        assert.is_true(Rules:ApplyPreset("combatOnly"))
         assert.is_true(Rules:ApplyPreset("mounted"))
         assert.same({ mounted = true }, Rules:Rule("chat.tabs").hideWhen)
         assert.equal("always", Rules:Rule("chat.tabs").mode)
@@ -257,11 +317,29 @@ describe("visibility rules", function()
         assert.equal("mouseover", Rules:Rule("bars.main").mode)
     end)
 
+    it("maps an Edit Mode system frame to its groups and a group to its siblings", function()
+        local env = Runtime.new()
+        local R2 = env.R
+        env.ChatFrame1, env.MainActionBar = {}, {}
+        env.MainStatusTrackingBarContainer, env.SecondaryStatusTrackingBarContainer = {}, {}
+        assert.same({ "chat.frames", "chat.tabs", "chat.buttons", "chat.inputArt" },
+            R2.Visibility:GroupsForSystem(env.ChatFrame1))
+        assert.same({ "bars.main" }, R2.Visibility:GroupsForSystem(env.MainActionBar))
+        assert.same({ "hud.status" }, R2.Visibility:GroupsForSystem(env.SecondaryStatusTrackingBarContainer))
+        assert.same({}, R2.Visibility:GroupsForSystem({}))
+        assert.same({}, R2.Visibility:GroupsForSystem(nil))
+        assert.same({ "bars.bottomLeft", "bars.bottomRight", "bars.right", "bars.left", "bars.five", "bars.six",
+            "bars.seven", "bars.pet", "bars.stance" }, R2.Visibility:Siblings("bars.main"))
+        assert.same({}, R2.Visibility:Siblings("chat.inputArt"))
+        assert.same({}, R2.Visibility:Siblings("hud.nothing"))
+    end)
+
     it("names only frames and functions the API index has evidence for", function()
         local file = assert(io.open("Data/api-retail.json", "r"))
         local index = assert(json.decode(file:read("*a")))
         file:close()
-        local names = { "FCF_FadeInChatFrame", "FCF_FadeOutChatFrame", "EventRegistry", "hooksecurefunc" }
+        local names = { "FCF_FadeInChatFrame", "GameTooltip", "GetCursorInfo", "EventRegistry", "hooksecurefunc",
+            "EditModeSystemSettingsDialog" }
         for _, group in ipairs(Rules.groups) do
             for _, name in ipairs(group.frames) do names[#names + 1] = name end
             for _, name in ipairs(group.optional or {}) do names[#names + 1] = name end
@@ -273,7 +351,14 @@ describe("visibility rules", function()
         for _, name in ipairs(names) do
             assert.is_table(index.symbols[name], "no source evidence for " .. name)
         end
+        for id, systems in pairs(Rules.systems) do
+            assert.is_table(Rules:Group(id), id)
+            for _, name in ipairs(systems) do
+                assert.is_table(index.symbols[name], "no source evidence for " .. name)
+            end
+        end
         for _, group in ipairs(Rules.groups) do
+            assert.is_table(Rules.systems[group.id], group.id .. " has no Edit Mode system")
             for _, entry in ipairs(group.extras or {}) do
                 assert.is_table(index.symbols[entry.frame], "no source evidence for " .. entry.frame)
                 assert.is_true(Rules.extraOptions[entry.option], entry.option)
@@ -350,45 +435,50 @@ describe("interface.visibility", function()
         assert.equal(0, env.ChatFrame1ButtonFrame.alpha)
         assert.equal(0, R.Fade:Active())
 
-        -- Hovering a button of the main bar brings the bar back; leaving it checks a tick later.
+        -- A button's tooltip is the hover; the bar and its whole zone come back.
         local button = env.MainActionBar.children[1]
-        button:Fire("OnEnter")
+        assert.is_nil(button.scripts.OnEnter)
+        assert.is_nil(env.MainActionBar.scripts.OnEnter)
+        tooltipOn(env, button)
         step(R, 5)
         assert.equal(1, env.MainActionBar.alpha)
-        env.MainActionBar.mouseOver = true
-        button:Fire("OnLeave")
-        env:Advance(0)
+        assert.equal(1, env.MultiBarRight.alpha)
+        assert.equal(1, env.BagsBar.alpha)
+        assert.equal(0, env.ChatFrame1.alpha)
+        assert.equal(0, env.MinimapCluster.alpha)
+        -- Still over a frame of the zone: the watch keeps it. Off everything: one tick drops it.
+        tooltipOff(env)
+        env.BagsBar.mouseOver = true
+        settle(env, R)
         assert.equal(1, env.MainActionBar.alpha)
-        env.MainActionBar.mouseOver = false
-        button:Fire("OnLeave")
-        env:Advance(0)
-        step(R, 5)
+        env.BagsBar.mouseOver = false
+        settle(env, R)
         assert.equal(0, env.MainActionBar.alpha)
+        assert.equal(0, env.BagsBar.alpha)
         assert.equal(0, env:ActiveTimers())
 
-        -- Blizzard's chat fade is the chat hover: windows and docked tabs together.
+        -- Blizzard's chat fade is the chat hover: windows, docked tabs and the rest of the side.
+        env.ChatFrame1.hasBeenFaded = true
         env.hooks.FCF_FadeInChatFrame(env.ChatFrame1)
         step(R, 5)
         assert.equal(1, env.ChatFrame1.alpha)
         assert.equal(1, env.ChatFrame7.alpha)
         assert.equal(1, env.GeneralDockManager.alpha)
-        assert.equal(0, env.ChatFrame1ButtonFrame.alpha)
-        env.hooks.FCF_FadeOutChatFrame(env.ChatFrame1)
-        env:Advance(0)
-        step(R, 5)
+        -- The chat buttons share the left zone with the windows, so they come along.
+        assert.equal(0.2, env.ChatFrame1ButtonFrame.alpha)
+        assert.equal(0, env.MainActionBar.alpha)
+        env.ChatFrame1.hasBeenFaded = nil
+        settle(env, R)
         assert.equal(0, env.ChatFrame1.alpha)
         assert.equal(0, env.GeneralDockManager.alpha)
         -- Typing holds the window open past a Blizzard fade out.
         env.ChatFrame1.editBox:Fire("OnEditFocusGained")
         step(R, 5)
         assert.equal(1, env.ChatFrame1.alpha)
-        env.hooks.FCF_FadeOutChatFrame(env.ChatFrame1)
-        env:Advance(0)
-        step(R, 5)
+        settle(env, R)
         assert.equal(1, env.ChatFrame1.alpha)
         env.ChatFrame1.editBox:Fire("OnEditFocusLost")
-        env:Advance(0)
-        step(R, 5)
+        settle(env, R)
         assert.equal(0, env.ChatFrame1.alpha)
 
         -- Conditions: hidden bars with a show-in-combat rule.
@@ -431,6 +521,91 @@ describe("interface.visibility", function()
         assert.equal(0, #R.errors)
     end)
 
+    it("watches the mouse rather than trusting a leave, so nothing is stranded visible", function()
+        local env, R, module = base()
+        R.Visibility:ApplyPreset("immersion")
+        R.Visibility:SetRule("hud.minimap", { zone = "none" })
+        assert.is_true(R.Registry:Enable(MODULE))
+        step(R, 5)
+        -- A plain frame's own OnEnter, with no OnLeave ever hooked or fired.
+        assert.equal(1, #env.MinimapCluster.scripts.OnEnter)
+        assert.is_nil(env.MinimapCluster.scripts.OnLeave)
+        env.MinimapCluster.mouseOver = true
+        env.MinimapCluster:Fire("OnEnter")
+        step(R, 5)
+        assert.equal(1, env.MinimapCluster.alpha)
+        assert.is_true(env:ActiveTimers() > 0)
+        settle(env, R)
+        assert.equal(1, env.MinimapCluster.alpha)
+        env.MinimapCluster.mouseOver = false
+        settle(env, R)
+        assert.equal(0, env.MinimapCluster.alpha)
+        assert.equal(0, env:ActiveTimers())
+        -- A frame the client will not measure counts as not under the mouse, and is no error.
+        env.MinimapCluster.IsMouseOver = function() error("Can't measure restricted regions") end
+        env.MinimapCluster:Fire("OnEnter")
+        step(R, 5)
+        assert.equal(1, env.MinimapCluster.alpha)
+        settle(env, R)
+        assert.equal(0, env.MinimapCluster.alpha)
+        assert.equal("enabled", module.state)
+        assert.equal(0, #R.errors)
+    end)
+
+    it("reveals a whole zone from any of its elements and only that element outside one", function()
+        local env, R = base()
+        R.Visibility:ApplyPreset("immersion")
+        assert.is_true(R.Registry:Enable(MODULE))
+        step(R, 5)
+        -- The bags are in the bottom zone with every bar: their tooltip brings the bars back.
+        tooltipOn(env, env.BagsBar)
+        step(R, 5)
+        assert.equal(1, env.BagsBar.alpha)
+        assert.equal(1, env.MainActionBar.alpha)
+        assert.equal(1, env.MultiBar7.alpha)
+        assert.equal(1, env.StatusTrackingBarManager.alpha)
+        assert.equal(0, env.PlayerFrame.alpha)
+        tooltipOff(env)
+        settle(env, R)
+        assert.equal(0, env.MainActionBar.alpha)
+        -- Taken out of the zone, the main bar answers to its own hover alone.
+        R.Visibility:SetRule("bars.main", { zone = "none" })
+        step(R, 5)
+        tooltipOn(env, env.BagsBar)
+        step(R, 5)
+        assert.equal(1, env.MultiBar7.alpha)
+        assert.equal(0, env.MainActionBar.alpha)
+        tooltipOff(env)
+        settle(env, R)
+        tooltipOn(env, env.MainActionBar.children[2])
+        step(R, 5)
+        assert.equal(1, env.MainActionBar.alpha)
+        assert.equal(0, env.MultiBar7.alpha)
+        tooltipOff(env)
+        settle(env, R)
+        assert.equal(0, env.MainActionBar.alpha)
+        assert.equal(0, env:ActiveTimers())
+    end)
+
+    it("shows everything while something is on the cursor", function()
+        local env, R = base()
+        R.Visibility:ApplyPreset("immersion")
+        R.Visibility:SetRule("bars.main", { shownAlpha = 0.7 })
+        assert.is_true(R.Registry:Enable(MODULE))
+        step(R, 5)
+        assert.equal(0, env.MainActionBar.alpha)
+        env.cursor = "spell"
+        env:Fire("CURSOR_CHANGED")
+        step(R, 5)
+        assert.equal(0.7, env.MainActionBar.alpha)
+        assert.equal(1, env.ChatFrame1.alpha)
+        env.cursor = nil
+        env:Fire("CURSOR_CHANGED")
+        step(R, 5)
+        assert.equal(0, env.MainActionBar.alpha)
+        assert.equal(0, env.ChatFrame1.alpha)
+    end)
+
     it("fades to the element's own shown and hidden opacity", function()
         local env, R = base()
         R.Visibility:ApplyPreset("immersion")
@@ -438,7 +613,7 @@ describe("interface.visibility", function()
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal(0.3, env.MainActionBar.alpha)
         assert.equal(0, env.MultiBarRight.alpha)
-        env.MainActionBar.children[1]:Fire("OnEnter")
+        tooltipOn(env, env.MainActionBar.children[1])
         step(R, 5)
         assert.equal(0.8, env.MainActionBar.alpha)
         -- A share of the frame's own alpha: the button frame ships at 0.2.
@@ -455,6 +630,103 @@ describe("interface.visibility", function()
         assert.equal(0.2, env.ChatFrame1ButtonFrame.alpha)
     end)
 
+    it("opens the companion beside Blizzard's dialog for the selected system and previews the element", function()
+        local env, R = base()
+        R.Visibility:ApplyPreset("immersion")
+        R.Visibility:SetRule("bars.main", { shownAlpha = 0.8 })
+        assert.is_true(R.Registry:Enable(MODULE))
+        local dialog = env.EditModeSystemSettingsDialog
+        local attach = env.hooks[dialog].AttachToSystemFrame
+        assert.is_function(attach)
+        env.EventRegistry.callbacks["EditMode.Enter"]()
+        assert.equal(1, env.MainActionBar.alpha)
+        attach(dialog, env.MainActionBar)
+        assert.same({ "bars.main" }, env.companion.ids)
+        assert.equal(dialog, env.companion.dialog)
+        assert.equal(0.8, env.MainActionBar.alpha)
+        assert.equal(1, env.MultiBarRight.alpha)
+        -- A slider move while previewing shows at once.
+        R.Visibility:SetRule("bars.main", { shownAlpha = 0.5 })
+        step(R, 5)
+        assert.equal(0.5, env.MainActionBar.alpha)
+        attach(dialog, env.ChatFrame1)
+        assert.same({ "chat.frames", "chat.tabs", "chat.buttons", "chat.inputArt" }, env.companion.ids)
+        assert.equal(1, env.MainActionBar.alpha)
+        -- A system with no group of ours closes the companion; so does the dialog hiding.
+        attach(dialog, fakeFrame("SomethingElse"))
+        assert.is_nil(env.companion.ids)
+        attach(dialog, env.MinimapCluster)
+        assert.same({ "hud.minimap", "hud.minimapButtons" }, env.companion.ids)
+        dialog:Fire("OnHide")
+        assert.is_nil(env.companion.ids)
+        env.EventRegistry.callbacks["EditMode.Exit"]()
+        step(R, 5)
+        assert.equal(0, env.MainActionBar.alpha)
+        -- Off: the companion closes and the hooks do nothing, and the frame is built once.
+        local count = env.companion.openCount
+        assert.is_true(R.Registry:Disable(MODULE))
+        attach(dialog, env.MainActionBar)
+        assert.is_nil(env.companion.ids)
+        assert.equal(count, env.companion.openCount)
+        assert.is_true(R.Registry:Enable(MODULE))
+        assert.equal(1, #dialog.scripts.OnHide)
+        assert.equal(0, #R.errors)
+    end)
+
+    it("hovers unit frames through their tooltip and puts no script on a secure button", function()
+        local env, R, module = base()
+        R.Visibility:ApplyPreset("immersion")
+        assert.is_true(R.Registry:Enable(MODULE))
+        for name, id in pairs({ PlayerFrame = "unit.player", TargetFrame = "unit.target", PartyFrame = "unit.party",
+            CompactRaidFrameContainer = "unit.raid" }) do
+            assert.equal("ok", module.groups[id].status, name)
+        end
+        for _, name in ipairs({ "PlayerFrame", "TargetFrame", "PartyFrame", "PetFrame" }) do
+            assert.is_nil(env[name].scripts.OnEnter, name)
+        end
+        assert.is_nil(env.PlayerFrame.children[1].scripts.OnEnter)
+        -- The raid container and its manager tab are plain frames and do carry the hook.
+        assert.equal(1, #env.CompactRaidFrameManager.scripts.OnEnter)
+        step(R, 5)
+        assert.equal(0, env.PlayerFrame.alpha)
+        assert.equal(0, env.PartyFrame.alpha)
+        assert.equal(0, env.CompactRaidFrameManager.alpha)
+        -- The unit frames share the top zone, so the player's tooltip brings them all.
+        tooltipOn(env, env.PlayerFrame)
+        step(R, 5)
+        assert.equal(1, env.PlayerFrame.alpha)
+        assert.equal(1, env.TargetFrame.alpha)
+        assert.equal(1, env.PartyFrame.alpha)
+        assert.equal(0, env.MainActionBar.alpha)
+        tooltipOff(env)
+        settle(env, R)
+        assert.equal(0, env.PlayerFrame.alpha)
+        assert.equal(0, env.TargetFrame.alpha)
+        -- The pet frame reaches the player frame's group through its parents.
+        R.Visibility:SetRules({ "unit.player", "unit.target", "unit.party", "unit.raid" }, { zone = "none" })
+        step(R, 5)
+        tooltipOn(env, env.PetFrame)
+        step(R, 5)
+        assert.equal(1, env.PlayerFrame.alpha)
+        assert.equal(0, env.TargetFrame.alpha)
+        tooltipOff(env)
+        settle(env, R)
+        assert.equal(0, env.PlayerFrame.alpha)
+        -- A tooltip on a frame of nobody's changes nothing.
+        tooltipOn(env, fakeFrame("ArenaEnemy1"))
+        step(R, 5)
+        assert.equal(0, env.PlayerFrame.alpha)
+        tooltipOff(env)
+        -- Party and raid are Edit Mode systems of their own.
+        assert.same({ "unit.party" }, R.Visibility:GroupsForSystem(env.PartyFrame))
+        assert.same({ "unit.raid" }, R.Visibility:GroupsForSystem(env.CompactRaidFrameContainer))
+        assert.is_true(R.Registry:Disable(MODULE))
+        tooltipOn(env, env.PlayerFrame)
+        step(R, 5)
+        assert.equal(1, env.PlayerFrame.alpha)
+        assert.equal(0, #R.errors)
+    end)
+
     it("restores every frame and leaves every hook inert across enable, disable, enable", function()
         local env, R, module = base()
         R.Visibility:ApplyPreset("immersion")
@@ -463,9 +735,10 @@ describe("interface.visibility", function()
         assert.equal(0, env.ChatFrame1ButtonFrame.alpha)
         local hooks = env.hookCount
         assert.is_true(hooks >= 2)
-        -- Mid-fade on the way out, so a fade record is live when the module goes off.
-        env.MainActionBar.children[1]:Fire("OnEnter")
+        -- Mid-fade on the way in, so a fade record and the watch are live when the module goes off.
+        tooltipOn(env, env.MainActionBar.children[1])
         assert.is_true(R.Fade:Active() > 0)
+        assert.is_true(env:ActiveTimers() > 0)
         assert.is_true(R.Registry:Disable(MODULE))
         assert.equal("disabled", module.state)
         for name, frame in pairs(env.fakes) do
@@ -476,13 +749,15 @@ describe("interface.visibility", function()
         assert.equal(0, env:ActiveTimers())
         assert.equal(0, R.Conditions.count)
         assert.is_nil(R.Broker.events.PLAYER_REGEN_DISABLED)
+        assert.is_nil(R.Broker.events.CURSOR_CHANGED)
         for event, entries in pairs(R.Broker.events) do
             for _, entry in ipairs(entries) do
                 assert.is_not.equal(module, entry.owner, event)
             end
         end
         -- The hooks stay installed and do nothing.
-        env.MainActionBar.children[1]:Fire("OnEnter")
+        tooltipOn(env, env.MainActionBar.children[1])
+        env.GeneralDockManager:Fire("OnEnter")
         env.hooks.FCF_FadeInChatFrame(env.ChatFrame1)
         env.ChatFrame1.editBox:Fire("OnEditFocusGained")
         env.EventRegistry.callbacks["EditMode.Enter"]()
@@ -495,9 +770,9 @@ describe("interface.visibility", function()
         -- On again: the same hooks serve, nothing is installed twice, and the rule applies.
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal(hooks, env.hookCount)
-        assert.equal(1, #env.MainActionBar.children[1].scripts.OnEnter)
+        assert.equal(1, #env.GeneralDockManager.scripts.OnEnter)
         assert.equal(0, env.MainActionBar.alpha)
-        env.MainActionBar.children[1]:Fire("OnEnter")
+        tooltipOn(env, env.MainActionBar.children[1])
         step(R, 5)
         assert.equal(1, env.MainActionBar.alpha)
         assert.is_true(R.Registry:Disable(MODULE))
@@ -546,6 +821,7 @@ describe("interface.visibility", function()
     it("fades the minimap's quest areas only when asked, and puts them back at its own strength", function()
         local env, R = base()
         R.Visibility:ApplyPreset("immersion")
+        R.Visibility:SetRule("hud.minimap", { zone = "none" })
         assert.is_true(R.Registry:Enable(MODULE))
         step(R, 5)
         assert.equal(0, env.MinimapCluster.alpha)
@@ -558,26 +834,26 @@ describe("interface.visibility", function()
         local count = 0
         for _ in pairs(env.blobs) do count = count + 1 end
         assert.equal(9, count)
-        env.GameTimeFrame:Fire("OnEnter")
+        env.MinimapCluster.mouseOver = true
+        env.MinimapCluster:Fire("OnEnter")
         step(R, 5)
         assert.equal(1, env.blobs.SetQuestBlobRingAlpha)
         assert.equal(0, env.blobs.SetQuestBlobInsideAlpha)
         assert.equal(1, env.blobs.SetTaskBlobRingAlpha)
-        env.GameTimeFrame:Fire("OnLeave")
-        env:Advance(0)
-        step(R, 5)
+        env.MinimapCluster.mouseOver = false
+        settle(env, R)
         assert.equal(0, env.blobs.SetQuestBlobRingAlpha)
         -- Opting out again while hidden puts the areas back to shown and leaves them alone after.
         R.Settings:SetOption("uiVisibilityBlobs", false)
         assert.equal(1, env.blobs.SetQuestBlobRingAlpha)
         env.blobs = {}
-        env.GameTimeFrame:Fire("OnEnter")
+        env.MinimapCluster.mouseOver = true
+        env.MinimapCluster:Fire("OnEnter")
         step(R, 5)
         assert.same({}, env.blobs)
         R.Settings:SetOption("uiVisibilityBlobs", true)
-        env.GameTimeFrame:Fire("OnLeave")
-        env:Advance(0)
-        step(R, 5)
+        env.MinimapCluster.mouseOver = false
+        settle(env, R)
         assert.equal(0, env.blobs.SetQuestBlobRingAlpha)
         assert.is_true(R.Registry:Disable(MODULE))
         assert.equal(1, env.blobs.SetQuestBlobRingAlpha)
@@ -620,6 +896,7 @@ describe("interface.visibility", function()
     it("reveals every group a shared frame belongs to and resolves a child by its parent key", function()
         local env, R, module = base()
         R.Visibility:ApplyPreset("immersion")
+        R.Visibility:SetRules({ "hud.minimap", "hud.minimapButtons", "hud.objectives" }, { zone = "none" })
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal("ok", module.groups["hud.minimapButtons"].status)
         assert.equal(0, env.MinimapCluster.alpha)
@@ -630,14 +907,14 @@ describe("interface.visibility", function()
         assert.equal(0, env.ChatFrame1EditBoxLeft.alpha)
         assert.equal(0, env.ChatFrame4EditBoxFocusMid.alpha)
         assert.equal(1, env.ChatFrame1.editBox.alpha)
+        env.GameTimeFrame.mouseOver = true
         env.GameTimeFrame:Fire("OnEnter")
         step(R, 5)
         assert.equal(1, env.MinimapCluster.alpha)
         assert.equal(1, env.GameTimeFrame.alpha)
         assert.equal(2, #env.GameTimeFrame.scripts.OnEnter)
-        env.GameTimeFrame:Fire("OnLeave")
-        env:Advance(0)
-        step(R, 5)
+        env.GameTimeFrame.mouseOver = false
+        settle(env, R)
         assert.equal(0, env.MinimapCluster.alpha)
         assert.equal(0, env.GameTimeFrame.alpha)
         assert.is_true(R.Registry:Disable(MODULE))

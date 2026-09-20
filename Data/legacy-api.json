@@ -379,6 +379,14 @@
     "needle": "function CloseDropDownMenus(level)",
     "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
   },
+  "CompactRaidFrameContainer": {
+    "needle": "name=\"CompactRaidFrameContainer\"",
+    "path": "Interface/AddOns/Blizzard_CompactRaidFrames/Blizzard_CompactRaidFrameContainer.xml"
+  },
+  "CompactRaidFrameManager": {
+    "needle": "name=\"CompactRaidFrameManager\"",
+    "path": "Interface/AddOns/Blizzard_CompactRaidFrames/Mainline/Blizzard_CompactRaidFrameManager.xml"
+  },
   "CompleteQuest": {
     "needle": "CompleteQuest();",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
@@ -393,6 +401,10 @@
   },
   "DELETE_ITEM_CONFIRM_STRING": {
     "path": "Interface/AddOns/Blizzard_StaticPopup_Game/Mainline/GameDialogDefs.lua"
+  },
+  "EditModeSystemSettingsDialog": {
+    "needle": "name=\"EditModeSystemSettingsDialog\"",
+    "path": "Interface/AddOns/Blizzard_EditMode/Shared/EditModeDialogs.xml"
   },
   "Enum.GossipOptionRecFlags.PlayMovieLabelPrepend": {
     "needle": "Name = \"PlayMovieLabelPrepend\", Type = \"GossipOptionRecFlags\"",
@@ -464,10 +476,6 @@
   },
   "FCF_FadeInChatFrame": {
     "needle": "function FCF_FadeInChatFrame(",
-    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.lua"
-  },
-  "FCF_FadeOutChatFrame": {
-    "needle": "function FCF_FadeOutChatFrame(",
     "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.lua"
   },
   "GameTimeFrame": {
@@ -616,6 +624,10 @@
     "needle": "name=\"MainActionBar\"",
     "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/MainActionBar.xml"
   },
+  "MainStatusTrackingBarContainer": {
+    "needle": "name=\"MainStatusTrackingBarContainer\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/StatusTrackingBar.xml"
+  },
   "MerchantBuyBackItem": {
     "needle": "name=\"MerchantBuyBackItem\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
@@ -759,6 +771,10 @@
     "needle": "name=\"ObjectiveTrackerFrame\"",
     "path": "Interface/AddOns/Blizzard_ObjectiveTracker/Blizzard_ObjectiveTracker.xml"
   },
+  "PartyFrame": {
+    "needle": "name=\"PartyFrame\"",
+    "path": "Interface/AddOns/Blizzard_UnitFrame/Shared/PartyFrame.xml"
+  },
   "PetActionBar": {
     "needle": "name=\"PetActionBar\"",
     "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/PetActionBar.xml"
@@ -790,6 +806,10 @@
   "RepairAllItems": {
     "needle": "RepairAllItems(",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
+  },
+  "SecondaryStatusTrackingBarContainer": {
+    "needle": "name=\"SecondaryStatusTrackingBarContainer\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/StatusTrackingBar.xml"
   },
   "SelectAvailableQuest": {
     "needle": "SelectAvailableQuest(self:GetID());",

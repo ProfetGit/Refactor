@@ -17487,6 +17487,16 @@
       "line": 53,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua"
     },
+    "CompactRaidFrameContainer": {
+      "kind": "source-reference",
+      "line": 3,
+      "path": "Interface/AddOns/Blizzard_CompactRaidFrames/Blizzard_CompactRaidFrameContainer.xml"
+    },
+    "CompactRaidFrameManager": {
+      "kind": "source-reference",
+      "line": 112,
+      "path": "Interface/AddOns/Blizzard_CompactRaidFrames/Mainline/Blizzard_CompactRaidFrameManager.xml"
+    },
     "CompleteQuest": {
       "kind": "source-reference",
       "line": 165,
@@ -17623,6 +17633,11 @@
       "line": 59,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GameCursorDocumentation.lua"
     },
+    "EditModeSystemSettingsDialog": {
+      "kind": "source-reference",
+      "line": 254,
+      "path": "Interface/AddOns/Blizzard_EditMode/Shared/EditModeDialogs.xml"
+    },
     "EjectPassengerFromSeat": {
       "line": 81,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua"
@@ -17723,11 +17738,6 @@
     "FCF_FadeInChatFrame": {
       "kind": "source-reference",
       "line": 1053,
-      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.lua"
-    },
-    "FCF_FadeOutChatFrame": {
-      "kind": "source-reference",
-      "line": 1085,
       "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.lua"
     },
     "FlashClientIcon": {
@@ -19117,6 +19127,11 @@
       "line": 29,
       "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/MainActionBar.xml"
     },
+    "MainStatusTrackingBarContainer": {
+      "kind": "source-reference",
+      "line": 41,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/StatusTrackingBar.xml"
+    },
     "MakeModifiers": {
       "line": 244,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/InputDocumentation.lua"
@@ -19333,6 +19348,11 @@
       "line": 1318,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
     },
+    "PartyFrame": {
+      "kind": "source-reference",
+      "line": 4,
+      "path": "Interface/AddOns/Blizzard_UnitFrame/Shared/PartyFrame.xml"
+    },
     "PetActionBar": {
       "kind": "source-reference",
       "line": 33,
@@ -19508,6 +19528,11 @@
     "Screenshot": {
       "line": 86,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ClientDocumentation.lua"
+    },
+    "SecondaryStatusTrackingBarContainer": {
+      "kind": "source-reference",
+      "line": 49,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/StatusTrackingBar.xml"
     },
     "SelectAvailableQuest": {
       "kind": "source-reference",

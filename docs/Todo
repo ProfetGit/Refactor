@@ -9,5 +9,4 @@
 - Class colored tooltip border when hovering a player.
 - Feature to allow user to copy chat texts.
 - Feature that moves new learned abilities to a free slot in actionbars automatically when learned
-- Alt + right click a player in the world to quick invite to party
 - When hovering over a zone in the map, display zone level gap, like "10-15" for example, so if i hover over Durotar, it would say at the top "Durotar 1-10" or something like that, i dont actually know the level gap for durotar, diplay the level gap in color depending on the users level, so red would mean player is not strong enough for the given zone. Make this a toggleable option.

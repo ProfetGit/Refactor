@@ -15,7 +15,7 @@ for _, name in ipairs(R.Conditions.names) do
 end
 local FADE_MIN, FADE_MAX, FADE_STEP = 0, 2, 0.05
 local DEFAULT_FADE_IN, DEFAULT_FADE_OUT = 0.15, 0.4
-local MAX_GROUPS, RULE_FIELDS = 32, 7
+local MAX_GROUPS, RULE_FIELDS = 32, 8
 -- How visible an element is when its rule says shown, and when it says hidden: a share of
 -- the alpha the game gives the frame, so an Edit Mode opacity still counts. Shown never
 -- goes below a tenth, or an element could be lost with no rule saying so.
@@ -25,16 +25,27 @@ Visibility.fadeRange = { minimum = FADE_MIN, maximum = FADE_MAX, step = FADE_STE
 Visibility.shownRange = { minimum = SHOWN_MIN, maximum = ALPHA_MAX, step = ALPHA_STEP }
 Visibility.hiddenRange = { minimum = HIDDEN_MIN, maximum = ALPHA_MAX, step = ALPHA_STEP }
 Visibility.option = "uiVisibility"
+-- A zone is hovered while any element in it is, so the bars, the bags and the micro menu
+-- along the bottom come and go as one. The names are where things usually sit; an
+-- element can be put in any of them.
+Visibility.zones = { "none", "bottom", "top", "left", "right" }
+Visibility.noZone = "none"
+local ZONES = {}
+for _, zone in ipairs(Visibility.zones) do
+    ZONES[zone] = true
+end
 -- Opt-in extras a group may carry, each behind its own boolean option.
 Visibility.extraOptions = { uiVisibilityBlobs = true }
 
 -- Every frame name is a string resolved at enable, never a global read here: a frame the
 -- client lacks costs its group, not the module. frames must all exist for the group to be
 -- available; optional ones join when present. hover says where a mouseover comes from:
--- frames hooks OnEnter and OnLeave on each frame, children on each frame's children too (a
--- number is how many levels down),
--- chat rides Blizzard's own chat fade calls (chat frames take no mouse of their own), and
--- editBox keeps a chat window shown while its edit box has focus. reapply names what to
+-- frames hooks OnEnter on each frame that is not secure, children on each frame's children
+-- too (a number is how many levels down), tooltip takes the hover from GameTooltip naming
+-- one of the group's frames as its owner (the only signal a secure button gives), chat
+-- rides Blizzard's own chat fade call, and editBox keeps a chat window shown while its
+-- edit box has focus. Leaving is never an event: a watch checks the mouse while anything
+-- is hovered. reapply names what to
 -- hook when Blizzard writes an alpha of its own: a global function name, or a frame and
 -- method. kind picks a preset's rule. Alpha multiplies down the frame tree, so a group
 -- whose frames sit inside another group's frames can never be more visible than its parent;
@@ -54,53 +65,64 @@ Visibility.groups = {
         frames = { "ChatFrame1ButtonFrame" },
         optional = { "ChatFrameToggleVoiceDeafenButton", "ChatFrameToggleVoiceMuteButton", "QuickJoinToastButton",
             "TextToSpeechButtonFrame" },
-        hover = { frames = true, children = true }, reapply = {}, noteKey = "VIS_NOTE_NESTED" },
+        hover = { tooltip = true, frames = true, children = true }, reapply = {}, noteKey = "VIS_NOTE_NESTED" },
     { id = "bars.main", kind = "bars", labelKey = "VIS_GROUP_BAR_1", frames = { "MainActionBar" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.bottomLeft", kind = "bars", labelKey = "VIS_GROUP_BAR_2", frames = { "MultiBarBottomLeft" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.bottomRight", kind = "bars", labelKey = "VIS_GROUP_BAR_3", frames = { "MultiBarBottomRight" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.right", kind = "bars", labelKey = "VIS_GROUP_BAR_4", frames = { "MultiBarRight" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.left", kind = "bars", labelKey = "VIS_GROUP_BAR_5", frames = { "MultiBarLeft" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.five", kind = "bars", labelKey = "VIS_GROUP_BAR_6", frames = { "MultiBar5" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.six", kind = "bars", labelKey = "VIS_GROUP_BAR_7", frames = { "MultiBar6" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.seven", kind = "bars", labelKey = "VIS_GROUP_BAR_8", frames = { "MultiBar7" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.pet", kind = "bars", labelKey = "VIS_GROUP_PET_BAR", frames = { "PetActionBar" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.stance", kind = "bars", labelKey = "VIS_GROUP_STANCE_BAR", frames = { "StanceBar" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
-    -- Edit Mode has an opacity setting for the unit frames and writes it through this method;
-    -- what it writes is the frame's new resting alpha, so the hook takes it as the baseline.
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
+    -- Unit frames are secure buttons, so no script of theirs is hooked: hover rides their tooltip.
+    -- Edit Mode has an opacity setting for them and writes it through this method; what it
+    -- writes is the frame's new resting alpha, so the hook takes it as the baseline.
     { id = "unit.player", kind = "unit", labelKey = "VIS_GROUP_PLAYER", frames = { "PlayerFrame" },
-        optional = {}, hover = { frames = true, children = 2 },
+        optional = {}, hover = { tooltip = true },
         reapply = { { frame = "PlayerFrame", method = "UpdateSystemSettingOpacity", baseline = true } },
         noteKey = "VIS_NOTE_PLAYER" },
     { id = "unit.target", kind = "unit", labelKey = "VIS_GROUP_TARGET", frames = { "TargetFrame" },
-        optional = {}, hover = { frames = true, children = 2 },
+        optional = {}, hover = { tooltip = true },
         reapply = { { frame = "TargetFrame", method = "UpdateSystemSettingOpacity", baseline = true } } },
+    { id = "unit.party", kind = "unit", labelKey = "VIS_GROUP_PARTY", frames = { "PartyFrame" },
+        optional = {}, hover = { tooltip = true },
+        reapply = { { frame = "PartyFrame", method = "UpdateSystemSettingOpacity", baseline = true } } },
+    -- The manager is the tab at the screen edge; a plain frame, so its own scripts are hooked.
+    { id = "unit.raid", kind = "unit", labelKey = "VIS_GROUP_RAID", frames = { "CompactRaidFrameContainer" },
+        optional = { "CompactRaidFrameManager" }, hover = { tooltip = true, frames = true },
+        reapply = { { frame = "CompactRaidFrameContainer", method = "UpdateSystemSettingOpacity", baseline = true } },
+        noteKey = "VIS_NOTE_RAID" },
     { id = "hud.status", kind = "hud", labelKey = "VIS_GROUP_STATUS", frames = { "StatusTrackingBarManager" },
-        optional = {}, hover = { frames = true, children = 2 }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true, children = 2 }, reapply = {} },
     { id = "hud.microMenu", kind = "hud", labelKey = "VIS_GROUP_MICRO_MENU", frames = { "MicroMenuContainer" },
-        optional = {}, hover = { frames = true, children = 2 }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true, children = 2 }, reapply = {} },
     { id = "hud.bags", kind = "hud", labelKey = "VIS_GROUP_BAGS", frames = { "BagsBar" },
-        optional = {}, hover = { frames = true, children = true }, reapply = {} },
+        optional = {}, hover = { tooltip = true, frames = true, children = true }, reapply = {} },
     -- Quest blocks are pooled and made as quests arrive, so only the ones present at enable
     -- carry a hover hook; the tracker frame itself takes no mouse.
     { id = "hud.objectives", kind = "hud", labelKey = "VIS_GROUP_OBJECTIVES", frames = { "ObjectiveTrackerFrame" },
-        optional = {}, hover = { frames = true, children = 3 }, reapply = {}, noteKey = "VIS_NOTE_OBJECTIVES" },
+        optional = {}, hover = { tooltip = true, frames = true, children = 3 }, reapply = {},
+        noteKey = "VIS_NOTE_OBJECTIVES" },
     -- The client draws the quest, task and dig-site areas inside the Minimap widget, past
     -- any frame alpha, and offers setters for their alpha but no getters and no default in
     -- its own UI code. So fading them is opt-in, and what they come back to when shown is
     -- Refactor's own: the ring on, the fills off, the look Blizzard ships as far as the eye
     -- can tell. The player arrow has no alpha of any kind on this client and stays.
     { id = "hud.minimap", kind = "hud", labelKey = "VIS_GROUP_MINIMAP", frames = { "MinimapCluster" },
-        optional = {}, hover = { frames = true, children = 3 }, reapply = {}, noteKey = "VIS_NOTE_MINIMAP",
+        optional = {}, hover = { tooltip = true, frames = true, children = 3 }, reapply = {},
+        noteKey = "VIS_NOTE_MINIMAP",
         extras = { { frame = "Minimap", option = "uiVisibilityBlobs", alphas = {
             SetQuestBlobRingAlpha = 1, SetQuestBlobInsideAlpha = 0, SetQuestBlobOutsideAlpha = 0,
             SetTaskBlobRingAlpha = 1, SetTaskBlobInsideAlpha = 0, SetTaskBlobOutsideAlpha = 0,
@@ -110,7 +132,8 @@ Visibility.groups = {
         frames = { "GameTimeFrame", "TimeManagerClockButton", "MinimapCluster.Tracking" },
         optional = { "AddonCompartmentFrame", "MinimapCluster.IndicatorFrame", "Minimap.ZoomIn", "Minimap.ZoomOut",
             "ExpansionLandingPageMinimapButton" },
-        hover = { frames = true, children = true }, reapply = {}, noteKey = "VIS_NOTE_MINIMAP_BUTTONS" },
+        hover = { tooltip = true, frames = true, children = true }, reapply = {},
+        noteKey = "VIS_NOTE_MINIMAP_BUTTONS" },
 }
 -- The chat edit box's background and border are textures, which take no mouse, so this group
 -- has no hover source and mouseover on it acts as hidden. The typed text is not touched.
@@ -133,6 +156,71 @@ table.insert(Visibility.groups, 4, { id = "chat.inputArt", kind = "art", labelKe
 local GROUP_BY_ID = {}
 for _, group in ipairs(Visibility.groups) do
     GROUP_BY_ID[group.id] = group
+end
+
+-- Where each element usually sits, which is the zone a preset puts it in.
+local ZONE_DEFAULTS = {
+    ["chat.frames"] = "left", ["chat.tabs"] = "left", ["chat.buttons"] = "left", ["chat.inputArt"] = "left",
+    ["unit.player"] = "top", ["unit.target"] = "top", ["unit.party"] = "top", ["unit.raid"] = "top",
+    ["hud.status"] = "bottom", ["hud.microMenu"] = "bottom", ["hud.bags"] = "bottom",
+    ["hud.objectives"] = "right", ["hud.minimap"] = "right", ["hud.minimapButtons"] = "right",
+}
+for _, group in ipairs(Visibility.groups) do
+    if group.kind == "bars" then
+        ZONE_DEFAULTS[group.id] = "bottom"
+    end
+end
+Visibility.zoneDefaults = ZONE_DEFAULTS
+
+-- Which Edit Mode system frame each group is tuned from: selecting that system in Edit
+-- Mode opens the group's settings beside Blizzard's own dialog. An element with no system
+-- of its own hangs off the one it sits inside, so every group is reachable.
+local CHAT, MINIMAP = { "ChatFrame1" }, { "MinimapCluster" }
+local STATUS = { "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer" }
+Visibility.systems = {
+    ["chat.frames"] = CHAT, ["chat.tabs"] = CHAT, ["chat.buttons"] = CHAT, ["chat.inputArt"] = CHAT,
+    ["bars.main"] = { "MainActionBar" }, ["bars.bottomLeft"] = { "MultiBarBottomLeft" },
+    ["bars.bottomRight"] = { "MultiBarBottomRight" }, ["bars.right"] = { "MultiBarRight" },
+    ["bars.left"] = { "MultiBarLeft" }, ["bars.five"] = { "MultiBar5" }, ["bars.six"] = { "MultiBar6" },
+    ["bars.seven"] = { "MultiBar7" }, ["bars.pet"] = { "PetActionBar" }, ["bars.stance"] = { "StanceBar" },
+    ["unit.player"] = { "PlayerFrame" }, ["unit.target"] = { "TargetFrame" },
+    ["unit.party"] = { "PartyFrame" }, ["unit.raid"] = { "CompactRaidFrameContainer" },
+    ["hud.status"] = STATUS, ["hud.microMenu"] = { "MicroMenuContainer" }, ["hud.bags"] = { "BagsBar" },
+    ["hud.objectives"] = { "ObjectiveTrackerFrame" }, ["hud.minimap"] = MINIMAP, ["hud.minimapButtons"] = MINIMAP,
+}
+
+-- The groups a selected Edit Mode system frame stands for, in catalogue order.
+function Visibility:GroupsForSystem(systemFrame, into)
+    local ids = into or {}
+    for index = #ids, 1, -1 do
+        ids[index] = nil
+    end
+    if type(systemFrame) ~= "table" then
+        return ids
+    end
+    for _, group in ipairs(self.groups) do
+        for _, name in ipairs(self.systems[group.id] or {}) do
+            if R.Capabilities:Resolve(name) == systemFrame then
+                ids[#ids + 1] = group.id
+                break
+            end
+        end
+    end
+    return ids
+end
+
+-- Ids of the other groups of the same kind, the ones "same for all" reaches.
+function Visibility:Siblings(id, into)
+    local group, siblings = GROUP_BY_ID[id], into or {}
+    for index = #siblings, 1, -1 do
+        siblings[index] = nil
+    end
+    for _, other in ipairs(self.groups) do
+        if group and other.kind == group.kind and other.id ~= id then
+            siblings[#siblings + 1] = other.id
+        end
+    end
+    return siblings
 end
 
 local function spec(mode, showWhen, hideWhen)
@@ -174,6 +262,7 @@ local function complete(stored)
         showWhen = copySet(stored.showWhen), hideWhen = copySet(stored.hideWhen),
         fadeIn = stored.fadeIn or DEFAULT_FADE_IN, fadeOut = stored.fadeOut or DEFAULT_FADE_OUT,
         shownAlpha = stored.shownAlpha or DEFAULT_SHOWN, hiddenAlpha = stored.hiddenAlpha or DEFAULT_HIDDEN,
+        zone = stored.zone or Visibility.noZone,
     }
 end
 
@@ -216,6 +305,7 @@ function Visibility:ValidRule(rule)
     return count == RULE_FIELDS and MODES[rule.mode] == true and validSet(rule.showWhen) and validSet(rule.hideWhen)
         and validNumber(rule.fadeIn, FADE_MIN, FADE_MAX) and validNumber(rule.fadeOut, FADE_MIN, FADE_MAX)
         and validNumber(rule.shownAlpha, SHOWN_MIN, ALPHA_MAX) and validNumber(rule.hiddenAlpha, HIDDEN_MIN, ALPHA_MAX)
+        and ZONES[rule.zone] == true
 end
 
 -- The whole saved option. Unknown group ids are kept: a group this build lacks may come back.
@@ -285,6 +375,7 @@ function Visibility:ApplyPreset(id)
         local wanted = preset.rules[group.kind] or preset.rules.default
         local rule = complete(settings.groups[group.id])
         rule.mode, rule.showWhen, rule.hideWhen = wanted.mode, copySet(wanted.showWhen), copySet(wanted.hideWhen)
+        rule.zone = ZONE_DEFAULTS[group.id] or self.noZone
         settings.groups[group.id] = rule
     end
     settings.preset = id
@@ -316,7 +407,7 @@ function Visibility:SetRules(groupIds, patch)
     if count == 0 then
         return false
     end
-    if patch.mode ~= nil or patch.showWhen ~= nil or patch.hideWhen ~= nil then
+    if patch.mode ~= nil or patch.showWhen ~= nil or patch.hideWhen ~= nil or patch.zone ~= nil then
         settings.preset = self.customPreset
     end
     return R.Settings:SetOption(self.option, settings)

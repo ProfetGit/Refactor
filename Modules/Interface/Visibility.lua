@@ -1,9 +1,10 @@
 --- @module interface.visibility
 --- Purpose: fade groups of Blizzard frames out, back in under the mouse, or by player state, with alpha alone.
 --- Requires: hooksecurefunc
---- Events: REFACTOR_CONDITIONS_CHANGED, REFACTOR_SETTINGS_CHANGED; EditMode.Enter and EditMode.Exit through
----     EventRegistry where the client has one. Frames, Blizzard's chat fade functions and EventRegistry are
----     resolved by name at enable, so one missing piece costs its group, never the module.
+--- Events: CURSOR_CHANGED, REFACTOR_CONDITIONS_CHANGED, REFACTOR_SETTINGS_CHANGED; EditMode.Enter and
+---     EditMode.Exit through EventRegistry where the client has one. Frames, GameTooltip, GetCursorInfo,
+---     Blizzard's chat fade function, EventRegistry and the Edit Mode settings dialog are resolved by name at
+---     enable, so one missing piece costs its group or its convenience, never the module.
 --- Hot: no
 local _, R = ...
 local Rules, Fade, Conditions = R.Visibility, R.Fade, R.Conditions
@@ -20,8 +21,19 @@ local Visibility = R:RegisterModule({
 -- and disable on purpose.
 Visibility.hooked = {}
 
-local CHAT_FADE_IN, CHAT_FADE_OUT = "FCF_FadeInChatFrame", "FCF_FadeOutChatFrame"
+local CHAT_FADE_IN = "FCF_FadeInChatFrame"
 local EDIT_MODE_ENTER, EDIT_MODE_EXIT = "EditMode.Enter", "EditMode.Exit"
+-- Blizzard's per-system Edit Mode dialog; ours opens beside it, never inside it.
+local DIALOG = "EditModeSystemSettingsDialog"
+-- Nearly everything with a mouse shows a tooltip, and every tooltip names its owner. That
+-- one call is the hover signal for secure buttons, which get no script hook of ours.
+local TOOLTIP, TOOLTIP_OWNER = "GameTooltip", "SetOwner"
+local CURSOR = "GetCursorInfo"
+-- A button or a member frame sits a few levels under its group's frame.
+local PARENT_DEPTH = 6
+-- Leaving is never trusted to an event: while anything is hovered, the mouse is checked
+-- against the hovered frames this often, and the watch stops the moment nothing is.
+local WATCH_INTERVAL = 0.1
 -- A catalogue entry may leave optional and reapply out; a later group should not need to spell them.
 local EMPTY = {}
 
@@ -29,20 +41,40 @@ local function isFrame(value)
     return type(value) == "table" and type(value.GetAlpha) == "function"
 end
 
+-- Secure and forbidden frames are Blizzard's alone: no script of ours goes on one.
+local function hookable(frame)
+    if type(frame) ~= "table" or type(frame.HookScript) ~= "function" then
+        return false
+    end
+    if type(frame.IsForbidden) == "function" and frame:IsForbidden() then
+        return false
+    end
+    return not (type(frame.IsProtected) == "function" and frame:IsProtected())
+end
+
 function Visibility:Group(id)
     return self.groups and self.groups[id]
 end
 
 -- Alpha is applied as a share of what the frame had when the module took it over, so
--- "visible" leaves Blizzard's own alpha alone. Edit Mode shows everything: a bar nobody can
--- see cannot be dragged.
+-- "visible" leaves Blizzard's own alpha alone. Edit Mode shows everything as the game has
+-- it, except the element being tuned, which previews its shown opacity so the slider shows
+-- what it does. A spell or item on the cursor shows everything too: a bar that cannot be
+-- seen cannot be dropped on.
 function Visibility:ApplyGroup(id, snap)
     local group = self:Group(id)
     if not group or group.status ~= "ok" then
         return
     end
     local rule = Rules:Rule(id)
-    local target = self.editing and 1 or Rules:Resolve(rule, Conditions:State(), group.hovered)
+    local target
+    if self.editing then
+        target = self.preview[id] and rule.shownAlpha or 1
+    elseif self.dragging then
+        target = rule.shownAlpha
+    else
+        target = Rules:Resolve(rule, Conditions:State(), group.hovered)
+    end
     for _, frame in ipairs(group.frames) do
         local goal = self.captured[frame] * target
         local seconds = goal > frame:GetAlpha() and rule.fadeIn or rule.fadeOut
@@ -67,60 +99,121 @@ function Visibility:ApplyAll(snap)
     end
 end
 
-function Visibility:MouseOver(group)
+-- Whether the mouse is still on a group by its own evidence: typing in it, its tooltip up,
+-- Blizzard's chat fade holding it, or the pointer over one of its frames. A frame the
+-- client refuses to measure counts as not under the mouse rather than as an error.
+function Visibility:Over(group)
+    if group.typing then
+        return true
+    end
+    if self.tooltipGroup == group.id and self.tooltip and self.tooltip:IsShown() then
+        return true
+    end
     for _, frame in ipairs(group.frames) do
-        if frame:IsMouseOver() then
+        if group.def.hover.chat and rawget(frame, "hasBeenFaded") then
+            return true
+        end
+        local ok, over = pcall(frame.IsMouseOver, frame)
+        if ok and over then
             return true
         end
     end
     return false
 end
 
-function Visibility:OnEnter(id)
-    local group = self.active and self:Group(id)
-    if not group then
+-- The one pass that decides hover for every group. A zone is hovered while any of its
+-- members is, so a bar, the bags and the micro menu come and go as one.
+function Visibility:Watch()
+    self.watch = nil
+    if not self.active then
         return
     end
-    if group.leaveCheck then
-        group.leaveCheck:Cancel()
-        group.leaveCheck = nil
+    local zones, any = self.zoneOver, false
+    for zone in pairs(zones) do
+        zones[zone] = nil
+    end
+    for _, group in pairs(self.groups) do
+        group.over = group.status == "ok" and self:Over(group)
+        if group.over then
+            local zone = Rules:Rule(group.id).zone
+            if zone ~= Rules.noZone then
+                zones[zone] = true
+            end
+        end
+    end
+    for id, group in pairs(self.groups) do
+        local hovered = group.over or zones[Rules:Rule(id).zone] == true
+        if hovered ~= group.hovered then
+            group.hovered = hovered
+            self:ApplyGroup(id)
+        end
+        any = any or hovered
+    end
+    if any then
+        self.watch = R:After(self, WATCH_INTERVAL, self.Watch)
+    end
+end
+
+-- Any hover-in signal lands here; the watch takes it from there.
+function Visibility:Hover(id)
+    local group = self.active and self:Group(id)
+    if not group or group.status ~= "ok" then
+        return
     end
     if not group.hovered then
         group.hovered = true
         self:ApplyGroup(id)
+        local zone = Rules:Rule(id).zone
+        if zone ~= Rules.noZone then
+            for otherId, other in pairs(self.groups) do
+                if other.status == "ok" and not other.hovered and Rules:Rule(otherId).zone == zone then
+                    other.hovered = true
+                    self:ApplyGroup(otherId)
+                end
+            end
+        end
+    end
+    if not self.watch then
+        self.watch = R:After(self, WATCH_INTERVAL, self.Watch)
     end
 end
 
--- A leave is checked a tick later rather than acted on: the mouse crossing from one button
--- of a bar to the next leaves and enters in the same frame, and a fade that started on the
--- leave would flicker. Typing in a chat window counts as hovering it.
-function Visibility:OnLeave(id)
-    local group = self.active and self:Group(id)
-    if not group or not group.hovered or group.leaveCheck then
+-- The group a frame belongs to: the frame itself, or an ancestor a few levels up.
+function Visibility:GroupOfFrame(frame)
+    local depth = 0
+    while type(frame) == "table" and depth < PARENT_DEPTH do
+        local id = self.frameGroup[frame]
+        if id then
+            return id
+        end
+        local ok, parent = pcall(frame.GetParent, frame)
+        frame = ok and parent or nil
+        depth = depth + 1
+    end
+    return nil
+end
+
+function Visibility:OnTooltipOwner(owner)
+    if not self.active then
         return
     end
-    group.leaveCheck = R:After(self, 0, function()
-        group.leaveCheck = nil
-        if self.active and group.hovered and not group.typing and not self:MouseOver(group) then
-            group.hovered = false
-            self:ApplyGroup(id)
-        end
-    end)
+    local id = self:GroupOfFrame(owner)
+    self.tooltipGroup = id
+    local group = id and self:Group(id)
+    if group and group.def.hover.tooltip then
+        self:Hover(id)
+    end
 end
 
--- Blizzard tracks the cursor over its chat windows itself and calls these as it fades them;
--- the windows take no mouse of their own, so this is the only hover signal they have.
-function Visibility:OnChatFade(shown)
+-- Blizzard tracks the cursor over its chat windows itself and calls this as it fades them
+-- in; the windows take no mouse of their own, so this is the only hover signal they have.
+function Visibility:OnChatFade()
     if not self.active then
         return
     end
     for id, group in pairs(self.groups) do
-        if group.def.hover.chat and group.status == "ok" then
-            if shown then
-                self:OnEnter(id)
-            else
-                self:OnLeave(id)
-            end
+        if group.def.hover.chat then
+            self:Hover(id)
         end
     end
 end
@@ -132,9 +225,16 @@ function Visibility:OnTyping(id, typing)
     end
     group.typing = typing
     if typing then
-        self:OnEnter(id)
-    else
-        self:OnLeave(id)
+        self:Hover(id)
+    end
+end
+
+function Visibility:OnCursor()
+    local read = self.cursor
+    local dragging = read ~= nil and read() ~= nil
+    if dragging ~= self.dragging then
+        self.dragging = dragging
+        self:ApplyAll(false)
     end
 end
 
@@ -157,9 +257,9 @@ function Visibility:OnSettingsChanged(_, key)
 end
 
 -- A frame can serve two groups, a minimap button being inside the minimap, so the record is
--- per frame and group, and a texture, which takes no mouse, is skipped.
+-- per frame and group. Only a frame's own hover-in is hooked; leaving is the watch's job.
 function Visibility:HookFrame(frame, id)
-    if type(frame.HookScript) ~= "function" then
+    if not hookable(frame) then
         return
     end
     local groups = self.hooked[frame]
@@ -171,8 +271,7 @@ function Visibility:HookFrame(frame, id)
         return
     end
     groups[id] = true
-    frame:HookScript("OnEnter", function() self:OnEnter(id) end)
-    frame:HookScript("OnLeave", function() self:OnLeave(id) end)
+    frame:HookScript("OnEnter", function() self:Hover(id) end)
 end
 
 function Visibility:HookChildren(frame, id, depth)
@@ -231,8 +330,10 @@ function Visibility:InstallHooks(group)
         end
     end
     if def.hover.chat then
-        self:HookGlobal(CHAT_FADE_IN, function() self:OnChatFade(true) end)
-        self:HookGlobal(CHAT_FADE_OUT, function() self:OnChatFade(false) end)
+        self:HookGlobal(CHAT_FADE_IN, function() self:OnChatFade() end)
+    end
+    if def.hover.tooltip then
+        self:HookMethod(TOOLTIP, TOOLTIP_OWNER, function(_, owner) self:OnTooltipOwner(owner) end)
     end
     for _, entry in ipairs(def.reapply or EMPTY) do
         -- Blizzard wrote an alpha of its own; the rule's answer goes straight back on. An entry
@@ -256,6 +357,52 @@ function Visibility:InstallHooks(group)
     end
 end
 
+-- Selecting a system in Edit Mode attaches Blizzard's dialog to it; the companion opens
+-- beside the dialog with the groups that system stands for, and closes with it.
+function Visibility:OnSystemSelected(systemFrame)
+    if not self.active then
+        return
+    end
+    local ids = Rules:GroupsForSystem(systemFrame, self.editIds)
+    for id in pairs(self.preview) do
+        self.preview[id] = nil
+    end
+    if #ids == 0 then
+        self.companion:Close()
+    else
+        for _, id in ipairs(ids) do
+            self.preview[id] = true
+        end
+        self.companion:Open(R.Capabilities:Resolve(DIALOG), ids)
+    end
+    self:ApplyAll(true)
+end
+
+function Visibility:OnSystemClosed()
+    if not self.active then
+        return
+    end
+    for id in pairs(self.preview) do
+        self.preview[id] = nil
+    end
+    self.companion:Close()
+    self:ApplyAll(true)
+end
+
+function Visibility:HookDialog()
+    if self.hooked.dialog then
+        return
+    end
+    local dialog = R.Capabilities:Resolve(DIALOG)
+    if type(dialog) ~= "table" or type(dialog.HookScript) ~= "function"
+        or type(rawget(dialog, "AttachToSystemFrame") or dialog.AttachToSystemFrame) ~= "function" then
+        return
+    end
+    self.hooked.dialog = true
+    hooksecurefunc(dialog, "AttachToSystemFrame", function(_, systemFrame) self:OnSystemSelected(systemFrame) end)
+    dialog:HookScript("OnHide", function() self:OnSystemClosed() end)
+end
+
 function Visibility:HookEditMode()
     if self.hooked.editMode then
         return
@@ -269,8 +416,6 @@ function Visibility:HookEditMode()
     registry:RegisterCallback(EDIT_MODE_EXIT, function() self:SetEditing(false) end, self)
 end
 
--- A group is available when every frame it needs exists and no neighbour owns it. Deference
--- is decided once, per group, so the chat groups keep working beside a bar addon.
 -- A widget alpha setter, wrapped so the fade driver can drive it like a frame. The client
 -- gives no getter, so the value it holds is the last one written, starting from the shown
 -- one. Nothing is written until the group first applies with the option on.
@@ -301,8 +446,11 @@ function Visibility:PrepareExtras(group)
     end
 end
 
+-- A group is available when every frame it needs exists and no neighbour owns it. Deference
+-- is decided once, per group, so the chat groups keep working beside a bar addon.
 function Visibility:PrepareGroup(def)
-    local group = { def = def, id = def.id, frames = {}, extras = {}, hovered = false, typing = false, status = "ok" }
+    local group = { def = def, id = def.id, frames = {}, extras = {}, hovered = false, over = false,
+        typing = false, status = "ok" }
     self.groups[def.id] = group
     local integrations = R.Integrations
     local owner = integrations and integrations.FrameGroupOwner and integrations:FrameGroupOwner(def.id)
@@ -326,6 +474,7 @@ function Visibility:PrepareGroup(def)
     end
     for _, frame in ipairs(group.frames) do
         self.captured[frame] = frame:GetAlpha()
+        self.frameGroup[frame] = def.id
     end
     self:PrepareExtras(group)
     self:InstallHooks(group)
@@ -342,17 +491,29 @@ function Visibility:OnEnable()
         R.Broker:Emit("REFACTOR_MODULE_CHANGED", self.id)
         return
     end
-    self.groups, self.captured = {}, {}
+    self.groups, self.captured, self.preview, self.editIds = {}, {}, {}, {}
+    self.frameGroup, self.zoneOver, self.tooltipGroup, self.watch = {}, {}, nil, nil
+    -- One companion for the session: a frame cannot be destroyed, so it is built once.
+    self.companion = self.companion or R.UI:CreateVisibilityCompanion(self)
+    local tooltip = R.Capabilities:Resolve(TOOLTIP)
+    self.tooltip = type(tooltip) == "table" and type(tooltip.IsShown) == "function" and tooltip or nil
+    local cursor = R.Capabilities:Resolve(CURSOR)
+    self.cursor = type(cursor) == "function" and cursor or nil
     local manager = R.Capabilities:Resolve("EditModeManagerFrame")
     self.editing = type(manager) == "table" and type(rawget(manager, "IsEditModeActive") or manager.IsEditModeActive)
         == "function" and manager:IsEditModeActive() == true
+    self.dragging = self.cursor ~= nil and self.cursor() ~= nil
     for _, def in ipairs(Rules.groups) do
         self:PrepareGroup(def)
     end
     self:HookEditMode()
+    self:HookDialog()
     Conditions:Start(self)
     R.Broker:Subscribe("REFACTOR_CONDITIONS_CHANGED", self.OnConditions, self)
     R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.OnSettingsChanged, self)
+    if self.cursor then
+        R.Broker:Subscribe("CURSOR_CHANGED", self.OnCursor, self)
+    end
     self.active = true
     self:ApplyAll(true)
 end
@@ -364,6 +525,9 @@ function Visibility:OnDisable()
     R.Broker:UnsubscribeAll(self)
     R:CancelTimers(self)
     Conditions:Stop(self)
+    if self.companion then
+        self.companion:Close()
+    end
     for frame, alpha in pairs(self.captured or {}) do
         Fade:Snap(frame, alpha)
     end
@@ -374,5 +538,6 @@ function Visibility:OnDisable()
             end
         end
     end
-    self.groups, self.captured, self.editing = nil, nil, false
+    self.groups, self.captured, self.preview, self.frameGroup, self.zoneOver = nil, nil, nil, nil, nil
+    self.watch, self.tooltipGroup, self.editing, self.dragging = nil, nil, false, false
 end

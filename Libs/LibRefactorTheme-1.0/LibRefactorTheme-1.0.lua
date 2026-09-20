@@ -1,9 +1,11 @@
-local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 14)
+local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 15)
 if not Theme then return end
 
 local unpack = unpack
 Theme.colors = {
     PANEL_BG = { 0.065, 0.051, 0.041, 0.98 },
+    -- Blizzard's translucent dialog ground (DialogBorderTranslucentTemplate): black at four fifths.
+    DIALOG_BG = { 0, 0, 0, 0.8 },
     SURFACE = { 0.105, 0.086, 0.068, 0.98 },
     ROW_BG = { 0.145, 0.120, 0.094, 0.92 },
     BORDER_BRONZE = { 0.48, 0.34, 0.20, 1 },
@@ -321,6 +323,22 @@ function Theme:Panel(frame, compact)
     fill:SetPoint("TOPLEFT", inset, -inset)
     fill:SetPoint("BOTTOMRIGHT", -inset, inset)
     fill:SetAlpha(0.38)
+    if nineSlice then
+        NineSliceUtil.ApplyLayoutByName(frame, self.panelLayout)
+        return
+    end
+    self:FlatBorder(frame)
+end
+
+-- The look of Blizzard's own Edit Mode dialogs: the same border as Panel over a plain
+-- translucent black, no tile, so a window of ours that sits beside one reads as its sibling.
+function Theme:Dialog(frame)
+    local nineSlice = NineSliceUtil and NineSliceUtil.GetLayout and NineSliceUtil.GetLayout(self.panelLayout)
+    local inset = nineSlice and NINE_SLICE_INSET or FLAT_INSET
+    local base = self:Fill(frame, "DIALOG_BG")
+    base:ClearAllPoints()
+    base:SetPoint("TOPLEFT", inset, -inset)
+    base:SetPoint("BOTTOMRIGHT", -inset, inset)
     if nineSlice then
         NineSliceUtil.ApplyLayoutByName(frame, self.panelLayout)
         return

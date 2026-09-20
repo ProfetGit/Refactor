@@ -308,20 +308,29 @@ an Edit Mode opacity still counts), and a fade time each way. Resolution is one 
 only), then show conditions, then hide conditions, then the base. Conditions (combat,
 mounted, resting, target, group, instance, stealth, dead) come from `Core/Conditions.lua`,
 which holds its events only while a module listens and publishes one event per change.
-Presets write a rule for every group; any hand edit makes the selection custom. The panel
-lists every element as a checkbox under a per-kind header and one editor writes to every
-ticked element at once, which is how two bars are made alike. Groups:
+Presets write a rule for every group; any hand edit makes the selection custom. Per-element
+editing lives in Edit Mode: selecting a system there attaches Blizzard's settings dialog to
+it, and a Refactor-owned companion opens beside that dialog with the groups the system stands
+for, the element previewing its shown opacity while it is open. Nothing is added to or
+changed in Blizzard's dialog, whose setting widgets all write into Blizzard's own layout
+data. A "same for all" button pushes one element's rule to its kind. Refactor's own window
+keeps only the preset. Groups:
 chat windows, chat tabs, chat buttons, chat input box art, the eight action bars, pet bar,
-stance bar, player frame, target frame, experience and reputation bars, micro menu, bags
-bar, quest list, minimap, minimap buttons. Buffs and anything else are data entries to add.
+stance bar, player, target, party and raid frames, experience and reputation bars, micro
+menu, bags bar, quest list, minimap, minimap buttons. Buffs and anything else are data entries to add.
 
 Alpha is the only tool. Never Hide, Show, EnableMouse, SetAttribute or SetParent on a
 Blizzard frame. An invisible action bar still takes clicks and keybinds, and the setting
 says so. Alpha multiplies down the frame tree, so a group whose frames sit inside another
 group's frames can never be more visible than its parent, and the panel says so too.
-Mouseover comes from HookScript on the group's frames and their children, or, for chat,
-from Blizzard's own fade calls hooked with hooksecurefunc, since chat windows take no mouse
-of their own. Where Blizzard writes an alpha of its own the group names the function or
+Mouseover in comes from three signals: `GameTooltip:SetOwner` naming one of a group's
+frames (the only signal a secure button gives, and no script of ours ever goes on a
+protected or forbidden frame), `HookScript("OnEnter")` on frames that are not secure, and
+Blizzard's own chat fade call. Mouseover out is never an event: while anything is hovered a
+watch checks the mouse against the hovered frames ten times a second and stops when nothing
+is, so a missed leave cannot strand an element visible. A rule carries a zone; a zone is
+hovered while any element in it is, which is how a side of the screen comes and goes as
+one. A spell or item on the cursor shows everything so a bar can be dropped on. Where Blizzard writes an alpha of its own the group names the function or
 frame method to hook and the rule goes straight back on. Fades run on the one
 Refactor-owned OnUpdate driver in `Core/Fade.lua`, idle when nothing moves. Every frame is
 resolved by name at enable: a missing frame or a neighbour that owns it (ElvUI takes the
