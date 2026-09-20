@@ -294,10 +294,45 @@ Risk column: **S** safe, **V** visible (changes the screen), **A** automation (a
 | CVar profile | User-defined set of CVars applied at login, exportable | Manual | V |
 | Hide talking head frame | Full | V |
 | Hide boss banner and zone text | Individually toggleable | Full | V |
-| UI element visibility | Per-frame show and hide, no repositioning, no reskin | Full | V |
+| UI element visibility | Alpha only, per frame group, presets and per-group rules, see 7.4.1 | Full | V |
 | Screenshot on level up | Full | V |
 | Auto stand when looting or mounting | Minimal | S |
 | Auto dismount for actions | Minimal | S |
+
+#### 7.4.1 UI element visibility
+
+Decided 20 Sep 2026. Groups of Blizzard frames each carry a rule: a base of visible,
+visible on mouseover or hidden, a set of conditions that always show the group, a set that
+always hide it, an opacity for each of the two states (a share of the frame's own alpha, so
+an Edit Mode opacity still counts), and a fade time each way. Resolution is one pure function: hover (mouseover
+only), then show conditions, then hide conditions, then the base. Conditions (combat,
+mounted, resting, target, group, instance, stealth, dead) come from `Core/Conditions.lua`,
+which holds its events only while a module listens and publishes one event per change.
+Presets write a rule for every group; any hand edit makes the selection custom. The panel
+lists every element as a checkbox under a per-kind header and one editor writes to every
+ticked element at once, which is how two bars are made alike. Groups:
+chat windows, chat tabs, chat buttons, chat input box art, the eight action bars, pet bar,
+stance bar, player frame, target frame, experience and reputation bars, micro menu, bags
+bar, quest list, minimap, minimap buttons. Buffs and anything else are data entries to add.
+
+Alpha is the only tool. Never Hide, Show, EnableMouse, SetAttribute or SetParent on a
+Blizzard frame. An invisible action bar still takes clicks and keybinds, and the setting
+says so. Alpha multiplies down the frame tree, so a group whose frames sit inside another
+group's frames can never be more visible than its parent, and the panel says so too.
+Mouseover comes from HookScript on the group's frames and their children, or, for chat,
+from Blizzard's own fade calls hooked with hooksecurefunc, since chat windows take no mouse
+of their own. Where Blizzard writes an alpha of its own the group names the function or
+frame method to hook and the rule goes straight back on. Fades run on the one
+Refactor-owned OnUpdate driver in `Core/Fade.lua`, idle when nothing moves. Every frame is
+resolved by name at enable: a missing frame or a neighbour that owns it (ElvUI takes the
+whole module, Bartender4 and Dominos the bar groups) costs that group with the reason on
+the panel. Turning the module off puts every captured alpha back.
+
+The client draws the minimap's player arrow and quest, task and dig-site areas inside the
+Minimap widget, past any frame alpha. The areas have alpha setters but no getters and no
+default anywhere in Blizzard's UI code, so fading them is an opt-in on the minimap group and
+the shown value is Refactor's own (ring on, fills off); a reload restores the client's. The
+arrow has no alpha API on Retail 12.1 and stays.
 
 ### 7.5 Chat and social
 
@@ -309,6 +344,7 @@ Risk column: **S** safe, **V** visible (changes the screen), **A** automation (a
 | Sticky channels | Standard | S |
 | Disable chat tab fade | Standard | V |
 | Auto accept party invite | Friends and guild only, never strangers | Manual | A |
+| Quick invite | Hold a modifier and click a player to invite them. The client hands addons no world click, so it reads the selection change the click causes and cannot tell left from right | Manual | A |
 | Auto decline duels | Manual | A |
 | Auto accept resurrect | Out of combat only | Manual | A |
 | Auto accept summon | With a countdown and a cancel | Manual | A |

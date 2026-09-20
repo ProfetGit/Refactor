@@ -14,8 +14,8 @@ describe("camera profiles", function()
             assert.is_true(Profiles:Valid(profile.values), profile.id)
             ids[#ids + 1] = profile.id
         end
-        assert.same({ "immersive", "controller", "cinematic", "raider", "melee", "comfort",
-            "blizzardBasic", "blizzardOn", "blizzardFull" }, ids)
+        assert.same({ "immersive", "controllerRanged", "controllerMelee", "cinematic", "raider", "melee",
+            "comfort", "blizzardBasic", "blizzardOn", "blizzardFull" }, ids)
         local values = Profiles:Resolve("immersive").values
         values.distance = nil
         assert.is_false(Profiles:Valid(values))
@@ -73,7 +73,7 @@ describe("camera profiles", function()
         assert.same({ nil, "invalid_encoding" }, { Profiles:Decode("not base64!") })
         assert.same({ nil, "invalid_encoding" }, { Profiles:Decode(R.Codec:EncodeText("RC1\nPad")) })
         -- The right shape with one number outside its range, one key twice, and one unknown.
-        local lines = { "RC2", "Pad" }
+        local lines = { "RC3", "Pad" }
         for _, field in ipairs(Profiles.fields) do
             local value = values[field.key]
             local text = field.kind == "boolean" and (value and "1" or "0") or tostring(value)
@@ -91,7 +91,7 @@ describe("camera profiles", function()
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("distance=1")) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("mystery=1")) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("pitch=yes", 6)) })
-        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("RC1", 1)) })
+        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("RC2", 1)) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Encode("", values) })
     end)
 

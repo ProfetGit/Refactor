@@ -4,6 +4,18 @@
 
 M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
 
+- Forever saved variables: the beta client (1.60.1.69913) writes SavedVariables and never
+  reads them back, so settings died on every reload. Refactor loads the last session from
+  `Restore.lua` in its own folder when the client hands back nothing, and says at login when
+  the client starts working again and the workaround can go. Temporary, with the removal
+  list under Temporary workarounds in `docs/ROADMAP.md`.
+- `/refactor saved` reports whether the client restored the saved variables, from a probe
+  taken before any of our code runs.
+- Settings: the Editing switch opens on Account defaults and keeps whichever layer you
+  last chose for that character. Editing the account layer now drops that character's own
+  setting for the feature, so the click takes effect instead of writing behind an override
+  that still wins; a feature the character has pinned says so on its row while the account
+  layer is on screen.
 - Tooltips: sell price per unit and per stack, labelled by source and hidden at merchants;
   rarity-coloured border on the main, linked and comparison tooltips, reset on clear;
   anchor mode (game default, cursor, fixed screen point with offsets).
@@ -40,10 +52,17 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
 - Chat and social: clickable web addresses with a copy box; auto decline duels; auto
   accept resurrection out of combat. Auto accept party invites is written but ships
   unavailable until AcceptGroup is confirmed callable from an addon.
+- Quick invite: hold a modifier, Alt unless changed, and click a player to invite them to
+  your party with no menu. The client gives addons no click on the 3D world, so the module
+  reads the selection the click causes and only acts when the new target is the unit under
+  the cursor. That is what keeps tab targeting from inviting anyone; it also means the
+  mouse button cannot be told apart, so either one sends it, and clicking someone already
+  selected sends nothing. Off by default, in no preset, and behind the automation
+  confirmation. `/refactor invitetest` reports what the last modified click looked like.
 - ActionCam profiles: Blizzard's Basic, On and Full run through the console command that
   defines them; Refactor's Immersive (close, over the shoulder, tilting as it comes in, a
-  faint head sway, tuned for mouse and keyboard) and Controller (target and NPC focus, no
-  sway, a little further back), Cinematic (far and centred, for the story), Raider (far
+  faint head sway, tuned for mouse and keyboard), Controller: Ranged and Controller: Melee
+  (a gentle or a strong pull toward the target, no sway, wide or close), Cinematic (far and centred, for the story), Raider (far
   everywhere, nothing moves on its own), Melee (close, hard over the shoulder, target
   focus) and Comfort (Immersive's distances with tilt, sway and focus off). Refactor's
   profiles move and recentre the camera
@@ -57,6 +76,20 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   export and import a
   profile as a string. The Keep Character Centered accessibility option, which overrides
   ActionCam, is off while a profile is on and back at its default when the feature is off.
+- UI visibility: chat windows, tabs, buttons and input box art, the eight action bars, pet
+  and stance bars, player and target frames, experience bars, micro menu, bags bar, quest
+  list, minimap and its buttons can be
+  visible, visible on mouseover, or hidden, with conditions that always show or always hide
+  a group (combat, mounted, resting, target, group, instance, stealth, dead) and a fade time
+  each way. Presets: Full immersion, Show in combat only, Clean when mounted, Off. Alpha
+  only, so keybinds and clicks keep working on an invisible bar. Chat hover rides Blizzard's
+  own chat fade; typing keeps the window shown; Edit Mode shows everything. Stands down
+  behind ElvUI, and per bar group behind Bartender4 or Dominos. `Core/Conditions.lua` is a
+  shared player state service and `Core/Fade.lua` the one OnUpdate driver. The minimap's
+  quest areas can follow it (opt-in, the game exposes no way to read their defaults); the
+  player arrow cannot be faded on this client. Each element has an opacity for shown and for
+  hidden. The panel lists every element as a checkbox with a per-kind tick-all; one editor
+  writes to every ticked element at once.
 - Interface: maximum camera distance, ActionCam through its three CVars, screenshot on
   level up. Mail: remember last recipient per character.
 - Price providers: TradeSkillMaster (custom price string) and Auctionator, opt-in under

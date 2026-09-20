@@ -11,6 +11,10 @@
     "needle": "AcceptQuest();",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
   },
+  "AddonCompartmentFrame": {
+    "needle": "name=\"AddonCompartmentFrame\"",
+    "path": "Interface/AddOns/Blizzard_Minimap/Mainline/AddonCompartment.xml"
+  },
   "AltCurrencyFrame_Update": {
     "needle": "function AltCurrencyFrame_Update(",
     "path": "Interface/AddOns/Blizzard_MoneyFrame/Mainline/MoneyFrame.lua"
@@ -18,6 +22,10 @@
   "BUYBACK_ITEMS_PER_PAGE": {
     "needle": "BUYBACK_ITEMS_PER_PAGE = 12;",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "BagsBar": {
+    "needle": "name=\"BagsBar\"",
+    "path": "Interface/AddOns/Blizzard_MainMenuBarBagButtons/Mainline/MainMenuBarBagButtons.xml"
   },
   "BuyMerchantItem": {
     "needle": "BuyMerchantItem(",
@@ -70,6 +78,294 @@
   "ChatFrame1": {
     "needle": "DEFAULT_CHAT_FRAME = ChatFrame1",
     "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameUtil.lua"
+  },
+  "ChatFrame10": {
+    "needle": "name=\"ChatFrame10\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame10EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame10EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame10EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame10EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame10EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame10EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame1ButtonFrame": {
+    "needle": "parent=\"ChatFrame1ButtonFrame\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame1EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame1EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame1EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame1EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame1EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame1EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame2": {
+    "needle": "name=\"ChatFrame2\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame2EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame2EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame2EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame2EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame2EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame2EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame3": {
+    "needle": "name=\"ChatFrame3\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame3EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame3EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame3EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame3EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame3EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame3EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame4": {
+    "needle": "name=\"ChatFrame4\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame4EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame4EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame4EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame4EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame4EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame4EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame5": {
+    "needle": "name=\"ChatFrame5\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame5EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame5EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame5EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame5EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame5EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame5EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame6": {
+    "needle": "name=\"ChatFrame6\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame6EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame6EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame6EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame6EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame6EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame6EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame7": {
+    "needle": "name=\"ChatFrame7\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame7EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame7EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame7EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame7EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame7EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame7EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame8": {
+    "needle": "name=\"ChatFrame8\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame8EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame8EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame8EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame8EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame8EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame8EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame9": {
+    "needle": "name=\"ChatFrame9\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+  },
+  "ChatFrame9EditBoxFocusLeft": {
+    "needle": "name=\"$parentFocusLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame9EditBoxFocusMid": {
+    "needle": "name=\"$parentFocusMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame9EditBoxFocusRight": {
+    "needle": "name=\"$parentFocusRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame9EditBoxLeft": {
+    "needle": "name=\"$parentLeft\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame9EditBoxMid": {
+    "needle": "name=\"$parentMid\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrame9EditBoxRight": {
+    "needle": "name=\"$parentRight\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+  },
+  "ChatFrameToggleVoiceDeafenButton": {
+    "needle": "name=\"ChatFrameToggleVoiceDeafenButton\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrame/Mainline/FloatingChatFrameVoiceChat.xml"
+  },
+  "ChatFrameToggleVoiceMuteButton": {
+    "needle": "name=\"ChatFrameToggleVoiceMuteButton\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrame/Mainline/FloatingChatFrameVoiceChat.xml"
   },
   "ChatFrameUtil.AddMessageEventFilter": {
     "needle": "function ChatFrameUtil.AddMessageEventFilter",
@@ -162,6 +458,22 @@
     "needle": "EventRegistry = CreateFromMixins(CallbackRegistryMixin);",
     "path": "Interface/AddOns/Blizzard_SharedXMLBase/GlobalCallbackRegistry.lua"
   },
+  "ExpansionLandingPageMinimapButton": {
+    "needle": "name=\"ExpansionLandingPageMinimapButton\"",
+    "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.xml"
+  },
+  "FCF_FadeInChatFrame": {
+    "needle": "function FCF_FadeInChatFrame(",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.lua"
+  },
+  "FCF_FadeOutChatFrame": {
+    "needle": "function FCF_FadeOutChatFrame(",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.lua"
+  },
+  "GameTimeFrame": {
+    "needle": "name=\"GameTimeFrame\"",
+    "path": "Interface/AddOns/Blizzard_Minimap/Mainline/GameTime.xml"
+  },
   "GameTooltip": {
     "needle": "name=\"GameTooltip\"",
     "path": "Interface/AddOns/Blizzard_GameTooltip/Mainline/GameTooltip.xml"
@@ -169,6 +481,10 @@
   "GameTooltip_SetDefaultAnchor": {
     "needle": "function GameTooltip_SetDefaultAnchor",
     "path": "Interface/AddOns/Blizzard_SharedXML/SharedTooltipTemplates.lua"
+  },
+  "GeneralDockManager": {
+    "needle": "name=\"GeneralDockManager\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
   },
   "GetAvailableQuestInfo": {
     "needle": "= GetAvailableQuestInfo(i - numActiveQuests);",
@@ -261,6 +577,10 @@
     "needle": "IsGuildMember(player)",
     "path": "Interface/AddOns/Blizzard_QuickJoin/QuickJoinToast.lua"
   },
+  "IsInGroup": {
+    "needle": "IsInGroup() and not IsInRaid()",
+    "path": "Interface/AddOns/Blizzard_UnitFrame/Shared/GroupFrameVisibility.lua"
+  },
   "IsModifiedClick": {
     "path": "Interface/AddOns/Blizzard_WeeklyRewards/Blizzard_WeeklyRewards.lua"
   },
@@ -291,6 +611,10 @@
   "MERCHANT_PAGE_NUMBER": {
     "needle": "MerchantPageText:SetFormattedText(MERCHANT_PAGE_NUMBER",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+  },
+  "MainActionBar": {
+    "needle": "name=\"MainActionBar\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/MainActionBar.xml"
   },
   "MerchantBuyBackItem": {
     "needle": "name=\"MerchantBuyBackItem\"",
@@ -364,6 +688,34 @@
     "needle": "name=\"MerchantPrevPageButton\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
   },
+  "MicroMenuContainer": {
+    "needle": "name=\"MicroMenuContainer\"",
+    "path": "Interface/AddOns/Blizzard_MicroMenu/Mainline/MicroMenuContainer.xml"
+  },
+  "Minimap": {
+    "needle": "name=\"Minimap\"",
+    "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.xml"
+  },
+  "Minimap.ZoomIn": {
+    "needle": "Minimap.ZoomIn",
+    "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.lua"
+  },
+  "Minimap.ZoomOut": {
+    "needle": "Minimap.ZoomOut",
+    "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.lua"
+  },
+  "MinimapCluster": {
+    "needle": "name=\"MinimapCluster\"",
+    "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.xml"
+  },
+  "MinimapCluster.IndicatorFrame": {
+    "needle": "MinimapCluster.IndicatorFrame",
+    "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.lua"
+  },
+  "MinimapCluster.Tracking": {
+    "needle": "MinimapCluster.Tracking",
+    "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.lua"
+  },
   "MoneyFrame_SetMaxDisplayWidth": {
     "needle": "function MoneyFrame_SetMaxDisplayWidth(",
     "path": "Interface/AddOns/Blizzard_MoneyFrame/Mainline/MoneyFrame.lua"
@@ -372,8 +724,48 @@
     "needle": "function MoneyFrame_Update(",
     "path": "Interface/AddOns/Blizzard_MoneyFrame/Mainline/MoneyFrame.lua"
   },
+  "MultiBar5": {
+    "needle": "name=\"MultiBar5\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+  },
+  "MultiBar6": {
+    "needle": "name=\"MultiBar6\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+  },
+  "MultiBar7": {
+    "needle": "name=\"MultiBar7\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+  },
+  "MultiBarBottomLeft": {
+    "needle": "name=\"MultiBarBottomLeft\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+  },
+  "MultiBarBottomRight": {
+    "needle": "name=\"MultiBarBottomRight\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+  },
+  "MultiBarLeft": {
+    "needle": "name=\"MultiBarLeft\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+  },
+  "MultiBarRight": {
+    "needle": "name=\"MultiBarRight\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+  },
   "NUM_TOTAL_EQUIPPED_BAG_SLOTS": {
     "path": "Interface/AddOns/Blizzard_FrameXMLBase/Constants.lua"
+  },
+  "ObjectiveTrackerFrame": {
+    "needle": "name=\"ObjectiveTrackerFrame\"",
+    "path": "Interface/AddOns/Blizzard_ObjectiveTracker/Blizzard_ObjectiveTracker.xml"
+  },
+  "PetActionBar": {
+    "needle": "name=\"PetActionBar\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/PetActionBar.xml"
+  },
+  "PlayerFrame": {
+    "needle": "name=\"PlayerFrame\"",
+    "path": "Interface/AddOns/Blizzard_UnitFrame/Mainline/PlayerFrame.xml"
   },
   "PlayerHasToy": {
     "needle": "PlayerHasToy(self.itemID)",
@@ -390,6 +782,10 @@
   "QuestIsFromAdventureMap": {
     "needle": "if ( QuestIsFromAdventureMap() ) then",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
+  "QuickJoinToastButton": {
+    "needle": "name=\"QuickJoinToastButton\"",
+    "path": "Interface/AddOns/Blizzard_QuickJoin/QuickJoinToast.xml"
   },
   "RepairAllItems": {
     "needle": "RepairAllItems(",
@@ -463,12 +859,20 @@
     "needle": "_G.SlashCmdList = {}",
     "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/SlashCommandsRegistry.lua"
   },
+  "StanceBar": {
+    "needle": "name=\"StanceBar\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/StanceBar.xml"
+  },
   "StaticPopup_FindVisible": {
     "path": "Interface/AddOns/Blizzard_StaticPopup/StaticPopup.lua"
   },
   "StaticPopup_Hide": {
     "needle": "function StaticPopup_Hide",
     "path": "Interface/AddOns/Blizzard_StaticPopup/StaticPopup.lua"
+  },
+  "StatusTrackingBarManager": {
+    "needle": "name=\"StatusTrackingBarManager\"",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/StatusTrackingBar.xml"
   },
   "TEXTURE_ITEM_QUEST_BANG": {
     "needle": "TEXTURE_ITEM_QUEST_BANG = ",
@@ -481,6 +885,18 @@
   "TakeInboxMoney": {
     "needle": "TakeInboxMoney",
     "path": "Interface/AddOns/Blizzard_MailFrame/MailFrame.lua"
+  },
+  "TargetFrame": {
+    "needle": "name=\"TargetFrame\"",
+    "path": "Interface/AddOns/Blizzard_UnitFrame/Mainline/TargetFrame.xml"
+  },
+  "TextToSpeechButtonFrame": {
+    "needle": "name=\"TextToSpeechButtonFrame\"",
+    "path": "Interface/AddOns/Blizzard_ChatFrame/Shared/TextToSpeech.xml"
+  },
+  "TimeManagerClockButton": {
+    "needle": "name=\"TimeManagerClockButton\"",
+    "path": "Interface/AddOns/Blizzard_TimeManager/Mainline/Blizzard_TimeManager.xml"
   },
   "ToggleDropDownMenu": {
     "needle": "function ToggleDropDownMenu(level, value, dropDownFrame, anchorName,",

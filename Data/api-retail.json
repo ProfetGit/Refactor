@@ -47,6 +47,11 @@
       "line": 10,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FrameScriptDocumentation.lua"
     },
+    "AddonCompartmentFrame": {
+      "kind": "source-reference",
+      "line": 3,
+      "path": "Interface/AddOns/Blizzard_Minimap/Mainline/AddonCompartment.xml"
+    },
     "AltCurrencyFrame_Update": {
       "kind": "source-reference",
       "line": 425,
@@ -80,6 +85,11 @@
       "kind": "source-reference",
       "line": 2,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
+    },
+    "BagsBar": {
+      "kind": "source-reference",
+      "line": 44,
+      "path": "Interface/AddOns/Blizzard_MainMenuBarBagButtons/Mainline/MainMenuBarBagButtons.xml"
     },
     "BeginTrade": {
       "line": 42,
@@ -17042,6 +17052,366 @@
       "line": 19,
       "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameUtil.lua"
     },
+    "ChatFrame10": {
+      "kind": "source-reference",
+      "line": 698,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame10EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame10EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame10EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame10EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame10EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame10EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame1ButtonFrame": {
+      "kind": "source-reference",
+      "line": 659,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame1EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame1EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame1EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame1EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame1EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame1EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame2": {
+      "kind": "source-reference",
+      "line": 676,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame2EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame2EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame2EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame2EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame2EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame2EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame3": {
+      "kind": "source-reference",
+      "line": 684,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame3EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame3EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame3EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame3EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame3EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame3EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame4": {
+      "kind": "source-reference",
+      "line": 686,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame4EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame4EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame4EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame4EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame4EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame4EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame5": {
+      "kind": "source-reference",
+      "line": 688,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame5EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame5EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame5EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame5EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame5EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame5EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame6": {
+      "kind": "source-reference",
+      "line": 690,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame6EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame6EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame6EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame6EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame6EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame6EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame7": {
+      "kind": "source-reference",
+      "line": 692,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame7EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame7EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame7EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame7EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame7EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame7EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame8": {
+      "kind": "source-reference",
+      "line": 694,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame8EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame8EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame8EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame8EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame8EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame8EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame9": {
+      "kind": "source-reference",
+      "line": 696,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
+    },
+    "ChatFrame9EditBoxFocusLeft": {
+      "kind": "source-reference",
+      "line": 27,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame9EditBoxFocusMid": {
+      "kind": "source-reference",
+      "line": 39,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame9EditBoxFocusRight": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame9EditBoxLeft": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame9EditBoxMid": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrame9EditBoxRight": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/ChatFrameEditBox.xml"
+    },
+    "ChatFrameToggleVoiceDeafenButton": {
+      "kind": "source-reference",
+      "line": 18,
+      "path": "Interface/AddOns/Blizzard_ChatFrame/Mainline/FloatingChatFrameVoiceChat.xml"
+    },
+    "ChatFrameToggleVoiceMuteButton": {
+      "kind": "source-reference",
+      "line": 23,
+      "path": "Interface/AddOns/Blizzard_ChatFrame/Mainline/FloatingChatFrameVoiceChat.xml"
+    },
     "ChatFrameUtil.AddMessageEventFilter": {
       "kind": "source-reference",
       "line": 202,
@@ -17345,6 +17715,21 @@
       "line": 1,
       "path": "Interface/AddOns/Blizzard_SharedXMLBase/GlobalCallbackRegistry.lua"
     },
+    "ExpansionLandingPageMinimapButton": {
+      "kind": "source-reference",
+      "line": 239,
+      "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.xml"
+    },
+    "FCF_FadeInChatFrame": {
+      "kind": "source-reference",
+      "line": 1053,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.lua"
+    },
+    "FCF_FadeOutChatFrame": {
+      "kind": "source-reference",
+      "line": 1085,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.lua"
+    },
     "FlashClientIcon": {
       "line": 10,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ClientDocumentation.lua"
@@ -17365,6 +17750,11 @@
       "line": 18,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ConnectionDocumentation.lua"
     },
+    "GameTimeFrame": {
+      "kind": "source-reference",
+      "line": 3,
+      "path": "Interface/AddOns/Blizzard_Minimap/Mainline/GameTime.xml"
+    },
     "GameTooltip": {
       "kind": "source-reference",
       "line": 249,
@@ -17374,6 +17764,11 @@
       "kind": "source-reference",
       "line": 87,
       "path": "Interface/AddOns/Blizzard_SharedXML/SharedTooltipTemplates.lua"
+    },
+    "GeneralDockManager": {
+      "kind": "source-reference",
+      "line": 631,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
     },
     "GetAccountExpansionLevel": {
       "line": 28,
@@ -18424,6 +18819,11 @@
       "line": 637,
       "path": "Interface/AddOns/Blizzard_QuickJoin/QuickJoinToast.lua"
     },
+    "IsInGroup": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_UnitFrame/Shared/GroupFrameVisibility.lua"
+    },
     "IsInGuild": {
       "line": 1116,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
@@ -18712,6 +19112,11 @@
       "line": 273,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.lua"
     },
+    "MainActionBar": {
+      "kind": "source-reference",
+      "line": 29,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/MainActionBar.xml"
+    },
     "MakeModifiers": {
       "line": 244,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/InputDocumentation.lua"
@@ -18806,6 +19211,41 @@
       "line": 520,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/MerchantFrame.xml"
     },
+    "MicroMenuContainer": {
+      "kind": "source-reference",
+      "line": 11,
+      "path": "Interface/AddOns/Blizzard_MicroMenu/Mainline/MicroMenuContainer.xml"
+    },
+    "Minimap": {
+      "kind": "source-reference",
+      "line": 178,
+      "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.xml"
+    },
+    "Minimap.ZoomIn": {
+      "kind": "source-reference",
+      "line": 317,
+      "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.lua"
+    },
+    "Minimap.ZoomOut": {
+      "kind": "source-reference",
+      "line": 310,
+      "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.lua"
+    },
+    "MinimapCluster": {
+      "kind": "source-reference",
+      "line": 3,
+      "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.xml"
+    },
+    "MinimapCluster.IndicatorFrame": {
+      "kind": "source-reference",
+      "line": 463,
+      "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.lua"
+    },
+    "MinimapCluster.Tracking": {
+      "kind": "source-reference",
+      "line": 462,
+      "path": "Interface/AddOns/Blizzard_Minimap/Mainline/Minimap.lua"
+    },
     "Mixin": {
       "line": 298,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FrameScriptDocumentation.lua"
@@ -18824,6 +19264,41 @@
       "line": 52,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/CinematicDocumentation.lua"
     },
+    "MultiBar5": {
+      "kind": "source-reference",
+      "line": 162,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+    },
+    "MultiBar6": {
+      "kind": "source-reference",
+      "line": 191,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+    },
+    "MultiBar7": {
+      "kind": "source-reference",
+      "line": 220,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+    },
+    "MultiBarBottomLeft": {
+      "kind": "source-reference",
+      "line": 45,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+    },
+    "MultiBarBottomRight": {
+      "kind": "source-reference",
+      "line": 75,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+    },
+    "MultiBarLeft": {
+      "kind": "source-reference",
+      "line": 104,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+    },
+    "MultiBarRight": {
+      "kind": "source-reference",
+      "line": 133,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Shared/MultiActionBars.xml"
+    },
     "NUM_TOTAL_EQUIPPED_BAG_SLOTS": {
       "kind": "source-reference",
       "line": 186,
@@ -18841,6 +19316,11 @@
       "line": 1308,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
     },
+    "ObjectiveTrackerFrame": {
+      "kind": "source-reference",
+      "line": 3,
+      "path": "Interface/AddOns/Blizzard_ObjectiveTracker/Blizzard_ObjectiveTracker.xml"
+    },
     "OpeningCinematic": {
       "line": 62,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/CinematicDocumentation.lua"
@@ -18852,6 +19332,11 @@
     "PartialPlayTime": {
       "line": 1318,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
+    },
+    "PetActionBar": {
+      "kind": "source-reference",
+      "line": 33,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/PetActionBar.xml"
     },
     "PickupPlayerMoney": {
       "line": 87,
@@ -18868,6 +19353,11 @@
     "PlayerEffectiveAttackPower": {
       "line": 1336,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
+    },
+    "PlayerFrame": {
+      "kind": "source-reference",
+      "line": 14,
+      "path": "Interface/AddOns/Blizzard_UnitFrame/Mainline/PlayerFrame.xml"
     },
     "PlayerGetTimerunningSeasonID": {
       "line": 1351,
@@ -18920,6 +19410,11 @@
       "kind": "source-reference",
       "line": 40,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+    },
+    "QuickJoinToastButton": {
+      "kind": "source-reference",
+      "line": 31,
+      "path": "Interface/AddOns/Blizzard_QuickJoin/QuickJoinToast.xml"
     },
     "Quit": {
       "line": 91,
@@ -19271,6 +19766,11 @@
       "line": 1573,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
     },
+    "StanceBar": {
+      "kind": "source-reference",
+      "line": 12,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/StanceBar.xml"
+    },
     "StartAttack": {
       "line": 1582,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
@@ -19284,6 +19784,11 @@
       "kind": "source-reference",
       "line": 212,
       "path": "Interface/AddOns/Blizzard_StaticPopup/StaticPopup.lua"
+    },
+    "StatusTrackingBarManager": {
+      "kind": "source-reference",
+      "line": 35,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/StatusTrackingBar.xml"
     },
     "StopAttack": {
       "line": 1593,
@@ -19327,6 +19832,11 @@
     "TargetDirectionFriend": {
       "line": 74,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TargetScriptDocumentation.lua"
+    },
+    "TargetFrame": {
+      "kind": "source-reference",
+      "line": 542,
+      "path": "Interface/AddOns/Blizzard_UnitFrame/Mainline/TargetFrame.xml"
     },
     "TargetLastEnemy": {
       "line": 85,
@@ -19387,6 +19897,16 @@
     "TargetUnit": {
       "line": 186,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TargetScriptDocumentation.lua"
+    },
+    "TextToSpeechButtonFrame": {
+      "kind": "source-reference",
+      "line": 3,
+      "path": "Interface/AddOns/Blizzard_ChatFrame/Shared/TextToSpeech.xml"
+    },
+    "TimeManagerClockButton": {
+      "kind": "source-reference",
+      "line": 178,
+      "path": "Interface/AddOns/Blizzard_TimeManager/Mainline/Blizzard_TimeManager.xml"
     },
     "TimeoutResurrect": {
       "line": 1601,

@@ -45,6 +45,9 @@ local CENTERED = "CameraKeepCharacterCentered"
 -- zero and a zoom out from there is the distance itself.
 local FULL_ZOOM_IN = 50
 local LEAVE = Profiles.LEAVE
+-- The target pull is one number; the client has a yaw and a pitch strength. Blizzard's
+-- defaults are 0.5 and 0.4, so the pitch follows the yaw at that ratio.
+local PULL_PITCH_RATIO = 0.8
 local SITUATION_EVENTS = {
     "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "PLAYER_UPDATE_RESTING",
     "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED",
@@ -186,7 +189,12 @@ function ActionCam:Apply(force)
     C_CVar.SetCVar("test_cameraDynamicPitch", flag(values.pitch))
     C_CVar.SetCVar("test_cameraHeadMovementStrength", decimal(values.headBob))
     C_CVar.SetCVar("test_cameraTargetFocusInteractEnable", flag(values.focusInteract))
-    C_CVar.SetCVar("test_cameraTargetFocusEnemyEnable", flag(values.focusEnemy))
+    local pull = values.targetPull
+    C_CVar.SetCVar("test_cameraTargetFocusEnemyEnable", flag(pull > 0))
+    if pull > 0 then
+        C_CVar.SetCVar("test_cameraTargetFocusEnemyStrengthYaw", decimal(pull))
+        C_CVar.SetCVar("test_cameraTargetFocusEnemyStrengthPitch", decimal(pull * PULL_PITCH_RATIO))
+    end
     local current = situation(self)
     self.situation = current
     self:ApplyShoulder(current)

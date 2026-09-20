@@ -51,6 +51,9 @@ read_globals = {
     -- the installed build. Used by the farm HUD's right click menu only.
     "UIDropDownMenu_Initialize", "UIDropDownMenu_CreateInfo", "UIDropDownMenu_AddButton",
     "ToggleDropDownMenu", "CloseDropDownMenus",
+    -- Quick invite: the unit tests Blizzard's own invite entry uses, and the invite itself
+    "C_PartyInfo", "UnitExists", "UnitIsUnit", "UnitIsPlayer", "UnitIsHumanPlayer", "UnitIsConnected",
+    "UnitCanCooperate", "UnitInParty", "UnitInRaid", "UnitName",
     -- ActionCam profiles: situation queries and the two camera zoom calls
     "IsIndoors", "IsResting", "IsMounted", "UnitOnTaxi", "UnitInVehicle", "IsPlayerInWorld",
     "CameraZoomIn", "CameraZoomOut", "GetCameraZoom",

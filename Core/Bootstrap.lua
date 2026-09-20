@@ -38,6 +38,11 @@ function bootstrap:OnLogin()
     end
     R.Registry:ReconcileAll()
     R.UI:ShowFirstRun()
+    -- Restore.lua is dead weight the moment the client does its own job again. See the
+    -- removal list under Temporary workarounds in docs/ROADMAP.md.
+    if R.loadProbe.clientGave and R.restoreAccount ~= nil then
+        R:Print(R.L.CHAT_RESTORE_RETIRED)
+    end
     R:RegisterSlash(handleSlash)
 end
 

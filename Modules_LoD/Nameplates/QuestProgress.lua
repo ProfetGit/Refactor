@@ -31,12 +31,32 @@ function QuestProgress:Acquire(pool)
     return pool:Acquire()
 end
 
+-- Nameplate frames are restricted in this client: GetLeft, GetWidth and GetPoint on them
+-- throw "Can't measure restricted regions", so the anchor is chosen by structure and by
+-- what Blizzard shows, never by where it sits. Forever runs the modern layout (LevelFrame
+-- hidden, modern bar background) but draws the mob level in a box past the bar's right
+-- edge, in the frame Retail reserves for Plunderstorm's level difference. Anchoring to
+-- the container or the background landed the indicator on that box.
 function QuestProgress:AnchorFor(plate)
     local unitFrame = plate.UnitFrame
-    if unitFrame then
-        return unitFrame.HealthBarsContainer or unitFrame
+    if not unitFrame then
+        return plate
     end
-    return plate
+    local level = unitFrame.LevelFrame
+    if level and level:IsShown() then
+        return level
+    end
+    local diff = unitFrame.PlayerLevelDiffFrame
+    if diff and diff:IsShown() then
+        return diff
+    end
+    local container = unitFrame.HealthBarsContainer
+    local healthBar = container and container.healthBar or unitFrame.healthBar
+    local border = healthBar and healthBar.bgTexture
+    if border then
+        return border
+    end
+    return container or unitFrame
 end
 
 function QuestProgress:Place(indicator, plate)

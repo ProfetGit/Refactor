@@ -34,7 +34,11 @@ local BOOLEAN_OPTIONS = {
     questAcceptItemsOnly = true, questAcceptLists = true,
     gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = true, gossipInInstances = true,
     resurrectPvp = true, resurrectInstance = true, resurrectWorld = true,
+    uiVisibilityBlobs = true,
 }
+-- Which layer the window's feature checkboxes write to.
+local SCOPES = { account = true, character = true }
+local DEFAULT_SCOPE = "account"
 local ANCHOR_POINTS = {
     TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true,
     RIGHT = true, BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true,
@@ -62,6 +66,10 @@ local OPTION_DEFAULTS = {
     questAcceptItemsOnly = false, questAcceptLists = true,
     gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = false, gossipInInstances = false,
     gossipLearnModifier = "SHIFT", gossipLearned = {},
+    -- Alt because Ctrl is the pause modifier's default and Shift is the gossip learn key.
+    -- Setting this to the pause modifier leaves the click doing nothing, which is why the
+    -- feature's own text says to pick another key.
+    inviteModifier = "ALT",
     -- Everywhere by default, which is what the module did before the areas existed. The
     -- three cover every instanceType between them, so turning two off is how a player says
     -- "battlegrounds only".
@@ -72,6 +80,10 @@ local OPTION_DEFAULTS = {
     -- The active ActionCam profile: a built-in id or a custom name behind its prefix, and
     -- the custom profiles themselves, name to values. Their shape lives in CameraProfiles.
     cameraProfile = R.CameraProfiles.default, cameraProfiles = {},
+    -- UI visibility: the chosen preset and one rule per frame group. Their shape lives in Visibility.
+    uiVisibility = { preset = R.Visibility.defaultPreset, groups = {} },
+    -- Off: the minimap's quest areas are the client's until the player says otherwise.
+    uiVisibilityBlobs = false,
 }
 Settings.optionDefaults = OPTION_DEFAULTS
 
@@ -145,7 +157,7 @@ local function validOption(key, value)
         return type(value) == "number" and value >= 2 and value <= 5 and value % 1 == 0
     elseif key == "vendorRows" then
         return type(value) == "number" and value >= 2 and value <= 8 and value % 1 == 0
-    elseif key == "gossipLearnModifier" then
+    elseif key == "gossipLearnModifier" or key == "inviteModifier" then
         return value == "CTRL" or value == "SHIFT" or value == "ALT"
     elseif key == "gossipLearned" then
         return validLearned(value)
@@ -153,6 +165,8 @@ local function validOption(key, value)
         return R.CameraProfiles:ValidReference(value)
     elseif key == "cameraProfiles" then
         return R.CameraProfiles:ValidCustom(value)
+    elseif key == "uiVisibility" then
+        return R.Visibility:ValidSettings(value)
     elseif key == "neverSellIDs" then
         if type(value) ~= "table" then
             return false
@@ -176,6 +190,9 @@ function Settings:Init(account, character, guid)
     account.modules = sanitizeValues(account.modules)
     character.overrides = sanitizeValues(character.overrides)
     character.window = type(character.window) == "table" and character.window or {}
+    -- Account by default: the layer a player edits is a choice that should outlive a logout,
+    -- and the account value is the one every character inherits.
+    character.scope = SCOPES[character.scope] and character.scope or DEFAULT_SCOPE
     character.minimap = type(character.minimap) == "table" and character.minimap or {}
     character.toast = type(character.toast) == "table" and character.toast or {}
     character.farmHud = type(character.farmHud) == "table" and character.farmHud or {}
@@ -219,6 +236,18 @@ end
 function Settings:RegisterDefaults(id, value)
     assert(R.Codec:ValidID(id) and type(value) == "boolean", "invalid module default")
     self.defaults[id] = value
+end
+
+function Settings:GetScope()
+    return self.character and self.character.scope or DEFAULT_SCOPE
+end
+
+function Settings:SetScope(scope)
+    if not self.character or not SCOPES[scope] then
+        return false
+    end
+    self.character.scope = scope
+    return true
 end
 
 function Settings:GetOverride(id)

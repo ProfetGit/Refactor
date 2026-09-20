@@ -7,7 +7,7 @@ local _, R = ...
 local Profiles = {}
 R.CameraProfiles = Profiles
 
-local MAX_CUSTOM, VERSION, CUSTOM_PREFIX = 20, "RC2", "custom:"
+local MAX_CUSTOM, VERSION, CUSTOM_PREFIX = 20, "RC3", "custom:"
 Profiles.customPrefix = CUSTOM_PREFIX
 
 -- One flat record per profile. The base fields hold while nothing special is going on;
@@ -25,7 +25,8 @@ local FIELDS = {
     { key = "headBob", kind = "number", minimum = 0, maximum = 1, step = 0.1 },
     { key = "pitch", kind = "boolean" },
     { key = "focusInteract", kind = "boolean" },
-    { key = "focusEnemy", kind = "boolean" },
+    -- How hard the camera turns toward the target in combat; off at zero.
+    { key = "targetPull", kind = "number", minimum = 0, maximum = 1, step = 0.1 },
 }
 -- Listed in the order the dropdown offers them. Which one wins when several apply is the
 -- module's call, not the profile's.
@@ -42,12 +43,12 @@ end
 Profiles.fields = FIELDS
 Profiles.situations = SITUATIONS
 
--- base is distance, shoulder, head sway, pitch, interact focus, enemy focus; each situation
+-- base is distance, shoulder, head sway, pitch, interact focus, target pull; each situation
 -- is distance and shoulder.
 local function record(base, situations)
     local values = {
         distance = base[1], shoulder = base[2], headBob = base[3],
-        pitch = base[4], focusInteract = base[5], focusEnemy = base[6],
+        pitch = base[4], focusInteract = base[5], targetPull = base[6],
     }
     for _, situation in ipairs(SITUATIONS) do
         local pair = situations[situation]
@@ -61,13 +62,15 @@ end
 -- centres so walls stay out of frame; talking to an NPC it comes in closest; in a city or
 -- inn it backs off to show the place; mounted it backs off and centres; in combat the
 -- shoulder offset grows so the target sits off centre. Dungeons sit a little further
--- back, raids and battlegrounds much further for awareness, arenas in between. Enemy
--- focus stays off: with a mouse the player already steers, and the camera pulling toward
--- a target fights them.
+-- back, raids and battlegrounds much further for awareness, arenas in between. No target
+-- pull: with a mouse the player already steers, and the camera pulling toward a target
+-- fights them.
 --
--- Controller: enemy and interact focus both on, because a stick has no free hand to keep
--- the target in frame, and no head movement, which fights a stick-driven camera. A step
--- further back than Immersive everywhere, so the wider swings a stick makes leave room.
+-- Controller, in two: a stick has no free hand to keep the target in frame, so the camera
+-- pulls toward it, and no head movement, which fights a stick-driven camera. Ranged sits
+-- wide and pulls gently, because a hard pull toward a mob forty yards out yanks the view
+-- on every tab. Melee sits close and hard over the shoulder and pulls hard, so a target
+-- being circled stays in frame.
 --
 -- Cinematic: further back than Immersive, centred, tilting as it comes in, no sway, and
 -- closest of all at an NPC. For the story and the screenshots, not the fight.
@@ -76,7 +79,7 @@ end
 -- toward an NPC and nothing else. Indoors a little closer so walls stay out of it; an NPC
 -- window leaves the camera where it is.
 --
--- Melee: hard over the shoulder, enemy focus on, so a target you circle stays in frame,
+-- Melee: hard over the shoulder, a medium target pull, so a target you circle stays in frame,
 -- and the wheel is the player's: nothing moves the camera except a mount and a raid,
 -- because a melee player sits exactly as close as they want. A ranged player would hate it.
 --
@@ -96,50 +99,58 @@ local function blizzard(shoulder)
 end
 Profiles.builtIn = {
     { id = "immersive", nameKey = "CAMERA_PROFILE_IMMERSIVE", detailKey = "CAMERA_PROFILE_IMMERSIVE_DETAIL",
-        values = record({ 9, 0.6, 0.3, true, true, false }, {
+        values = record({ 9, 0.6, 0.3, true, true, 0 }, {
             indoors = { 6, 0 }, resting = { 12, 0.3 }, mounted = { 16, 0 }, combat = { 9, 0.9 },
             npc = { 5, 0.8 }, dungeon = { 14, 0.3 }, raid = { 24, 0 }, battleground = { 16, 0.3 },
             arena = { 12, 0.5 },
         }) },
-    { id = "controller", nameKey = "CAMERA_PROFILE_CONTROLLER", detailKey = "CAMERA_PROFILE_CONTROLLER_DETAIL",
-        values = record({ 11, 0.8, 0, true, true, true }, {
-            indoors = { 7, 0.2 }, resting = { 13, 0.4 }, mounted = { 17, 0 }, combat = { 11, 1 },
+    { id = "controllerRanged", nameKey = "CAMERA_PROFILE_CONTROLLER_RANGED",
+        detailKey = "CAMERA_PROFILE_CONTROLLER_RANGED_DETAIL",
+        values = record({ 13, 0.8, 0, true, true, 0.3 }, {
+            indoors = { 8, 0.2 }, resting = { 14, 0.4 }, mounted = { 17, 0 }, combat = { 13, 0.9 },
             npc = { 6, 0.8 }, dungeon = { 15, 0.3 }, raid = { 24, 0 }, battleground = { 16, 0.4 },
-            arena = { 13, 0.6 },
+            arena = { 14, 0.6 },
+        }) },
+    { id = "controllerMelee", nameKey = "CAMERA_PROFILE_CONTROLLER_MELEE",
+        detailKey = "CAMERA_PROFILE_CONTROLLER_MELEE_DETAIL",
+        values = record({ 8, 1, 0, true, true, 0.8 }, {
+            indoors = { 6, 0.6 }, resting = { 10, 0.5 }, mounted = { 17, 0 }, combat = { 8, 1 },
+            npc = { 5, 0.8 }, dungeon = { 9, 0.8 }, raid = { 20, 0.5 }, battleground = { 10, 0.8 },
+            arena = { 9, 0.9 },
         }) },
     { id = "cinematic", nameKey = "CAMERA_PROFILE_CINEMATIC", detailKey = "CAMERA_PROFILE_CINEMATIC_DETAIL",
-        values = record({ 12, 0, 0, true, true, false }, {
+        values = record({ 12, 0, 0, true, true, 0 }, {
             indoors = { 7, 0 }, resting = { 14, 0 }, mounted = { 18, 0 }, combat = { 12, 0.3 },
             npc = { 4, 0.6 }, dungeon = { 15, 0 }, raid = { 24, 0 }, battleground = { 16, 0 },
             arena = { 13, 0 },
         }) },
     { id = "raider", nameKey = "CAMERA_PROFILE_RAIDER", detailKey = "CAMERA_PROFILE_RAIDER_DETAIL",
-        values = record({ 24, 0, 0, false, true, false }, {
+        values = record({ 24, 0, 0, false, true, 0 }, {
             indoors = { 20, 0 }, resting = { 24, 0 }, mounted = { 24, 0 }, combat = { 24, 0 },
             npc = { LEAVE, 0 }, dungeon = { 24, 0 }, raid = { 24, 0 }, battleground = { 24, 0 },
             arena = { 24, 0 },
         }) },
     { id = "melee", nameKey = "CAMERA_PROFILE_MELEE", detailKey = "CAMERA_PROFILE_MELEE_DETAIL",
-        values = record({ LEAVE, 1, 0.2, true, true, true }, {
+        values = record({ LEAVE, 1, 0.2, true, true, 0.5 }, {
             indoors = { LEAVE, 0.6 }, resting = { LEAVE, 0.5 }, mounted = { 16, 0 }, combat = { LEAVE, 1 },
             npc = { LEAVE, 0.8 }, dungeon = { LEAVE, 0.8 }, raid = { 12, 0.6 }, battleground = { LEAVE, 0.8 },
             arena = { LEAVE, 0.9 },
         }) },
     { id = "comfort", nameKey = "CAMERA_PROFILE_COMFORT", detailKey = "CAMERA_PROFILE_COMFORT_DETAIL",
-        values = record({ 9, 0.3, 0, false, false, false }, {
+        values = record({ 9, 0.3, 0, false, false, 0 }, {
             indoors = { 6, 0.3 }, resting = { 12, 0.3 }, mounted = { 16, 0.3 }, combat = { 9, 0.3 },
             npc = { LEAVE, 0.3 }, dungeon = { 14, 0.3 }, raid = { 24, 0.3 }, battleground = { 16, 0.3 },
             arena = { 12, 0.3 },
         }) },
     { id = "blizzardBasic", nameKey = "CAMERA_PROFILE_BLIZZARD_BASIC", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
         console = "actioncam basic",
-        values = record({ BLIZZARD_DISTANCE, 0, 0, true, false, false }, blizzard(0)) },
+        values = record({ BLIZZARD_DISTANCE, 0, 0, true, false, 0 }, blizzard(0)) },
     { id = "blizzardOn", nameKey = "CAMERA_PROFILE_BLIZZARD_ON", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
         console = "actioncam on",
-        values = record({ BLIZZARD_DISTANCE, 1, 1, true, true, false }, blizzard(1)) },
+        values = record({ BLIZZARD_DISTANCE, 1, 1, true, true, 0 }, blizzard(1)) },
     { id = "blizzardFull", nameKey = "CAMERA_PROFILE_BLIZZARD_FULL", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
         console = "actioncam full",
-        values = record({ BLIZZARD_DISTANCE, 1, 1, true, true, true }, blizzard(1)) },
+        values = record({ BLIZZARD_DISTANCE, 1, 1, true, true, 0.5 }, blizzard(1)) },
 }
 Profiles.default = "immersive"
 local BUILT_IN_BY_ID = {}

@@ -5,7 +5,8 @@ local function tocFiles()
     local files = {}
     for line in assert(io.open("Refactor.toc", "r")):lines() do
         local entry = line:gsub("\\", "/"):gsub("%s+$", "")
-        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" then
+        -- Restore.lua is a local capture of one client's saved variables, not addon code.
+        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" and entry ~= "Restore.lua" then
             files[#files + 1] = entry
         end
     end
@@ -27,7 +28,7 @@ describe("the real load sequence", function()
             end
         end
         assert.is_table(env.LibStub)
-        assert.equal(24, #R.modules)
+        assert.equal(26, #R.modules)
         env:Fire("PLAYER_LOGIN")
         assert.is_function(env.SlashCmdList.REFACTOR)
         assert.is_table(R.UI.frame)

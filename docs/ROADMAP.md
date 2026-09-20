@@ -47,6 +47,45 @@ support is added when that client can be probed. Consequences:
 
 ---
 
+## Temporary workarounds
+
+Each one names the condition that retires it. Do not carry any of these past that condition.
+
+### Forever saved variables (added 20 Sep 2026)
+
+WoW Forever beta **1.60.1.69913** writes SavedVariables to disk correctly and never reads
+them back, so every addon on that client starts blank and settings die on `/reload`. It is a
+client bug, not ours: reproduced with two throwaway addons sharing no code with Refactor, and
+with a saved file planted by hand while the client was closed. Reported widely on the Blizzard
+forums and in other addon repos.
+
+Refactor works around it by loading the last session from its own folder:
+
+| Piece | What it does |
+|---|---|
+| `Restore.lua` | Generated. Sets `R.restoreAccount` / `R.restoreCharacter` on the private table. First entry in the TOC. |
+| `Core/Namespace.lua`, `InitSavedVariables` | Uses them **only** when the client handed back nothing. |
+| `Tools/forever-restore.py` | Rewrites `Restore.lua` from the file the client last wrote. `--watch` captures each session. |
+| `~/ClaudeProject/forever-watch.sh` | Polls for the client's write, captures it, and syncs. Not in this repo. |
+
+The Forever addon folder must be a **real directory**, kept in sync by
+`~/ClaudeProject/sync-forever.sh`. Its addon rescan does not see a symlinked addon folder:
+symlink it and Refactor disappears from the AddOn List entirely (seen 20 Sep 2026).
+
+
+**Retire it when** `/refactor saved` reports that the client restored the saved variables.
+The addon says so by itself at login while the workaround is still installed, so this does
+not depend on anyone remembering to check.
+
+**To remove:** delete `Restore.lua` and `Tools/forever-restore.py`, drop the `Restore.lua`
+line from `Refactor.toc` and run `make toc`, revert the restore branch in
+`InitSavedVariables`, drop `CMD_SAVED_VERDICT_RESTORE_FILE` and `CHAT_RESTORE_RETIRED` from
+`Locales/Commands.enUS.lua`, drop the `Restore.lua` line from `.gitignore`, the skip in the
+three spec TOC loaders and in `Tools/package.py`, and stop the watcher. `/refactor saved` and `R.loadProbe` stay:
+they cost nothing and they are how this was found.
+
+---
+
 ## Refactor track
 
 ### M0. Foundations (16 to 17 Sep)
@@ -184,6 +223,26 @@ loot windows rather than the combat log: `C_CombatLog.GetCurrentEventInfo` is go
 build, `CombatLogGetCurrentEventInfo` survives only behind the `loadDeprecationFallbacks`
 CVar, and `Blizzard_CombatLogProcessor` reads `C_CombatLogSecure`, which addons cannot call.
 
+Added to M4 on 20 Sep 2026 at the owner's request, and to PRD 7.5: quick invite, as
+`social.quickInvite`. Tier manual, risk automation, in no preset, off by default.
+
+The asked-for gesture was Alt plus right click on a player in the world. The client hands
+Lua no click on the 3D world at all: `UnitPopup_OpenMenu` is only ever called from a UI
+frame, no Blizzard file sets a script on `WorldFrame`, and reading the real click would
+mean a secure click handler, which rule 1 forbids. So the module reads the click from its
+effect instead. Clicking a unit selects it, and the cursor is still on that unit when
+`PLAYER_TARGET_CHANGED` fires, so the new target having to be the unit under the cursor is
+what separates a click from tab or soft targeting. The consequence is that the mouse button
+cannot be told apart: either button sends the invite while the modifier is held.
+
+Not working on the first in-game try (20 Sep 2026, Forever 1.60.1.69913): every required
+symbol is present on that client and the module was enabled and confirmed in saved
+variables, so the cause is one of the things `/refactor invitetest` now separates. The
+GUID of the last hovered unit, kept from `UPDATE_MOUSEOVER_UNIT` and dropped the moment
+the cursor leaves a unit, stands in for `mouseover` in case the client clears it on the
+click. One limitation is inherent and now documented in the feature text: clicking a
+player you already have selected fires no event and so sends nothing.
+
 Status 18 Sep 2026: every deliverable above is written and specced headless except the
 native ones listed. Manual checklist for the in-game pass, none of it done yet:
 
@@ -261,8 +320,10 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   never moves the zoom; a saved copy's distance slider moves the camera as it is dragged,
   its leftmost stop reads "stays where you had it" and gives the wheel back, and a slider
   for another situation does not move anything; export, import and delete round trip
-  through the share box; Reduce Unexpected Camera Movement on in Accessibility is
-  expected to cancel the shoulder offset
+  through the share box; on Controller: Melee with a mob targeted the camera visibly
+  turns toward it and on Controller: Ranged only a little, and at the slider's left stop
+  `test_cameraTargetFocusEnemyEnable` reads 0; Reduce Unexpected Camera Movement on in
+  Accessibility is expected to cancel the shoulder offset
 - `/refactor farmtest` over a dark and a snow-bright zone after a full client restart:
   every HUD texture loads, the text shadows keep both lines readable, the hold to reset
   fills the meter and cancels on an early release, and the chevron opens and closes the
@@ -275,6 +336,15 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
 - With TSM or Auctionator installed and opted into, the HUD names that provider, and the
   summary notes a source that changed mid session
 - `/refactor bench` with `scriptProfile` on, idle in a capital city
+- Quick invite: Alt and click a player standing in the world, one you do not already have
+  selected, and the invite goes out with one chat line and no menu; the same click on an
+  NPC, a player already in the group and yourself does nothing; Alt held while tab
+  targeting invites nobody. Invite someone on another realm from a cross-realm zone and
+  check the name went out as Name-Realm. With the modifier set to the pause modifier,
+  nothing is sent. When a click does nothing, `/refactor invitetest` names the reason:
+  zero target changes means the click never moved the selection, zero modified changes
+  means the modifier was not read at that instant, and a CURSOR verdict means neither
+  `mouseover` nor the remembered hover GUID matched the new target
 - Conflict panel with Leatrix Plus installed (carried from M3)
 
 Exit criteria:

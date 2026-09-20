@@ -1039,6 +1039,113 @@ describe("M4 chat and social", function()
         assert.equal(6, #actions)
         for _, module in ipairs({ duels, res, invites }) do noResidue(env, module) end
     end)
+
+    it("quick invites the player under the cursor, and nobody else", function()
+        local env = base()
+        env.alt, env.shift = false, false
+        env.IsAltKeyDown = function() return env.alt end
+        env.IsShiftKeyDown = function() return env.shift end
+        -- One little world: what the cursor is over, what is selected, and what each of
+        -- them is. A click is the cursor landing on someone and the selection following.
+        local people = {
+            rogue = { name = "Rogue", guid = "P-1", player = true, human = true, online = true, friendly = true },
+            farseer = { name = "Farseer", realm = "Other Realm", guid = "P-2", player = true, human = true,
+                online = true, friendly = true },
+            guard = { name = "Guard", guid = "C-1", online = true, friendly = true },
+            grunt = { name = "Grunt", guid = "P-3", player = true, human = true, online = true },
+            ghost = { name = "Ghost", guid = "P-4", player = true, human = true, friendly = true },
+            healer = { name = "Healer", guid = "P-5", player = true, human = true, online = true,
+                friendly = true, grouped = true },
+            bot = { name = "Bot", guid = "P-6", player = true, online = true, friendly = true },
+            me = { name = "Tester", guid = "P-0", player = true, human = true, online = true, friendly = true },
+        }
+        env.hover, env.selected = nil, nil
+        local function unitOf(token)
+            if token == "target" then return env.selected end
+            if token == "mouseover" then return env.hover end
+            if token == "player" then return people.me end
+            return nil
+        end
+        env.UnitExists = function(token) return unitOf(token) ~= nil end
+        env.UnitIsUnit = function(a, b) return unitOf(a) ~= nil and unitOf(a) == unitOf(b) end
+        env.UnitIsPlayer = function(token) return (unitOf(token) or {}).player == true end
+        env.UnitIsHumanPlayer = function(token) return (unitOf(token) or {}).human == true end
+        env.UnitIsConnected = function(token) return (unitOf(token) or {}).online == true end
+        env.UnitCanCooperate = function(_, token) return (unitOf(token) or {}).friendly == true end
+        env.UnitInParty = function(token) return (unitOf(token) or {}).grouped == true end
+        env.UnitInRaid = function() return false end
+        env.UnitGUID = function(token) return (unitOf(token) or {}).guid end
+        env.UnitName = function(token)
+            local unit = unitOf(token)
+            if not unit then return nil end
+            return unit.name, unit.realm
+        end
+        local invited = {}
+        env.C_PartyInfo = { InviteUnit = function(name) invited[#invited + 1] = name end }
+        local module = enable(env, "Modules/Chat/QuickInvite.lua", "social.quickInvite")
+        local function hover(who)
+            env.hover = who
+            env:Fire("UPDATE_MOUSEOVER_UNIT")
+        end
+        local function click(who)
+            hover(who)
+            env.selected = who
+            env:Fire("PLAYER_TARGET_CHANGED")
+        end
+        click(people.rogue)
+        assert.same({}, invited)
+        env.alt = true
+        click(people.rogue)
+        assert.same({ "Rogue" }, invited)
+        assert.equal("Party invite sent to Rogue.", env.messages[#env.messages])
+        -- Cross-realm needs the realm spelled out; a same-realm name never carries one.
+        click(people.farseer)
+        assert.equal("Farseer-Other Realm", invited[2])
+        -- A client that drops mouseover on the click still leaves the GUID the cursor was
+        -- last on, and that is enough to know the selection came from a click.
+        hover(people.rogue)
+        env.hover = nil
+        env.selected = people.rogue
+        env:Fire("PLAYER_TARGET_CHANGED")
+        assert.equal("Rogue", invited[3])
+        assert.equal("hover", module.report.via)
+        -- Tab targeting with the key held: the cursor is on nobody and was on nobody.
+        hover(nil)
+        env.selected = people.farseer
+        env:Fire("PLAYER_TARGET_CHANGED")
+        assert.equal(3, #invited)
+        assert.equal("CURSOR", module.report.verdict)
+        -- The cursor on one player while the selection lands on another is not a click either.
+        hover(people.farseer)
+        env.selected = people.rogue
+        env:Fire("PLAYER_TARGET_CHANGED")
+        assert.equal(3, #invited)
+        for _, who in ipairs({ people.guard, people.grunt, people.ghost, people.healer,
+            people.bot, people.me }) do
+            env.selected = nil
+            click(who)
+            assert.equal(3, #invited)
+        end
+        assert.equal("REFUSED", module.report.verdict)
+        -- The pause modifier still wins, and the invite key is the player's to pick.
+        env.control = true
+        env.selected = nil
+        click(people.rogue)
+        assert.equal(3, #invited)
+        env.control = false
+        env.R.Settings:SetOption("inviteModifier", "SHIFT")
+        env.selected = nil
+        click(people.rogue)
+        assert.equal(3, #invited)
+        env.alt, env.shift = false, true
+        env.selected = nil
+        click(people.rogue)
+        assert.equal("Rogue", invited[4])
+        -- The report is what the in-game session has instead of a debugger.
+        env.R.Broker:Emit("REFACTOR_INVITE_TEST")
+        assert.matches("Invite sent%.", env.messages[#env.messages - 1])
+        noResidue(env, module)
+    end)
 end)
 
 describe("M4 interface, mail, vendor", function()
@@ -1098,6 +1205,7 @@ describe("M4 interface, mail, vendor", function()
         assert.equal("0.30", cvars.test_cameraHeadMovementStrength)
         assert.equal("1", cvars.test_cameraTargetFocusInteractEnable)
         assert.equal("0", cvars.test_cameraTargetFocusEnemyEnable)
+        assert.equal("0", cvars.test_cameraTargetFocusEnemyStrengthYaw)
         -- Blizzard's motion sickness guard overrides every ActionCam CVar, so it is off.
         assert.equal("0", cvars.CameraKeepCharacterCentered)
         assert.equal(9, env.cameraZoom)
@@ -1162,6 +1270,8 @@ describe("M4 interface, mail, vendor", function()
         assert.equal(5, env.cameraZoom)
         assert.equal("1.00", cvars.test_cameraOverShoulder)
         assert.equal("1", cvars.test_cameraTargetFocusEnemyEnable)
+        assert.equal("0.50", cvars.test_cameraTargetFocusEnemyStrengthYaw)
+        assert.equal("0.40", cvars.test_cameraTargetFocusEnemyStrengthPitch)
         -- An NPC window changes the shoulder and nothing else.
         env:Fire("GOSSIP_SHOW")
         env:Advance(0)
@@ -1280,16 +1390,19 @@ describe("M4 interface, mail, vendor", function()
         assert.equal("0", env.cvars.test_cameraOverShoulder)
         -- A switch made indoors: the new profile's indoor distance now, and what the player
         -- had before the building is still what comes back on the way out.
-        assert.is_true(Settings:SetOption("cameraProfile", "controller"))
-        assert.equal(7, env.cameraZoom)
+        assert.is_true(Settings:SetOption("cameraProfile", "controllerRanged"))
+        assert.equal(8, env.cameraZoom)
         assert.equal("0.20", env.cvars.test_cameraOverShoulder)
         assert.equal("0.00", env.cvars.test_cameraHeadMovementStrength)
+        -- A gentle pull: the yaw strength is the slider, the pitch follows at Blizzard's ratio.
         assert.equal("1", env.cvars.test_cameraTargetFocusEnemyEnable)
+        assert.equal("0.30", env.cvars.test_cameraTargetFocusEnemyStrengthYaw)
+        assert.equal("0.24", env.cvars.test_cameraTargetFocusEnemyStrengthPitch)
         -- A copy edits live: the shoulder reaches the camera at once, a distance for the
         -- situation in play moves it, one for any other situation leaves it alone, and
         -- setting the situation in play to leave the camera gives the wheel back.
         assert.is_true(Profiles:SaveCopy("Mine", Profiles:Active().values))
-        assert.equal(7, env.cameraZoom)
+        assert.equal(8, env.cameraZoom)
         assert.is_true(Profiles:SetField("indoorsShoulder", 1.2))
         assert.equal("1.20", env.cvars.test_cameraOverShoulder)
         moves = env.moves

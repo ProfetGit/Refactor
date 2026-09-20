@@ -58,7 +58,17 @@ describe("slash dispatch", function()
         local env = base()
         local lines = env.R.Commands:Dispatch("wat")
         assert.equal(env.R.L.CMD_HELP_HEADER, lines[1])
-        assert.equal(7, #lines)
+        assert.equal(9, #lines)
+    end)
+
+    it("reports whether the client restored the saved variables", function()
+        local env = base()
+        local lines = env.R.Commands:SavedLines()
+        assert.equal(3, #lines)
+        assert.matches("Account DB", lines[1])
+        assert.equal(env.R.L.CMD_SAVED_VERDICT_LOST, lines[3])
+        env.R.loadProbe.clientGave = true
+        assert.equal(env.R.L.CMD_SAVED_VERDICT_OK, env.R.Commands:SavedLines()[3])
     end)
 
     it("says so when nothing is listening for the loot feed test", function()

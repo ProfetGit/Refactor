@@ -8,7 +8,8 @@ files = ["Refactor.toc", "README.md", "CHANGELOG.md", "Libs/NOTICE.md"]
 files += sorted(str(path.relative_to(root)) for path in (root / "Media").glob("*.tga"))
 for line in (root / "Refactor.toc").read_text().splitlines():
     line = line.strip().replace("\\", "/")
-    if line and not line.startswith("#"):
+    # Restore.lua is one machine's captured saved variables; shipping it would ship them.
+    if line and not line.startswith("#") and line != "Restore.lua":
         files.append(line)
 assert len(files) == len(set(files)), "duplicate package file"
 out = root / ".release/Refactor-retail.zip"

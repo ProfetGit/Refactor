@@ -33,6 +33,22 @@ function Commands:ErrorLines()
     return lines
 end
 
+-- Whether the client handed the saved variables back at all. Only interesting while
+-- Forever loses them; the numbers are counts of top level keys, so "table:0" is a DB the
+-- client created empty rather than one it restored.
+function Commands:SavedLines()
+    local probe = R.loadProbe or {}
+    local restored = probe.clientGave == true
+    return {
+        string.format(R.L.CMD_SAVED_ACCOUNT, tostring(probe.atFile), tostring(probe.atLogin),
+            tostring(probe.firstRun)),
+        string.format(R.L.CMD_SAVED_CHARACTER, tostring(probe.atFileChar), tostring(probe.atLoginChar)),
+        restored and R.L.CMD_SAVED_VERDICT_OK
+            or probe.restored and R.L.CMD_SAVED_VERDICT_RESTORE_FILE
+            or R.L.CMD_SAVED_VERDICT_LOST,
+    }
+end
+
 function Commands:Clear()
     local errors = R.errors
     for index = #errors, 1, -1 do
@@ -56,6 +72,9 @@ function Commands:Dispatch(input)
         end
         return self:ErrorLines()
     end
+    if command == "saved" then
+        return self:SavedLines()
+    end
     -- The feed belongs to a module, so the command asks the broker rather than reaching
     -- into the module itself. No subscriber means the module is off.
     if command == "loottest" then
@@ -72,10 +91,18 @@ function Commands:Dispatch(input)
         R.Broker:Emit("REFACTOR_FARM_TEST")
         return nil
     end
+    if command == "invitetest" then
+        if not R.Broker.events.REFACTOR_INVITE_TEST then
+            return { R.L.CMD_INVITE_TEST_OFF }
+        end
+        R.Broker:Emit("REFACTOR_INVITE_TEST")
+        return nil
+    end
     if command == "bench" and R.Bench then
         R.Bench:Start(function(line) R:Print(line) end)
         return nil
     end
     return { R.L.CMD_HELP_HEADER, R.L.CMD_HELP_OPEN, R.L.CMD_HELP_ERRORS, R.L.CMD_HELP_ERRORS_CLEAR,
-        R.L.CMD_HELP_BENCH, R.L.CMD_HELP_LOOT_TEST, R.L.CMD_HELP_FARM_TEST }
+        R.L.CMD_HELP_SAVED, R.L.CMD_HELP_BENCH, R.L.CMD_HELP_LOOT_TEST, R.L.CMD_HELP_FARM_TEST,
+        R.L.CMD_HELP_INVITE_TEST }
 end

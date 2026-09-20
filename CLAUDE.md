@@ -34,7 +34,7 @@ Violating any of these is a bug even if the code works.
 10. **No new dependencies.** Ace3 is deliberately not used, see PRD 9.7. The complete list of embedded libraries: `LibStub`, `CallbackHandler-1.0`, `LibDataBroker-1.1`, `LibDBIcon-1.0`, and our own `LibRefactorPrice-1.0` and `LibRefactorTheme-1.0` (in-tree under `Libs/` until extracted). Anything else needs approval first.
 11. **No frame creation inside an event handler.** Frames are created once at module enable and pooled.
 12. **Never reskin Blizzard frames.** Refactor styles its own frames only, through `LibRefactorTheme` and the visual style in PRD 8.3. No colour literals or texture paths in module or widget code, only theme tokens. One layout exception, decided 19 Sep 2026: the vendor modules that work inside Blizzard's merchant window (`vendor.extendedUI`, `vendor.itemCosts`, `vendor.filter`) resize it, hide cells, and add widgets from Blizzard's own templates. They change where things sit, never how they look, and undo all of it on disable.
-13. **Animation uses `AnimationGroup`.** `OnUpdate` only when an animation cannot be expressed that way.
+13. **Animation uses `AnimationGroup`.** `OnUpdate` only when an animation cannot be expressed that way. Alpha on a Blizzard frame is tweened by the one driver in `Core/Fade.lua`, never by an `AnimationGroup` created on the Blizzard frame and never by `UIFrameFadeIn`, which writes into the frame's table.
 
 ## API ground truth
 
@@ -153,7 +153,7 @@ Do not build, and do not suggest building:
 - Quest database or levelling routes (Questie)
 - Bag replacement (Bagnon, ArkInventory)
 - Damage meter or combat log parser
-- Unit frames, action bars, or any secure frame work
+- Unit frame or action bar replacements. Alpha-only visibility control of Blizzard frames is allowed; no Hide, Show, SetAttribute, EnableMouse or SetParent on secure frames
 - Boss mods
 - Auction house scanning or posting
 - A reskin of the default UI

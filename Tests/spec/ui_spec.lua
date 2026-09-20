@@ -5,7 +5,8 @@ local function tocFiles()
     local files = {}
     for line in assert(io.open("Refactor.toc", "r")):lines() do
         local entry = line:gsub("\\", "/"):gsub("%s+$", "")
-        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" then
+        -- Restore.lua is a local capture of one client's saved variables, not addon code.
+        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" and entry ~= "Restore.lua" then
             files[#files + 1] = entry
         end
     end
@@ -153,23 +154,23 @@ describe("window chrome", function()
             return count
         end
         assert.equal(1, selectedCount())
-        assert.equal("character", UI.mode)
+        assert.equal("account", UI.mode)
         assert.equal("", UI.help:GetText())
         UI:SelectCategory("General")
         assert.equal(1, selectedCount())
         assert.is_true(UI.general:IsShown())
         assert.equal(R.L.UI_SCOPE, UI.scopeDropdown.label:GetText())
-        assert.equal(R.L.UI_CHARACTER, UI.scopeDropdown.button:GetDefaultText())
+        assert.equal(R.L.UI_ACCOUNT, UI.scopeDropdown.button:GetDefaultText())
         -- Opening the menu runs the real generator, so the entries and the setter behind
         -- them are exercised rather than assumed.
         local entries = UI.scopeDropdown.button:OpenMenu()
         assert.equal(2, #entries)
-        assert.is_true(entries[1].selected)
+        assert.is_true(entries[2].selected)
         for _, entry in ipairs(entries) do
-            if entry.value == "account" then entry.choose() end
+            if entry.value == "character" then entry.choose() end
         end
-        assert.equal("account", UI.mode)
-        assert.equal(R.L.UI_ACCOUNT, UI.scopeDropdown.button:GetDefaultText())
+        assert.equal("character", UI.mode)
+        assert.equal(R.L.UI_CHARACTER, UI.scopeDropdown.button:GetDefaultText())
         UI:SelectCategory("Profiles")
         assert.equal(1, selectedCount())
         assert.is_true(UI.panelTitle:IsShown())
@@ -193,6 +194,7 @@ describe("window chrome", function()
         local _, R = loaded()
         local UI = R.UI
         UI:Toggle()
+        UI.mode = "character"
         local row = UI.rows[1]
         assert.is_false(row.undo:IsShown())
         R.Settings:SetOverride(row.module.id, true)
@@ -633,5 +635,69 @@ describe("smooth scrolling", function()
         scroll:ScrollTo(140, true)
         assert.are.equal(140, scroll.offset)
         assert.is_nil(scroll:GetScript("OnUpdate"))
+    end)
+end)
+
+describe("editing scope", function()
+    -- A row with nothing in its meta slot: no warning state to compete with the marker.
+    local function plainRow(UI)
+        for _, row in ipairs(UI.rows) do
+            if row.meta:GetText() == "" then return row end
+        end
+    end
+
+    it("opens on the account layer and keeps the choice for the character", function()
+        local _, R = loaded()
+        assert.equal("account", R.UI.mode)
+        assert.is_true(R.Settings:SetScope("character"))
+        R.UI.frame = nil
+        R.UI:Initialize()
+        assert.equal("character", R.UI.mode)
+    end)
+
+    it("clears this character's override when the account layer is edited", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        UI.mode = "character"
+        local module = plainRow(UI).module
+        UI:SetModuleEnabled(module, true)
+        assert.is_true(R.Settings:GetOverride(module.id))
+        UI.mode = "account"
+        -- Without the clear this writes false behind an override that is still true, and
+        -- the click changes nothing the player can see.
+        UI:SetModuleEnabled(module, false)
+        assert.is_nil(R.Settings:GetOverride(module.id))
+        assert.is_false(R.Settings:Get(module.id))
+        UI:SetModuleEnabled(module, true)
+        assert.is_true(R.Settings:Get(module.id))
+    end)
+
+    it("drops the override when undo runs on the account layer", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        UI.mode = "character"
+        local module = plainRow(UI).module
+        UI:SetModuleEnabled(module, true)
+        UI.mode = "account"
+        UI:ResetModule(module)
+        assert.is_nil(R.Settings:GetOverride(module.id))
+        assert.is_nil(R.Settings.account.modules[module.id])
+        assert.is_false(R.Settings:Get(module.id))
+    end)
+
+    it("names a character override while the account layer is on screen", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        UI.mode = "character"
+        local row = plainRow(UI)
+        R.Settings:SetOverride(row.module.id, true)
+        UI:Refresh()
+        assert.equal("", row.meta:GetText())
+        UI.mode = "account"
+        UI:Refresh()
+        assert.equal(R.L.UI_SCOPE_PINNED, row.meta:GetText())
     end)
 end)

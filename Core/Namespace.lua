@@ -17,6 +17,27 @@ R.ownedFrames = {}
 local unpack = unpack
 local MAX_ERRORS, MAX_TRACE = 30, 4096
 
+-- The client restores saved variables before the first addon file runs, so this is the
+-- earliest honest look at them. On Forever they come back empty every session and the file
+-- on disk cannot say where they were lost, because the client writes a correct-looking file
+-- at logout either way. Recorded here, again at login, and written back into the account
+-- table so the answer survives to disk. Read it with /refactor saved.
+local function shapeOf(value)
+    if type(value) ~= "table" then
+        return type(value)
+    end
+    local count = 0
+    for _ in pairs(value) do
+        count = count + 1
+    end
+    return "table:" .. count
+end
+
+R.loadProbe = {
+    atFile = shapeOf(_G.RefactorDB),
+    atFileChar = shapeOf(_G.RefactorCharDB),
+}
+
 local function traceError(err)
     local message = tostring(err)
     if type(debugstack) == "function" then
@@ -126,13 +147,23 @@ end
 
 -- SavedVariables and slash registration are the required Blizzard global exceptions.
 function R:InitSavedVariables(guid)
+    local probe = self.loadProbe
+    probe.atLogin = shapeOf(_G.RefactorDB)
+    probe.atLoginChar = shapeOf(_G.RefactorCharDB)
+    probe.clientGave = type(_G.RefactorDB) == "table"
+    probe.firstRun = tostring(type(_G.RefactorDB) == "table" and _G.RefactorDB.firstRun or nil)
+    -- Forever hands back nothing (see Restore.lua). Its copy of the last session is used
+    -- only then, so a client that restores properly never reaches this.
     if type(_G.RefactorDB) ~= "table" then
-        _G.RefactorDB = {}
+        _G.RefactorDB = type(self.restoreAccount) == "table" and self.restoreAccount or {}
+        probe.restored = self.restoreAccount ~= nil
     end
     if type(_G.RefactorCharDB) ~= "table" then
-        _G.RefactorCharDB = {}
+        _G.RefactorCharDB = type(self.restoreCharacter) == "table" and self.restoreCharacter or {}
     end
-    self.Settings:Init(_G.RefactorDB, _G.RefactorCharDB, guid)
+    local account, character = _G.RefactorDB, _G.RefactorCharDB
+    account.loadProbe = probe
+    self.Settings:Init(account, character, guid)
 end
 
 function R:RegisterSlash(handler)

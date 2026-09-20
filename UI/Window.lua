@@ -135,10 +135,19 @@ function UI:SetModuleEnabled(module, enabled)
     end
     if self.mode == "account" then
         Settings:SetAccount(module.id, enabled)
+        self:DropOverride(module)
     else
         Settings:SetOverride(module.id, enabled)
     end
     self:Refresh()
+end
+
+-- An account default this character overrides changes nothing the player can see, so
+-- editing the account layer drops the override instead of writing behind it.
+function UI:DropOverride(module)
+    if Settings:GetOverride(module.id) ~= nil then
+        Settings:SetOverride(module.id, nil)
+    end
 end
 
 -- What "undo" means depends on the tab: a character override goes back to inheriting,
@@ -153,8 +162,12 @@ function UI:IsModified(module)
 end
 
 function UI:ResetModule(module)
-    if self.mode == "account" then Settings:SetAccount(module.id, nil)
-    else Settings:SetOverride(module.id, nil) end
+    if self.mode == "account" then
+        Settings:SetAccount(module.id, nil)
+        self:DropOverride(module)
+    else
+        Settings:SetOverride(module.id, nil)
+    end
     self:Refresh()
 end
 
@@ -468,6 +481,7 @@ function UI:Refresh()
     self:LoadDisplay()
     self:LoadTooltips()
     self:LoadCamera()
+    self:LoadVisibility()
     self:RefreshNameplateOptions()
     -- One block per category, headed by its name: the list carries the same structure as
     -- the sidebar, and a search result says which category each row came from.
@@ -557,8 +571,12 @@ function UI:RefreshRow(row)
     local module = row.module
     row.name:SetText(self:ModuleText(module, "name"))
     local reason = self:StatusReason(module)
+    -- Editing account defaults, a feature this character has pinned would read as the
+    -- account value while the game runs the override, so the row names it instead.
+    local pinned = self.mode == "account" and Settings:GetOverride(module.id) ~= nil
     row.meta:SetText(reason and (module.state == "failed" and L.UI_FAILED_SHORT or L.UI_UNAVAILABLE_SHORT)
-        or module.state == "unconfirmed" and L.UI_STATE_UNCONFIRMED or "")
+        or module.state == "unconfirmed" and L.UI_STATE_UNCONFIRMED
+        or pinned and L.UI_SCOPE_PINNED or "")
     Theme:Color(row.meta, reason and "TEXT_WARNING" or "TEXT_MUTED", true)
     row.undo:SetShown(self:IsModified(module))
 end
@@ -640,6 +658,7 @@ function UI:BuildScopeControls(block, top)
     self.scopeDropdown = Theme:Dropdown(block, CONTROL_WIDTH, list,
         function(value) return self.mode == value end,
         function(value)
+            Settings:SetScope(value)
             self.mode = value
             self:Refresh()
         end)
@@ -786,7 +805,7 @@ end
 
 function UI:Initialize()
     if self.frame then return end
-    self.mode = "character"
+    self.mode = Settings:GetScope()
     local frame = CreateFrame("Frame", nil, UIParent)
     self.frame = frame
     frame:SetSize(920, 660)
@@ -896,8 +915,10 @@ function UI:Initialize()
     self:BuildQuestSettings(self.scroll.child)
     self:BuildGossipSettings(self.scroll.child)
     self:BuildResurrectSettings(self.scroll.child)
+    self:BuildQuickInviteSettings(self.scroll.child)
     self:BuildTooltipSettings(self.scroll.child)
     self:BuildCameraSettings(self.scroll.child)
+    self:BuildVisibilitySettings(self.scroll.child)
     self.panels = {}
     self:BuildProfiles(frame)
     self:BuildConflicts(frame)

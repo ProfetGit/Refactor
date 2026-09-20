@@ -290,6 +290,14 @@ function UI:BuildResurrectSettings(parent)
     self:RegisterModuleSettings("social.acceptResurrect", block)
 end
 
+function UI:BuildQuickInviteSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_QUICKINVITE_HELP)
+    self.inviteModifierDropdown = self:OptionDropdown(block, "inviteModifier", MODIFIER_ENTRIES,
+        "UI_QUICKINVITE_MODIFIER", block.top)
+    block:SetBodyHeight(36)
+    self:RegisterModuleSettings("social.quickInvite", block)
+end
+
 function UI:BuildGossipSettings(parent)
     local gossip = self.Widgets:SettingsBlock(parent, L.UI_GOSSIP_HELP)
     local top = gossip.top

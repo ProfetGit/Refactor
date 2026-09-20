@@ -48,13 +48,13 @@ end
 local BASE_DISTANCE = { key = "distance", labelKey = "UI_CAMERA_DISTANCE" }
 local BASE_SHOULDER = { key = "shoulder", labelKey = "UI_CAMERA_SHOULDER", formatter = shoulderText }
 local BASE_SWAY = { key = "headBob", labelKey = "UI_CAMERA_HEAD_BOB", formatter = swayText }
+local BASE_PULL = { key = "targetPull", labelKey = "UI_CAMERA_TARGET_PULL", formatter = swayText }
 local SITUATION_DISTANCE = { suffix = "Distance", labelKey = "UI_CAMERA_SITUATION_DISTANCE" }
 local SITUATION_SHOULDER = { suffix = "Shoulder", labelKey = "UI_CAMERA_SITUATION_SHOULDER",
     formatter = shoulderText }
 local BOXES = {
     { key = "pitch", labelKey = "UI_CAMERA_PITCH" },
     { key = "focusInteract", labelKey = "UI_CAMERA_FOCUS_INTERACT" },
-    { key = "focusEnemy", labelKey = "UI_CAMERA_FOCUS_ENEMY" },
 }
 
 local function fieldFor(spec, situation)
@@ -153,7 +153,8 @@ function UI:BuildCameraSettings(parent)
     self:CameraSlider(block, BASE_DISTANCE, y)
     self:CameraSlider(block, BASE_SHOULDER, y - SLIDER_STEP)
     self:CameraSlider(block, BASE_SWAY, y - SLIDER_STEP * 2)
-    y = y - SLIDER_STEP * 3
+    self:CameraSlider(block, BASE_PULL, y - SLIDER_STEP * 3)
+    y = y - SLIDER_STEP * 4
     for index, spec in ipairs(BOXES) do
         self:CameraCheckbox(block, spec, y - (index - 1) * BOX_STEP)
     end
