@@ -7,24 +7,30 @@ local _, R = ...
 local Profiles = {}
 R.CameraProfiles = Profiles
 
-local MAX_CUSTOM, VERSION, CUSTOM_PREFIX = 20, "RC1", "custom:"
+local MAX_CUSTOM, VERSION, CUSTOM_PREFIX = 20, "RC2", "custom:"
 Profiles.customPrefix = CUSTOM_PREFIX
 
 -- One flat record per profile. The base fields hold while nothing special is going on;
--- each situation then says how far the camera moves (positive is closer) and where the
--- shoulder offset sits while it lasts. Ranges are what the sliders offer and what an
--- imported string is held to.
+-- each situation then says where the camera sits, in yards from the character, and where
+-- the shoulder offset is while it lasts. Distances are absolute rather than relative so a
+-- profile can never put the camera inside the character: the lowest a slider goes still
+-- shows the whole model. Ranges are what the sliders offer and what an imported string
+-- is held to.
+local DISTANCE_MINIMUM, DISTANCE_MAXIMUM = 4, 30
 local FIELDS = {
-    { key = "zoom", kind = "number", minimum = 0, maximum = 10, step = 1 },
+    { key = "distance", kind = "number", minimum = DISTANCE_MINIMUM, maximum = DISTANCE_MAXIMUM, step = 1 },
     { key = "shoulder", kind = "number", minimum = -2, maximum = 2, step = 0.1 },
     { key = "headBob", kind = "number", minimum = 0, maximum = 1, step = 0.1 },
     { key = "pitch", kind = "boolean" },
     { key = "focusInteract", kind = "boolean" },
     { key = "focusEnemy", kind = "boolean" },
 }
-local SITUATIONS = { "indoors", "resting", "mounted", "combat" }
+-- Listed in the order the dropdown offers them. Which one wins when several apply is the
+-- module's call, not the profile's.
+local SITUATIONS = { "indoors", "resting", "mounted", "combat", "npc", "dungeon", "raid", "battleground", "arena" }
 for _, situation in ipairs(SITUATIONS) do
-    FIELDS[#FIELDS + 1] = { key = situation .. "Zoom", kind = "number", minimum = -10, maximum = 10, step = 1 }
+    FIELDS[#FIELDS + 1] = { key = situation .. "Distance", kind = "number",
+        minimum = DISTANCE_MINIMUM, maximum = DISTANCE_MAXIMUM, step = 1 }
     FIELDS[#FIELDS + 1] = { key = situation .. "Shoulder", kind = "number", minimum = -2, maximum = 2, step = 0.1 }
 end
 local FIELD_BY_KEY = {}
@@ -34,46 +40,102 @@ end
 Profiles.fields = FIELDS
 Profiles.situations = SITUATIONS
 
-local function record(values)
-    return {
-        zoom = values[1], shoulder = values[2], headBob = values[3],
-        pitch = values[4], focusInteract = values[5], focusEnemy = values[6],
-        indoorsZoom = values[7], indoorsShoulder = values[8],
-        restingZoom = values[9], restingShoulder = values[10],
-        mountedZoom = values[11], mountedShoulder = values[12],
-        combatZoom = values[13], combatShoulder = values[14],
+-- base is distance, shoulder, head sway, pitch, interact focus, enemy focus; each situation
+-- is distance and shoulder.
+local function record(base, situations)
+    local values = {
+        distance = base[1], shoulder = base[2], headBob = base[3],
+        pitch = base[4], focusInteract = base[5], focusEnemy = base[6],
     }
+    for _, situation in ipairs(SITUATIONS) do
+        local pair = situations[situation]
+        values[situation .. "Distance"], values[situation .. "Shoulder"] = pair[1], pair[2]
+    end
+    return values
 end
 
--- Immersive: the camera comes in and sits a little over the right shoulder, tilts as it
--- zooms, follows the head only faintly, and turns to face an NPC you talk to. Indoors
--- it comes in further and centres so walls stay out of frame; in a city or inn it backs
--- off to show the place; mounted it backs off and centres; in combat the shoulder
--- offset grows so the target sits off centre. Enemy focus stays off: with a mouse the
--- player already steers, and the camera pulling toward a target fights them.
+-- Immersive: the camera sits close over the right shoulder, tilts as it comes in, follows
+-- the head only faintly, and turns to face an NPC you talk to. Indoors it comes in and
+-- centres so walls stay out of frame; talking to an NPC it comes in closest; in a city or
+-- inn it backs off to show the place; mounted it backs off and centres; in combat the
+-- shoulder offset grows so the target sits off centre. Dungeons sit a little further
+-- back, raids and battlegrounds much further for awareness, arenas in between. Enemy
+-- focus stays off: with a mouse the player already steers, and the camera pulling toward
+-- a target fights them.
 --
 -- Controller: enemy and interact focus both on, because a stick has no free hand to keep
--- the target in frame, and no head movement, which fights a stick-driven camera. Closer
--- than Blizzard's presets but not as close as Immersive, so the wider swings a stick
--- makes still leave room to see.
+-- the target in frame, and no head movement, which fights a stick-driven camera. A step
+-- further back than Immersive everywhere, so the wider swings a stick makes leave room.
+--
+-- Cinematic: further back than Immersive, centred, tilting as it comes in, no sway, and
+-- closest of all at an NPC. For the story and the screenshots, not the fight.
+--
+-- Raider: far back everywhere, nothing that moves on its own, ActionCam on for the turn
+-- toward an NPC and nothing else. Indoors a little closer so walls stay out of it.
+--
+-- Melee: close, hard over the shoulder, enemy focus on, so a target you circle stays in
+-- frame. A ranged player would hate it.
+--
+-- Comfort: Immersive's distances with everything that moves on its own switched off: no
+-- tilt, no sway, no focus, a mild shoulder. For the player it makes queasy who still
+-- wants the situations.
 --
 -- Blizzard's three are run through the console command that defines them; the numbers
 -- here are only what the sliders show for them, taken from the community documentation
--- of those presets, and what a copy of one starts from.
+-- of those presets, and what a copy of one starts from. A preset never moves the zoom,
+-- so its distances are a middling starting point for a copy and nothing more.
+local BLIZZARD_DISTANCE = 15
+local function blizzard(shoulder)
+    local pair = { BLIZZARD_DISTANCE, shoulder }
+    return { indoors = pair, resting = pair, mounted = pair, combat = pair, npc = pair,
+        dungeon = pair, raid = pair, battleground = pair, arena = pair }
+end
 Profiles.builtIn = {
     { id = "immersive", nameKey = "CAMERA_PROFILE_IMMERSIVE", detailKey = "CAMERA_PROFILE_IMMERSIVE_DETAIL",
-        values = record({ 4, 0.6, 0.3, true, true, false, 3, 0, -4, 0.3, -6, 0, 0, 0.9 }) },
+        values = record({ 9, 0.6, 0.3, true, true, false }, {
+            indoors = { 6, 0 }, resting = { 12, 0.3 }, mounted = { 16, 0 }, combat = { 9, 0.9 },
+            npc = { 5, 0.8 }, dungeon = { 14, 0.3 }, raid = { 24, 0 }, battleground = { 16, 0.3 },
+            arena = { 12, 0.5 },
+        }) },
     { id = "controller", nameKey = "CAMERA_PROFILE_CONTROLLER", detailKey = "CAMERA_PROFILE_CONTROLLER_DETAIL",
-        values = record({ 2, 0.8, 0, true, true, true, 2, 0.2, -3, 0.4, -6, 0, 0, 1 }) },
+        values = record({ 11, 0.8, 0, true, true, true }, {
+            indoors = { 7, 0.2 }, resting = { 13, 0.4 }, mounted = { 17, 0 }, combat = { 11, 1 },
+            npc = { 6, 0.8 }, dungeon = { 15, 0.3 }, raid = { 24, 0 }, battleground = { 16, 0.4 },
+            arena = { 13, 0.6 },
+        }) },
+    { id = "cinematic", nameKey = "CAMERA_PROFILE_CINEMATIC", detailKey = "CAMERA_PROFILE_CINEMATIC_DETAIL",
+        values = record({ 12, 0, 0, true, true, false }, {
+            indoors = { 7, 0 }, resting = { 14, 0 }, mounted = { 18, 0 }, combat = { 12, 0.3 },
+            npc = { 4, 0.6 }, dungeon = { 15, 0 }, raid = { 24, 0 }, battleground = { 16, 0 },
+            arena = { 13, 0 },
+        }) },
+    { id = "raider", nameKey = "CAMERA_PROFILE_RAIDER", detailKey = "CAMERA_PROFILE_RAIDER_DETAIL",
+        values = record({ 24, 0, 0, false, true, false }, {
+            indoors = { 20, 0 }, resting = { 24, 0 }, mounted = { 24, 0 }, combat = { 24, 0 },
+            npc = { 24, 0 }, dungeon = { 24, 0 }, raid = { 24, 0 }, battleground = { 24, 0 },
+            arena = { 24, 0 },
+        }) },
+    { id = "melee", nameKey = "CAMERA_PROFILE_MELEE", detailKey = "CAMERA_PROFILE_MELEE_DETAIL",
+        values = record({ 7, 1, 0.2, true, true, true }, {
+            indoors = { 6, 0.6 }, resting = { 10, 0.5 }, mounted = { 16, 0 }, combat = { 8, 1 },
+            npc = { 5, 0.8 }, dungeon = { 9, 0.8 }, raid = { 12, 0.6 }, battleground = { 10, 0.8 },
+            arena = { 9, 0.9 },
+        }) },
+    { id = "comfort", nameKey = "CAMERA_PROFILE_COMFORT", detailKey = "CAMERA_PROFILE_COMFORT_DETAIL",
+        values = record({ 9, 0.3, 0, false, false, false }, {
+            indoors = { 6, 0.3 }, resting = { 12, 0.3 }, mounted = { 16, 0.3 }, combat = { 9, 0.3 },
+            npc = { 5, 0.3 }, dungeon = { 14, 0.3 }, raid = { 24, 0.3 }, battleground = { 16, 0.3 },
+            arena = { 12, 0.3 },
+        }) },
     { id = "blizzardBasic", nameKey = "CAMERA_PROFILE_BLIZZARD_BASIC", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
         console = "actioncam basic",
-        values = record({ 0, 0, 0, true, false, false, 0, 0, 0, 0, 0, 0, 0, 0 }) },
+        values = record({ BLIZZARD_DISTANCE, 0, 0, true, false, false }, blizzard(0)) },
     { id = "blizzardOn", nameKey = "CAMERA_PROFILE_BLIZZARD_ON", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
         console = "actioncam on",
-        values = record({ 0, 1, 1, true, true, false, 0, 1, 0, 1, 0, 1, 0, 1 }) },
+        values = record({ BLIZZARD_DISTANCE, 1, 1, true, true, false }, blizzard(1)) },
     { id = "blizzardFull", nameKey = "CAMERA_PROFILE_BLIZZARD_FULL", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
         console = "actioncam full",
-        values = record({ 0, 1, 1, true, true, true, 0, 1, 0, 1, 0, 1, 0, 1 }) },
+        values = record({ BLIZZARD_DISTANCE, 1, 1, true, true, true }, blizzard(1)) },
 }
 Profiles.default = "immersive"
 local BUILT_IN_BY_ID = {}

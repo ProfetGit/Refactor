@@ -336,23 +336,27 @@ describe("window chrome", function()
         assert.equal(#Profiles.builtIn + 1, #UI.cameraProfileDropdown.button:OpenMenu())
         assert.equal("Mine", UI.cameraProfileDropdown.button:GetDefaultText())
         assert.is_true(UI.cameraDelete:IsEnabled())
-        local shoulder, situationZoom
+        local shoulder, situationDistance
         for _, slider in ipairs(UI.cameraSliders) do
             assert.is_true(slider.slider:IsEnabled())
             if slider.spec.key == "shoulder" then shoulder = slider end
-            if slider.spec.suffix == "Zoom" then situationZoom = slider end
+            if slider.spec.suffix == "Distance" then situationDistance = slider end
         end
         shoulder.slider:GetScript("OnValueChanged")(shoulder.slider, 1.2)
         assert.equal(1.2, Settings:GetOption("cameraProfiles").Mine.shoulder)
         assert.equal("1.2 right", shoulder.valueText:GetText())
         -- The situation dropdown swaps which field the two sliders under it show.
-        assert.equal("3 yards closer", situationZoom.valueText:GetText())
+        assert.equal("6 yards", situationDistance.valueText:GetText())
         for _, entry in ipairs(UI.cameraSituationDropdown.button:OpenMenu()) do
             if entry.value == "mounted" then entry.choose() end
         end
-        assert.equal("6 yards further", situationZoom.valueText:GetText())
-        situationZoom.slider:GetScript("OnValueChanged")(situationZoom.slider, -2)
-        assert.equal(-2, Settings:GetOption("cameraProfiles").Mine.mountedZoom)
+        assert.equal("16 yards", situationDistance.valueText:GetText())
+        situationDistance.slider:GetScript("OnValueChanged")(situationDistance.slider, 20)
+        assert.equal(20, Settings:GetOption("cameraProfiles").Mine.mountedDistance)
+        -- A value the profile refuses is not stored and the slider is read back.
+        situationDistance.slider:GetScript("OnValueChanged")(situationDistance.slider, 2)
+        assert.equal(20, Settings:GetOption("cameraProfiles").Mine.mountedDistance)
+        assert.equal("20 yards", situationDistance.valueText:GetText())
         -- Export fills the box; importing the same string is a name clash, so it is
         -- imported under the built-in's name instead and selected.
         UI.cameraExport:GetScript("OnClick")(UI.cameraExport)

@@ -43,11 +43,16 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
 - ActionCam profiles: Blizzard's Basic, On and Full run through the console command that
   defines them; Refactor's Immersive (close, over the shoulder, tilting as it comes in, a
   faint head sway, tuned for mouse and keyboard) and Controller (target and NPC focus, no
-  sway, a little further back). Immersive and Controller move and recentre the camera
-  as you go indoors, into a city or inn, onto a mount or into combat. Save a copy of any
-  profile and tune it on sliders; export and import a profile as a string. The Keep
-  Character Centered accessibility option, which overrides ActionCam, is off while a
-  profile is on and back at its default when the feature is off.
+  sway, a little further back), Cinematic (far and centred, for the story), Raider (far
+  everywhere, nothing moves on its own), Melee (close, hard over the shoulder, target
+  focus) and Comfort (Immersive's distances with tilt, sway and focus off). Refactor's
+  profiles move and recentre the camera
+  for where you are: indoors, in a city or inn, on a mount, in combat, talking to an NPC,
+  or in a dungeon or delve, raid, battleground or arena. Every distance is absolute, in
+  yards from the character, so a close camera walking into a building never ends up in
+  first person. Save a copy of any profile and tune it on sliders; export and import a
+  profile as a string. The Keep Character Centered accessibility option, which overrides
+  ActionCam, is off while a profile is on and back at its default when the feature is off.
 - Interface: maximum camera distance, ActionCam through its three CVars, screenshot on
   level up. Mail: remember last recipient per character.
 - Price providers: TradeSkillMaster (custom price string) and Auctionator, opt-in under

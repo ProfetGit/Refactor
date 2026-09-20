@@ -15,15 +15,6 @@ local function yardsText(value)
     return string.format(L.UI_CAMERA_YARDS, value)
 end
 
-local function moveText(value)
-    if value > 0 then
-        return string.format(L.UI_CAMERA_CLOSER, value)
-    elseif value < 0 then
-        return string.format(L.UI_CAMERA_FURTHER, -value)
-    end
-    return L.UI_CAMERA_STAYS
-end
-
 -- A shoulder offset is a side before it is a number, so the sign is spelled out.
 local function shoulderText(value)
     if value > 0.05 then
@@ -43,10 +34,11 @@ end
 
 -- The base fields, then the two a situation carries. suffix marks the ones whose field
 -- depends on which situation the dropdown is showing.
-local BASE_ZOOM = { key = "zoom", labelKey = "UI_CAMERA_ZOOM", formatter = yardsText }
+local BASE_DISTANCE = { key = "distance", labelKey = "UI_CAMERA_DISTANCE", formatter = yardsText }
 local BASE_SHOULDER = { key = "shoulder", labelKey = "UI_CAMERA_SHOULDER", formatter = shoulderText }
 local BASE_SWAY = { key = "headBob", labelKey = "UI_CAMERA_HEAD_BOB", formatter = swayText }
-local SITUATION_ZOOM = { suffix = "Zoom", labelKey = "UI_CAMERA_SITUATION_ZOOM", formatter = moveText }
+local SITUATION_DISTANCE = { suffix = "Distance", labelKey = "UI_CAMERA_SITUATION_DISTANCE",
+    formatter = yardsText }
 local SITUATION_SHOULDER = { suffix = "Shoulder", labelKey = "UI_CAMERA_SITUATION_SHOULDER",
     formatter = shoulderText }
 local BOXES = {
@@ -143,7 +135,7 @@ function UI:BuildCameraSettings(parent)
     self.cameraDetail:SetJustifyV("TOP")
 
     local y = top - DROPDOWN_STEP - NOTE_HEIGHT - 6
-    self:CameraSlider(block, BASE_ZOOM, y)
+    self:CameraSlider(block, BASE_DISTANCE, y)
     self:CameraSlider(block, BASE_SHOULDER, y - SLIDER_STEP)
     self:CameraSlider(block, BASE_SWAY, y - SLIDER_STEP * 2)
     y = y - SLIDER_STEP * 3
@@ -160,6 +152,10 @@ function UI:BuildCameraSettings(parent)
         end)
     self.cameraSituationDropdown:SetPoint("TOPLEFT", 0, y)
     self.cameraSituationDropdown:SetLabel(L.UI_CAMERA_SITUATION)
+    local situationHelp = Theme:Text(block, L.UI_CAMERA_SITUATION_HELP, "small", "TEXT_MUTED")
+    situationHelp:SetPoint("TOPLEFT", 0, y - DROPDOWN_STEP)
+    situationHelp:SetPoint("RIGHT")
+    block:Index(L.UI_CAMERA_SITUATION_HELP)
     local situations = {}
     for index, entry in ipairs(SITUATION_ENTRIES) do
         situations[index] = { value = entry.value, text = L[entry.labelKey] }
@@ -167,8 +163,8 @@ function UI:BuildCameraSettings(parent)
     end
     self.cameraSituationDropdown:SetEntries(situations)
     self.cameraSituationEntries = situations
-    y = y - DROPDOWN_STEP
-    self:CameraSlider(block, SITUATION_ZOOM, y)
+    y = y - DROPDOWN_STEP - 18
+    self:CameraSlider(block, SITUATION_DISTANCE, y)
     self:CameraSlider(block, SITUATION_SHOULDER, y - SLIDER_STEP)
     y = y - SLIDER_STEP * 2 - 4
 

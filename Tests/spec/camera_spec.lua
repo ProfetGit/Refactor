@@ -9,11 +9,15 @@ describe("camera profiles", function()
     end)
 
     it("ships valid built-ins and refuses a record that is short, wide, or off its range", function()
+        local ids = {}
         for _, profile in ipairs(Profiles.builtIn) do
             assert.is_true(Profiles:Valid(profile.values), profile.id)
+            ids[#ids + 1] = profile.id
         end
+        assert.same({ "immersive", "controller", "cinematic", "raider", "melee", "comfort",
+            "blizzardBasic", "blizzardOn", "blizzardFull" }, ids)
         local values = Profiles:Resolve("immersive").values
-        values.zoom = nil
+        values.distance = nil
         assert.is_false(Profiles:Valid(values))
         values = Profiles:Resolve("immersive").values
         values.extra = 1
@@ -42,8 +46,8 @@ describe("camera profiles", function()
         assert.is_nil(Profiles:CustomName("immersive"))
         -- Resolving hands out a copy: editing it changes no built-in.
         local resolved = Profiles:Resolve("immersive")
-        resolved.values.zoom = 9
-        assert.equal(4, Profiles:Resolve("immersive").values.zoom)
+        resolved.values.distance = 30
+        assert.equal(9, Profiles:Resolve("immersive").values.distance)
         assert.is_nil(Profiles:Resolve("custom:Mine", {}))
         assert.equal("Mine", Profiles:Resolve("custom:Mine", { Mine = resolved.values }).name)
     end)
@@ -71,11 +75,11 @@ describe("camera profiles", function()
             copy[index or #copy + 1] = replacement
             return R.Codec:EncodeText(table.concat(copy, "\n") .. "\n")
         end
-        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("zoom=99", 3)) })
-        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("zoom=1")) })
+        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("distance=99", 3)) })
+        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("distance=1")) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("mystery=1")) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("pitch=yes", 6)) })
-        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("RC0", 1)) })
+        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("RC1", 1)) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Encode("", values) })
     end)
 
@@ -124,7 +128,7 @@ describe("camera profiles", function()
         end
         assert.same({ false, "profile_limit" }, { Profiles:SaveCopy("P21", values) })
         -- A saved table with a bad entry is refused whole, the way every option is.
-        assert.is_false(Settings:SetOption("cameraProfiles", { Bad = { zoom = 1 } }))
+        assert.is_false(Settings:SetOption("cameraProfiles", { Bad = { distance = 1 } }))
         assert.is_false(Settings:SetOption("cameraProfiles", { [""] = values }))
         assert.is_false(Settings:SetOption("cameraProfile", "custom:"))
         -- Init keeps a good table and resets a selection whose profile is gone.
