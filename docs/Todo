@@ -1,5 +1,6 @@
 - Auto complete not working on all quests, one scenario i had was that it had 1 quest reward, i didnt need to select anything, but it still didnt auto complete even when it should have.
-- When switching the "Editing" profile from character to account, it seems like some settings get bugged, maby require reload when switching profile or make other improvements.
+- When switching the "Editing" profile from character to account, it seems like some settings get bugged, maby require reload when switching profile or make other improvements. Make it account profile by default
 - Add feature to display Refactor changelogs.
 - Add a feature to notify user when an update is available.
 - Add a slider to the maximum camera distance to allow user define it himslef.
+- Class colored tooltip border when hovering a player.

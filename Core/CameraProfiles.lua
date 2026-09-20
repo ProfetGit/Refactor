@@ -14,11 +14,13 @@ Profiles.customPrefix = CUSTOM_PREFIX
 -- each situation then says where the camera sits, in yards from the character, and where
 -- the shoulder offset is while it lasts. Distances are absolute rather than relative so a
 -- profile can never put the camera inside the character: the lowest a slider goes still
--- shows the whole model. Ranges are what the sliders offer and what an imported string
--- is held to.
-local DISTANCE_MINIMUM, DISTANCE_MAXIMUM = 4, 30
+-- shows the whole model. A distance may also be LEAVE, which moves nothing: the player's
+-- own wheel position stands, and only the shoulder changes. Ranges are what the sliders
+-- offer and what an imported string is held to.
+local DISTANCE_MINIMUM, DISTANCE_MAXIMUM, LEAVE = 4, 30, 0
+Profiles.LEAVE = LEAVE
 local FIELDS = {
-    { key = "distance", kind = "number", minimum = DISTANCE_MINIMUM, maximum = DISTANCE_MAXIMUM, step = 1 },
+    { key = "distance", kind = "distance", minimum = DISTANCE_MINIMUM, maximum = DISTANCE_MAXIMUM, step = 1 },
     { key = "shoulder", kind = "number", minimum = -2, maximum = 2, step = 0.1 },
     { key = "headBob", kind = "number", minimum = 0, maximum = 1, step = 0.1 },
     { key = "pitch", kind = "boolean" },
@@ -29,7 +31,7 @@ local FIELDS = {
 -- module's call, not the profile's.
 local SITUATIONS = { "indoors", "resting", "mounted", "combat", "npc", "dungeon", "raid", "battleground", "arena" }
 for _, situation in ipairs(SITUATIONS) do
-    FIELDS[#FIELDS + 1] = { key = situation .. "Distance", kind = "number",
+    FIELDS[#FIELDS + 1] = { key = situation .. "Distance", kind = "distance",
         minimum = DISTANCE_MINIMUM, maximum = DISTANCE_MAXIMUM, step = 1 }
     FIELDS[#FIELDS + 1] = { key = situation .. "Shoulder", kind = "number", minimum = -2, maximum = 2, step = 0.1 }
 end
@@ -71,14 +73,16 @@ end
 -- closest of all at an NPC. For the story and the screenshots, not the fight.
 --
 -- Raider: far back everywhere, nothing that moves on its own, ActionCam on for the turn
--- toward an NPC and nothing else. Indoors a little closer so walls stay out of it.
+-- toward an NPC and nothing else. Indoors a little closer so walls stay out of it; an NPC
+-- window leaves the camera where it is.
 --
--- Melee: close, hard over the shoulder, enemy focus on, so a target you circle stays in
--- frame. A ranged player would hate it.
+-- Melee: hard over the shoulder, enemy focus on, so a target you circle stays in frame,
+-- and the wheel is the player's: nothing moves the camera except a mount and a raid,
+-- because a melee player sits exactly as close as they want. A ranged player would hate it.
 --
 -- Comfort: Immersive's distances with everything that moves on its own switched off: no
--- tilt, no sway, no focus, a mild shoulder. For the player it makes queasy who still
--- wants the situations.
+-- tilt, no sway, no focus, a mild shoulder, and no move for an NPC window. For the player
+-- it makes queasy who still wants the situations.
 --
 -- Blizzard's three are run through the console command that defines them; the numbers
 -- here are only what the sliders show for them, taken from the community documentation
@@ -112,19 +116,19 @@ Profiles.builtIn = {
     { id = "raider", nameKey = "CAMERA_PROFILE_RAIDER", detailKey = "CAMERA_PROFILE_RAIDER_DETAIL",
         values = record({ 24, 0, 0, false, true, false }, {
             indoors = { 20, 0 }, resting = { 24, 0 }, mounted = { 24, 0 }, combat = { 24, 0 },
-            npc = { 24, 0 }, dungeon = { 24, 0 }, raid = { 24, 0 }, battleground = { 24, 0 },
+            npc = { LEAVE, 0 }, dungeon = { 24, 0 }, raid = { 24, 0 }, battleground = { 24, 0 },
             arena = { 24, 0 },
         }) },
     { id = "melee", nameKey = "CAMERA_PROFILE_MELEE", detailKey = "CAMERA_PROFILE_MELEE_DETAIL",
-        values = record({ 7, 1, 0.2, true, true, true }, {
-            indoors = { 6, 0.6 }, resting = { 10, 0.5 }, mounted = { 16, 0 }, combat = { 8, 1 },
-            npc = { 5, 0.8 }, dungeon = { 9, 0.8 }, raid = { 12, 0.6 }, battleground = { 10, 0.8 },
-            arena = { 9, 0.9 },
+        values = record({ LEAVE, 1, 0.2, true, true, true }, {
+            indoors = { LEAVE, 0.6 }, resting = { LEAVE, 0.5 }, mounted = { 16, 0 }, combat = { LEAVE, 1 },
+            npc = { LEAVE, 0.8 }, dungeon = { LEAVE, 0.8 }, raid = { 12, 0.6 }, battleground = { LEAVE, 0.8 },
+            arena = { LEAVE, 0.9 },
         }) },
     { id = "comfort", nameKey = "CAMERA_PROFILE_COMFORT", detailKey = "CAMERA_PROFILE_COMFORT_DETAIL",
         values = record({ 9, 0.3, 0, false, false, false }, {
             indoors = { 6, 0.3 }, resting = { 12, 0.3 }, mounted = { 16, 0.3 }, combat = { 9, 0.3 },
-            npc = { 5, 0.3 }, dungeon = { 14, 0.3 }, raid = { 24, 0.3 }, battleground = { 16, 0.3 },
+            npc = { LEAVE, 0.3 }, dungeon = { 14, 0.3 }, raid = { 24, 0.3 }, battleground = { 16, 0.3 },
             arena = { 12, 0.3 },
         }) },
     { id = "blizzardBasic", nameKey = "CAMERA_PROFILE_BLIZZARD_BASIC", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
@@ -166,7 +170,10 @@ function Profiles:Valid(values)
             if type(value) ~= "boolean" then
                 return false
             end
-        elseif type(value) ~= "number" or value ~= value or value < field.minimum or value > field.maximum then
+        elseif type(value) ~= "number" or value ~= value then
+            return false
+        elseif (value < field.minimum or value > field.maximum)
+            and not (field.kind == "distance" and value == LEAVE) then
             return false
         end
     end

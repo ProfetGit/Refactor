@@ -50,7 +50,11 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   for where you are: indoors, in a city or inn, on a mount, in combat, talking to an NPC,
   or in a dungeon or delve, raid, battleground or arena. Every distance is absolute, in
   yards from the character, so a close camera walking into a building never ends up in
-  first person. Save a copy of any profile and tune it on sliders; export and import a
+  first person, and a situation's distance can be "stays where you had it". Entering a
+  situation remembers where the wheel had the camera and leaving gives it back, so a
+  mount backs off and a dismount returns exactly to where you were. Melee moves the
+  camera only for a mount and a raid. Save a copy of any profile and tune it on sliders;
+  export and import a
   profile as a string. The Keep Character Centered accessibility option, which overrides
   ActionCam, is off while a profile is on and back at its default when the feature is off.
 - Interface: maximum camera distance, ActionCam through its three CVars, screenshot on
@@ -61,6 +65,8 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   on, handler counts, and OnUpdate handlers on Refactor's frames.
 - Display options panel. Diagnostics list scrolls. Window categories: Quest, Chat, Social,
   Tooltips, Toasts, Display.
+- `GetCameraZoom` enters the API index through `Data/client-api.json`: a global the client
+  exports but no Blizzard UI file calls, verified against the client index at this build.
 - Not built because Retail does it natively: bag quality borders, auto track quests, chat
   timestamps, sell-all-junk, the client's own flagged single-option gossip skip.
 

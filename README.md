@@ -111,7 +111,7 @@ their first run.
 
 | Feature | What it does | Tier |
 |---|---|---|
-| **ActionCam** | Camera profiles. Blizzard's Basic, On and Full, plus Refactor's **Immersive** (close, over the shoulder, tilting as it comes in, tuned for mouse and keyboard) and **Controller** (target and NPC focus, no head sway, tuned for a gamepad), **Cinematic**, **Raider**, **Melee** and **Comfort**. Each profile names a camera distance and shoulder offset for where you are: indoors, in a city or inn, on a mount, in combat, talking to an NPC, or in a dungeon, raid, battleground or arena. Distances are absolute, so the camera never ends up inside your character. Save a copy of any profile, tune it on sliders, and share it as a string. | Full |
+| **ActionCam** | Camera profiles. Blizzard's Basic, On and Full, plus Refactor's **Immersive** (close, over the shoulder, tilting as it comes in, tuned for mouse and keyboard) and **Controller** (target and NPC focus, no head sway, tuned for a gamepad), **Cinematic**, **Raider**, **Melee** and **Comfort**. Each profile names a camera distance and shoulder offset for where you are: indoors, in a city or inn, on a mount, in combat, talking to an NPC, or in a dungeon, raid, battleground or arena. Distances are absolute, so the camera never ends up inside your character, and a situation can leave the camera where you had it. Leaving a situation gives your own distance back. Save a copy of any profile, tune it on sliders, and share it as a string. | Full |
 | **Maximum camera distance** | Lets the camera zoom out further than the options menu allows. | Full |
 | **Screenshot on level up** | Takes a screenshot a moment after you level, so the effect is in frame. | Full |
 

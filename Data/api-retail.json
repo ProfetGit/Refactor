@@ -17477,6 +17477,12 @@
       "line": 10,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/CameraDocumentation.lua"
     },
+    "GetCameraZoom": {
+      "build": "69814",
+      "kind": "client-index",
+      "note": "Current camera distance in yards. Called by no Blizzard UI file at this build; the client's own global list carries it. Used to remember the player's distance before a camera profile moves it.",
+      "verifiedBy": "hated-wow-mcp"
+    },
     "GetCemeteryPreference": {
       "line": 266,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"

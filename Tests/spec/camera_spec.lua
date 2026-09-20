@@ -32,6 +32,15 @@ describe("camera profiles", function()
         values = Profiles:Resolve("immersive").values
         values.pitch = 1
         assert.is_false(Profiles:Valid(values))
+        -- LEAVE is a distance; nothing between it and the floor is, and a shoulder cannot use it.
+        values = Profiles:Resolve("immersive").values
+        values.indoorsDistance = Profiles.LEAVE
+        assert.is_true(Profiles:Valid(values))
+        values.indoorsDistance = 2
+        assert.is_false(Profiles:Valid(values))
+        values.indoorsDistance = 4
+        values.indoorsShoulder = 3
+        assert.is_false(Profiles:Valid(values))
         assert.is_false(Profiles:Valid("immersive"))
     end)
 
@@ -53,7 +62,8 @@ describe("camera profiles", function()
     end)
 
     it("round trips a profile through its share string and refuses a tampered one", function()
-        local values = Profiles:Resolve("controller").values
+        -- Melee carries LEAVE in several fields, so the round trip covers it.
+        local values = Profiles:Resolve("melee").values
         local encoded = Profiles:Encode("Pad", values)
         assert.is_string(encoded)
         assert.is_nil(encoded:find("[^%w+/=]"))
@@ -63,7 +73,7 @@ describe("camera profiles", function()
         assert.same({ nil, "invalid_encoding" }, { Profiles:Decode("not base64!") })
         assert.same({ nil, "invalid_encoding" }, { Profiles:Decode(R.Codec:EncodeText("RC1\nPad")) })
         -- The right shape with one number outside its range, one key twice, and one unknown.
-        local lines = { "RC1", "Pad" }
+        local lines = { "RC2", "Pad" }
         for _, field in ipairs(Profiles.fields) do
             local value = values[field.key]
             local text = field.kind == "boolean" and (value and "1" or "0") or tostring(value)
@@ -76,6 +86,8 @@ describe("camera profiles", function()
             return R.Codec:EncodeText(table.concat(copy, "\n") .. "\n")
         end
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("distance=99", 3)) })
+        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("distance=2", 3)) })
+        assert.equal(0, Profiles:Decode(withLine("distance=0", 3)).values.distance)
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("distance=1")) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("mystery=1")) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("pitch=yes", 6)) })

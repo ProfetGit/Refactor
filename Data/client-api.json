@@ -1,0 +1,7 @@
+{
+  "GetCameraZoom": {
+    "verifiedBy": "hated-wow-mcp",
+    "build": "69814",
+    "note": "Current camera distance in yards. Called by no Blizzard UI file at this build; the client's own global list carries it. Used to remember the player's distance before a camera profile moves it."
+  }
+}

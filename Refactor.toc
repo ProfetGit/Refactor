@@ -1,4 +1,4 @@
-## Interface: 120100
+## Interface: 120100, 16001
 ## Title: Refactor
 ## Notes: Quality of life, one feature at a time. Search everything, override per character.
 ## Author: emppu

@@ -53,7 +53,7 @@ read_globals = {
     "ToggleDropDownMenu", "CloseDropDownMenus",
     -- ActionCam profiles: situation queries and the two camera zoom calls
     "IsIndoors", "IsResting", "IsMounted", "UnitOnTaxi", "UnitInVehicle", "IsPlayerInWorld",
-    "CameraZoomIn", "CameraZoomOut",
+    "CameraZoomIn", "CameraZoomOut", "GetCameraZoom",
 }
 
 files["Tests/"] = { std = "+busted" }

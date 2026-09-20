@@ -2,6 +2,9 @@
 
 This is explicitly source evidence, not a client Probe dump. Legacy symbols are
 included only with a reviewed Mainline/shared source reference in legacy-api.json.
+A global the client exports but no Blizzard UI file calls can enter through
+client-api.json, naming the client index that verified it and the build it was
+verified at, which has to be the build this index targets.
 """
 import argparse
 import json
@@ -44,6 +47,15 @@ if legacy_path.exists():
         index["symbols"][name] = {
             "path": evidence["path"], "line": text.count("\n", 0, text.index(needle)) + 1,
             "kind": "source-reference",
+        }
+client_path = Path("Data/client-api.json")
+if client_path.exists():
+    for name, evidence in json.loads(client_path.read_text()).items():
+        if evidence.get("build") != index["build"] or not evidence.get("verifiedBy"):
+            raise SystemExit(f"Client reference needs verifiedBy and this build: {name}: {evidence}")
+        index["symbols"][name] = {
+            "kind": "client-index", "verifiedBy": evidence["verifiedBy"], "build": evidence["build"],
+            "note": evidence.get("note", ""),
         }
 Path("Data/api-retail.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
 print(f"Indexed {len(index['symbols'])} declarations/references at {commit}; not a runtime Probe.")

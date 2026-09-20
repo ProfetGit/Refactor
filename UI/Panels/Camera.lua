@@ -11,8 +11,19 @@ for index, situation in ipairs(Profiles.situations) do
     SITUATION_ENTRIES[index] = { value = situation, labelKey = "UI_CAMERA_SITUATION_" .. situation:upper() }
 end
 
+-- A distance slider's leftmost stop sits one below the smallest real distance and means
+-- the profile leaves the camera alone; the profile stores that as its LEAVE value.
+local LEAVE_STOP_OFFSET = 1
+
 local function yardsText(value)
     return string.format(L.UI_CAMERA_YARDS, value)
+end
+
+local function distanceText(value, minimum)
+    if value < minimum then
+        return L.UI_CAMERA_LEAVE
+    end
+    return yardsText(value)
 end
 
 -- A shoulder offset is a side before it is a number, so the sign is spelled out.
@@ -34,11 +45,10 @@ end
 
 -- The base fields, then the two a situation carries. suffix marks the ones whose field
 -- depends on which situation the dropdown is showing.
-local BASE_DISTANCE = { key = "distance", labelKey = "UI_CAMERA_DISTANCE", formatter = yardsText }
+local BASE_DISTANCE = { key = "distance", labelKey = "UI_CAMERA_DISTANCE" }
 local BASE_SHOULDER = { key = "shoulder", labelKey = "UI_CAMERA_SHOULDER", formatter = shoulderText }
 local BASE_SWAY = { key = "headBob", labelKey = "UI_CAMERA_HEAD_BOB", formatter = swayText }
-local SITUATION_DISTANCE = { suffix = "Distance", labelKey = "UI_CAMERA_SITUATION_DISTANCE",
-    formatter = yardsText }
+local SITUATION_DISTANCE = { suffix = "Distance", labelKey = "UI_CAMERA_SITUATION_DISTANCE" }
 local SITUATION_SHOULDER = { suffix = "Shoulder", labelKey = "UI_CAMERA_SITUATION_SHOULDER",
     formatter = shoulderText }
 local BOXES = {
@@ -77,15 +87,20 @@ end
 -- what it writes is a number inside a profile, so there is no default for it to undo to.
 function UI:CameraSlider(block, spec, y)
     local range = fieldRange(fieldFor(spec, DEFAULT_SITUATION))
-    local slider = Theme:Slider(block, CONTROL_WIDTH, range.minimum, range.maximum, range.step,
+    local distance = range.kind == "distance"
+    local low = distance and range.minimum - LEAVE_STOP_OFFSET or range.minimum
+    local slider = Theme:Slider(block, CONTROL_WIDTH, low, range.maximum, range.step,
         function(value)
-            if not Profiles:SetField(fieldFor(spec, self.cameraSituation), onStep(value, range.step)) then
+            value = onStep(value, range.step)
+            if distance and value < range.minimum then value = Profiles.LEAVE end
+            if not Profiles:SetField(fieldFor(spec, self.cameraSituation), value) then
                 self:LoadCamera()
             end
         end)
     slider:SetPoint("TOPLEFT", 0, y)
-    slider:SetLabel(L[spec.labelKey], spec.formatter)
-    slider.spec = spec
+    slider:SetLabel(L[spec.labelKey], spec.formatter
+        or function(value) return distanceText(value, range.minimum) end)
+    slider.spec, slider.range = spec, range
     block:Index(L[spec.labelKey])
     self.cameraSliders[#self.cameraSliders + 1] = slider
     return slider
@@ -252,7 +267,11 @@ function UI:LoadCamera()
         or L.CAMERA_PROFILE_CUSTOM_DETAIL)
     local editable = not active.builtIn
     for _, slider in ipairs(self.cameraSliders) do
-        slider:SetValue(active.values[fieldFor(slider.spec, self.cameraSituation)])
+        local value, range = active.values[fieldFor(slider.spec, self.cameraSituation)], slider.range
+        if range.kind == "distance" and value == Profiles.LEAVE then
+            value = range.minimum - LEAVE_STOP_OFFSET
+        end
+        slider:SetValue(value)
         setSliderEnabled(slider, editable)
     end
     for _, box in ipairs(self.cameraBoxes) do

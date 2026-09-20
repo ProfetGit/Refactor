@@ -353,10 +353,14 @@ describe("window chrome", function()
         assert.equal("16 yards", situationDistance.valueText:GetText())
         situationDistance.slider:GetScript("OnValueChanged")(situationDistance.slider, 20)
         assert.equal(20, Settings:GetOption("cameraProfiles").Mine.mountedDistance)
-        -- A value the profile refuses is not stored and the slider is read back.
-        situationDistance.slider:GetScript("OnValueChanged")(situationDistance.slider, 2)
-        assert.equal(20, Settings:GetOption("cameraProfiles").Mine.mountedDistance)
-        assert.equal("20 yards", situationDistance.valueText:GetText())
+        -- The leftmost stop sits one under the smallest distance and stores "leave it".
+        local low = situationDistance.slider:GetMinMaxValues()
+        assert.equal(3, low)
+        situationDistance.slider:GetScript("OnValueChanged")(situationDistance.slider, 3)
+        assert.equal(Profiles.LEAVE, Settings:GetOption("cameraProfiles").Mine.mountedDistance)
+        assert.equal(R.L.UI_CAMERA_LEAVE, situationDistance.valueText:GetText())
+        UI:LoadCamera()
+        assert.equal(3, situationDistance.slider:GetValue())
         -- Export fills the box; importing the same string is a name clash, so it is
         -- imported under the built-in's name instead and selected.
         UI.cameraExport:GetScript("OnClick")(UI.cameraExport)

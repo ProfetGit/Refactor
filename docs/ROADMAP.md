@@ -248,16 +248,21 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   the camera goes to 9 yards on enable, 6 indoors, 5 at an NPC, 16 on a mount, 14 in a
   dungeon and 24 in a raid, easing straight there with no dip through first person (if it
   dips, the client is not clamping the zoom target and `SetDistance` needs another way);
-  a camera wheeled in to two yards then walked into a building settles at 6, not in the
-  head; a gossip that hands over to a quest or a vendor does not flick the camera; on
-  disable the camera stays where it is and nothing is left in Accessibility; a login and
-  a `/reload` put the camera at the profile's distance for where you stand (if the camera
-  is wrong at login, `IsPlayerInWorld` is true at PLAYER_LOGIN before the situation
-  queries answer); `CameraZoomIn` from the module raises no protected-call error;
-  Blizzard: Full reads as `/console actioncam full` does and never moves the zoom; a saved
-  copy's distance slider moves the camera as it is dragged and a slider for another
-  situation does not; export, import and delete round trip through the share box; Reduce
-  Unexpected Camera Movement on in Accessibility is expected to cancel the shoulder offset
+  wheel to 4 yards, walk into a building, walk out: the camera reads 6 inside and 4 again
+  outside, so `GetCameraZoom` answers in the same yards `CameraZoomIn` moves (if the
+  return lands elsewhere, the two units differ and `MoveFor` needs a scale); on Melee an
+  NPC window changes the shoulder and nothing else, a mount backs off and a dismount
+  returns exactly; a gossip that hands over to a quest or a vendor does not flick the
+  camera; off while mounted the camera returns to the pre-mount distance and nothing is
+  left in Accessibility; a login and a `/reload` put the camera at the profile's distance
+  for where you stand (if the camera is wrong at login, `IsPlayerInWorld` is true at
+  PLAYER_LOGIN before the situation queries answer); `CameraZoomIn` from the module raises
+  no protected-call error; Blizzard: Full reads as `/console actioncam full` does and
+  never moves the zoom; a saved copy's distance slider moves the camera as it is dragged,
+  its leftmost stop reads "stays where you had it" and gives the wheel back, and a slider
+  for another situation does not move anything; export, import and delete round trip
+  through the share box; Reduce Unexpected Camera Movement on in Accessibility is
+  expected to cancel the shoulder offset
 - `/refactor farmtest` over a dark and a snow-bright zone after a full client restart:
   every HUD texture loads, the text shadows keep both lines readable, the hold to reset
   fills the meter and cancels on an early release, and the chevron opens and closes the
