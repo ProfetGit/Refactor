@@ -9,7 +9,7 @@ local AutoTurnIn = R:RegisterModule({
     descriptionKey = "QUEST_TURNIN_DESC", detailKey = "QUEST_TURNIN_DETAIL",
     requires = { "InCombatLockdown", "IsQuestCompletable", "CompleteQuest", "GetNumQuestChoices",
         "GetQuestReward" },
-    tier = "manual", risk = "automation", defaultEnabled = false,
+    risk = "automation", defaultEnabled = false,
 })
 
 function AutoTurnIn:OnProgress()

@@ -10,7 +10,7 @@ local Urls = R:RegisterModule({
     descriptionKey = "CHAT_URLS_DESC", detailKey = "CHAT_URLS_DETAIL",
     requires = { "ChatFrameUtil.AddMessageEventFilter", "ChatFrameUtil.RemoveMessageEventFilter",
         "hooksecurefunc", "SetItemRef" },
-    tier = "standard", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = true,
 })
 
 local EVENTS = {

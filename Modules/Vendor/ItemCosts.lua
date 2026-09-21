@@ -23,7 +23,7 @@ local ItemCosts = R:RegisterModule({
         "GetMerchantItemCostInfo", "GetMerchantItemCostItem", "GetMoney", "C_CurrencyInfo.GetCurrencyInfoFromLink",
         "C_Item.GetItemCount", "AltCurrencyFrame_Update", "SetMoneyFrameColor", "MoneyFrame_SetMaxDisplayWidth",
         "MoneyFrame_Update" },
-    tier = "standard", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = true,
 })
 
 -- The merchant filter fills the page again after Blizzard's pass, with Blizzard's own

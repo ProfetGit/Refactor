@@ -14,7 +14,7 @@ local ExtendedUI = R:RegisterModule({
     requires = { "InCombatLockdown", "hooksecurefunc", "MerchantFrame", "MerchantItem1", "MerchantItem12",
         "MerchantBuyBackItem", "MerchantNextPageButton", "MerchantFrameBottomLeftBorder", "MerchantFrame_Update",
         "MERCHANT_ITEMS_PER_PAGE", "BUYBACK_ITEMS_PER_PAGE" },
-    tier = "standard", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = true,
 })
 
 -- The merchant window is not a protected frame, so reshaping it in combat is allowed. It

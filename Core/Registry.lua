@@ -58,13 +58,6 @@ function Registry:Enable(module)
         R.Broker:Emit("REFACTOR_MODULE_CHANGED", module.id)
         return false
     end
-    if module.risk == "automation" and not R.Settings:IsConfirmed(module.id) then
-        -- Not a failure and not unavailable: it is waiting for the player to read the
-        -- dialog. "No automation is on unless you turned it on" stays literally true.
-        module.state = "unconfirmed"
-        R.Broker:Emit("REFACTOR_MODULE_CHANGED", module.id)
-        return false
-    end
     local available, missing = R.Capabilities:Check(module.requires)
     module.missing = missing
     if not available then
@@ -120,9 +113,6 @@ function Registry:Reconcile(module)
             return false
         end
         return self:Enable(module)
-    end
-    if module.state == "unconfirmed" then
-        module.state = "disabled"
     end
     return self:Disable(module)
 end

@@ -84,7 +84,7 @@ end)
 describe("login bootstrap", function()
     local function login(env)
         env:Load("Core/Bootstrap.lua")
-        env.R.UI = { Initialize = function() end, Toggle = function() end, ShowFirstRun = function() end }
+        env.R.UI = { Initialize = function() end, Toggle = function() end }
         env:Fire("PLAYER_LOGIN")
     end
 

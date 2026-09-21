@@ -9,7 +9,7 @@ local HideHealthBar = R:RegisterModule({
     id = "tooltips.hideHealthBar", category = "Tooltips", nameKey = "TOOLTIP_HEALTHBAR_NAME",
     descriptionKey = "TOOLTIP_HEALTHBAR_DESC", detailKey = "TOOLTIP_HEALTHBAR_DETAIL",
     requires = { "hooksecurefunc", "GameTooltip" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = false,
 })
 
 -- The bar is GameTooltip's own child (parentKey StatusBar) and it shows itself from

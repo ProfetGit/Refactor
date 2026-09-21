@@ -19,7 +19,7 @@ local AutoGossip = R:RegisterModule({
         "C_GossipInfo.SelectOptionByIndex", "C_GossipInfo.SelectAvailableQuest", "C_GossipInfo.SelectActiveQuest",
         "Enum.GossipOptionStatus.Available", "Enum.GossipOptionRecFlags.QuestLabelPrepend",
         "Enum.GossipOptionRecFlags.PlayMovieLabelPrepend" },
-    tier = "standard", risk = "safe", defaultEnabled = false,
+    risk = "safe", defaultEnabled = false,
 })
 
 -- Gossip icon file IDs from Interface/GossipFrame. A service opens a window the player can

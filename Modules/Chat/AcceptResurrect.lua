@@ -8,7 +8,7 @@ local AcceptRes = R:RegisterModule({
     id = "social.acceptResurrect", category = "Social", nameKey = "SOCIAL_RESURRECT_NAME",
     descriptionKey = "SOCIAL_RESURRECT_DESC", detailKey = "SOCIAL_RESURRECT_DETAIL",
     requires = { "InCombatLockdown", "IsInInstance", "AcceptResurrect", "StaticPopup_Hide" },
-    tier = "manual", risk = "automation", defaultEnabled = false,
+    risk = "automation", defaultEnabled = false,
 })
 
 -- Every instanceType the client returns today maps to one of the three area options. An

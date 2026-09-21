@@ -12,7 +12,7 @@ local QuickInvite = R:RegisterModule({
     requires = { "C_PartyInfo.InviteUnit", "UnitExists", "UnitIsUnit", "UnitIsPlayer",
         "UnitIsHumanPlayer", "UnitIsConnected", "UnitCanCooperate", "UnitInParty", "UnitInRaid",
         "UnitName", "UnitGUID", "IsControlKeyDown", "IsShiftKeyDown", "IsAltKeyDown" },
-    tier = "manual", risk = "automation", defaultEnabled = false,
+    risk = "automation", defaultEnabled = false,
 })
 
 local MODIFIER_CHECKS = { CTRL = IsControlKeyDown, SHIFT = IsShiftKeyDown, ALT = IsAltKeyDown }

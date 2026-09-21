@@ -15,7 +15,7 @@ local AutoSell = R:RegisterModule({
         "C_Container.GetContainerItemQuestInfo", "C_Container.GetContainerItemPurchaseInfo",
         "C_Container.UseContainerItem", "C_TooltipInfo.GetBagItem",
         "Enum.TooltipDataLineType.TradeTimeRemaining" },
-    tier = "standard", risk = "safe", defaultEnabled = false,
+    risk = "safe", defaultEnabled = true,
 })
 -- MERCHANT_SHOW is the merchant data arriving, not the window opening: Blizzard shows
 -- MerchantFrame from PLAYER_INTERACTION_MANAGER_FRAME_SHOW, a separate event with no

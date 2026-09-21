@@ -2,93 +2,52 @@ local Runtime = require("Tests.mock.runtime")
 
 local function withModules(env)
     local R = env.R
-    R:RegisterModule({ id = "loot.fast", requires = {}, tier = "minimal", risk = "safe" })
-    R:RegisterModule({ id = "vendor.sell", requires = {}, tier = "standard", risk = "safe" })
-    R:RegisterModule({ id = "nameplates.quest", requires = {}, tier = "full", risk = "visible" })
-    R:RegisterModule({ id = "quest.autoAccept", requires = {}, tier = "standard", risk = "automation" })
-    R:RegisterModule({ id = "misc.manual", requires = {}, tier = "manual", risk = "safe" })
+    R:RegisterModule({ id = "loot.fast", requires = {}, risk = "safe", defaultEnabled = true })
+    R:RegisterModule({ id = "nameplates.quest", requires = {}, risk = "visible" })
+    R:RegisterModule({ id = "quest.autoAccept", requires = {}, risk = "automation" })
     return R
 end
 
-describe("presets", function()
+describe("module defaults", function()
     local env, R
     before_each(function()
         env = Runtime.new()
         R = withModules(env)
     end)
 
-    it("nests the tiers so Full contains Standard contains Minimal", function()
-        assert.same({ "loot.fast" }, R.Presets:Members("minimal"))
-        assert.same({ "loot.fast", "vendor.sell" }, R.Presets:Members("standard"))
-        assert.same({ "loot.fast", "nameplates.quest", "vendor.sell" }, R.Presets:Members("full"))
-    end)
-
-    it("never puts automation in a preset, Full included", function()
-        for _, preset in ipairs(R.Presets.order) do
-            for _, id in ipairs(R.Presets:Members(preset)) do
-                assert.is_not.equal("quest.autoAccept", id)
-            end
-        end
-    end)
-
-    it("leaves manual-tier modules out of every preset", function()
-        assert.equal(3, R.Presets:Count("full"))
-    end)
-
-    it("writes account defaults, not character overrides", function()
-        R.Presets:Apply("standard")
-        assert.is_true(R.Settings:Get("vendor.sell"))
+    it("uses each module's declared default until the player sets one", function()
+        assert.is_true(R.Settings:Get("loot.fast"))
         assert.is_false(R.Settings:Get("nameplates.quest"))
-        assert.is_nil(R.Settings:GetOverride("vendor.sell"))
-        assert.is_false(R.Settings:IsFirstRun())
+        assert.is_false(R.Settings:Get("quest.autoAccept"))
     end)
 
-    it("turns everything off when the player chooses to browse instead", function()
-        R.Presets:Apply(nil)
+    it("lets an account value override the default", function()
+        R.Settings:SetAccount("loot.fast", false)
         assert.is_false(R.Settings:Get("loot.fast"))
-        assert.is_false(R.Settings:IsFirstRun())
+        assert.is_nil(R.Settings:GetOverride("loot.fast"))
     end)
 
     it("a second character inherits the account choice with no clicks", function()
-        R.Presets:Apply("standard")
-        local account = env.RefactorDB or R.Settings.account
-        -- A fresh character means a fresh per-character table and the same account table.
+        R.Settings:SetAccount("nameplates.quest", true)
+        local account = R.Settings.account
         R.Settings:Init(account, {}, "Player-second")
-        assert.is_true(R.Settings:Get("vendor.sell"))
-        assert.is_false(R.Settings:Get("nameplates.quest"))
-        assert.is_false(R.Settings:IsFirstRun())
+        assert.is_true(R.Settings:Get("nameplates.quest"))
+        assert.is_true(R.Settings:Get("loot.fast"))
     end)
 end)
 
-describe("automation confirmation", function()
+describe("automation modules", function()
     local env, R
     before_each(function()
         env = Runtime.new()
         R = withModules(env)
     end)
 
-    it("refuses to enable an automation module until it is confirmed once", function()
+    it("enables as soon as the setting is on, with no confirmation step", function()
         local module = R.moduleByID["quest.autoAccept"]
         R.Settings:SetAccount("quest.autoAccept", true)
-        R.Registry:Reconcile(module)
-        assert.equal("unconfirmed", module.state)
-
-        R.Settings:Confirm("quest.autoAccept", true)
         R.Registry:Reconcile(module)
         assert.equal("enabled", module.state)
-    end)
-
-    it("keeps the confirmation once given, and forgets it when withdrawn", function()
-        R.Settings:Confirm("quest.autoAccept", true)
-        assert.is_true(R.Settings:IsConfirmed("quest.autoAccept"))
-        R.Settings:Confirm("quest.autoAccept", false)
-        assert.is_false(R.Settings:IsConfirmed("quest.autoAccept"))
-    end)
-
-    it("returns an unconfirmed module to disabled when the setting goes off", function()
-        local module = R.moduleByID["quest.autoAccept"]
-        R.Settings:SetAccount("quest.autoAccept", true)
-        R.Registry:Reconcile(module)
         R.Settings:SetAccount("quest.autoAccept", false)
         R.Registry:Reconcile(module)
         assert.equal("disabled", module.state)

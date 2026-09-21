@@ -2,6 +2,4 @@
 - In wow forever the Refactor addon specific configurations are not saved, they reset when i restart/reload the game.
 - Remove the Forever saved variables workaround once Blizzard fixes the client. The addon
   tells you at login when it is safe; the removal list is in docs/ROADMAP.md.
-- Add feature to display Refactor changelogs.
-- Add a feature to notify user when an update is available.
-- Some setting in refactor show a popup when enabled first time, remove this. For example auto accept quest does this.
+- Visual bug, in loot toast the currency icon asset lags behind when the toast container moves.

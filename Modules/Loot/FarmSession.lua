@@ -16,7 +16,7 @@ local Farm = R:RegisterModule({
         "C_CurrencyInfo.GetCoinTextureString" },
     -- PRD 7.2 puts the session log and gold per hour outside every preset: a number that
     -- watches you play is something you ask for, not something you find switched on.
-    tier = "manual", risk = "safe", defaultEnabled = false,
+    risk = "safe", defaultEnabled = false,
 })
 
 local SECONDS_PER_HOUR, SECONDS_PER_MINUTE = 3600, 60
@@ -467,7 +467,14 @@ function Farm:OnMoney()
     self:Refresh()
 end
 
-function Farm:OnSettingsChanged()
+-- The HUD's own options, the price chain it values loot with, or a change with no key (a
+-- profile). Anything else is some other feature's slider mid-drag.
+local PRICE_OPTIONS = { priceSource = true, priceTSM = true, priceAuctionator = true, tsmPriceString = true }
+
+function Farm:OnSettingsChanged(_, key)
+    if key ~= nil and string.sub(key, 1, 4) ~= "farm" and not PRICE_OPTIONS[key] then
+        return
+    end
     if self.host then
         self.host:ApplySettings()
     end

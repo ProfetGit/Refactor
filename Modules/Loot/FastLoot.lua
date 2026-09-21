@@ -10,7 +10,7 @@ local FastLoot = R:RegisterModule({
     descriptionKey = "FAST_LOOT_DESC", detailKey = "FAST_LOOT_DETAIL",
     requires = { "InCombatLockdown", "C_CVar.GetCVarBool", "C_CVar.SetCVar", "C_CVar.GetCVarDefault",
         "IsModifiedClick", "GetNumLootItems", "GetLootSlotInfo", "LootSlot" },
-    tier = "minimal", risk = "safe", defaultEnabled = false,
+    risk = "safe", defaultEnabled = true,
 })
 
 -- The engine ticks its own auto-loot every autoLootRate milliseconds, 150 by default.

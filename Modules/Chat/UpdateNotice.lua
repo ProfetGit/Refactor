@@ -12,7 +12,7 @@ local UpdateNotice = R:RegisterModule({
     requires = { "C_ChatInfo.RegisterAddonMessagePrefix", "C_ChatInfo.SendAddonMessage",
         "C_AddOns.GetAddOnMetadata", "IsInGuild", "IsInGroup", "IsInRaid",
         "LE_PARTY_CATEGORY_HOME", "LE_PARTY_CATEGORY_INSTANCE", "GetTime" },
-    tier = "standard", risk = "safe", defaultEnabled = false,
+    risk = "safe", defaultEnabled = true,
 })
 
 -- The client allows sixteen characters of prefix. The payload starts with a letter for its

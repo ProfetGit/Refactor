@@ -40,8 +40,7 @@ function Commands:SavedLines()
     local probe = R.loadProbe or {}
     local restored = probe.clientGave == true
     return {
-        string.format(R.L.CMD_SAVED_ACCOUNT, tostring(probe.atFile), tostring(probe.atLogin),
-            tostring(probe.firstRun)),
+        string.format(R.L.CMD_SAVED_ACCOUNT, tostring(probe.atFile), tostring(probe.atLogin)),
         string.format(R.L.CMD_SAVED_CHARACTER, tostring(probe.atFileChar), tostring(probe.atLoginChar)),
         restored and R.L.CMD_SAVED_VERDICT_OK
             or probe.restored and R.L.CMD_SAVED_VERDICT_RESTORE_FILE

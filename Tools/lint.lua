@@ -1,6 +1,6 @@
 local lfs = require("lfs")
 local failures = {}
-local DEFINITION_FIELDS = { "id", "category", "requires", "tier", "risk" }
+local DEFINITION_FIELDS = { "id", "category", "requires", "risk" }
 local function fail(path, message) failures[#failures + 1] = path .. ": " .. message end
 local function check(path)
     local file = assert(io.open(path, "r"))

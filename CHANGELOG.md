@@ -9,6 +9,11 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   `Restore.lua` in its own folder when the client hands back nothing, and says at login when
   the client starts working again and the workaround can go. Temporary, with the removal
   list under Temporary workarounds in `docs/ROADMAP.md`.
+- Presets and the first-run screen are gone. Each feature has its own default instead:
+  information and click savers start on (sell junk, auto repair, merchant window, chat links,
+  rarity border, nameplate quest progress and a few more), anything that acts for you or
+  changes the camera or screen starts off. Automation features turn on with one click, with no
+  confirmation dialog.
 - `/refactor saved` reports whether the client restored the saved variables, from a probe
   taken before any of our code runs.
 - Settings: the Editing switch opens on Account defaults and keeps whichever layer you

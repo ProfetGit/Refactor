@@ -102,7 +102,7 @@ function Runtime.new()
     for _, path in ipairs({
         "Core/Namespace.lua", "Core/Capabilities.lua", "Core/Broker.lua", "Core/Registry.lua",
         "Core/Codec.lua", "Core/CameraProfiles.lua", "Core/Conditions.lua", "Core/Visibility.lua",
-        "Core/Settings.lua", "Core/Pools.lua", "Core/Fade.lua", "Core/Safety.lua", "Core/Presets.lua",
+        "Core/Settings.lua", "Core/Pools.lua", "Core/Fade.lua", "Core/Safety.lua",
     }) do env:Load(path) end
     env.R.Settings:Init({}, {}, "Player-test")
     return env

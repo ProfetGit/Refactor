@@ -13,7 +13,7 @@ local Visibility = R:RegisterModule({
     descriptionKey = "VISIBILITY_DESC", detailKey = "VISIBILITY_DETAIL",
     requires = { "hooksecurefunc" },
     conflicts = { "ElvUI.ui", "Bartender4.bars", "Dominos.bars" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = false,
 })
 
 -- Neither a script hook nor a secure hook can be removed, so each is installed once for the

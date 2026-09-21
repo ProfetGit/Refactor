@@ -17,7 +17,7 @@ Refactor is a single addon that removes the repetitive friction of playing WoW F
 
 It is deliberately **wide within one layer and empty outside it**. Refactor owns annoyance removal. It does not compete with Questie, Bagnon, Details, Plater, or any auction house addon, and it actively defers to them when they are present.
 
-The differentiator is not feature count. It is the settings experience: a searchable, preset-driven config that feels like part of the game, plus an account-wide profile system so a new character inherits everything instead of being reconfigured from scratch.
+The differentiator is not feature count. It is the settings experience: a searchable config with sensible defaults that feels like part of the game, plus an account-wide profile system so a new character inherits everything instead of being reconfigured from scratch.
 
 ---
 
@@ -64,12 +64,12 @@ This is specified in full in section 5.1. Section 13 lists what to verify on bet
 | # | Goal |
 |---|---|
 | G1 | A new character requires zero configuration. Settings are inherited from the account profile. |
-| G2 | A new user reaches a good configuration in under 60 seconds via the first-run preset picker. |
+| G2 | A new user has a good configuration on first login with no setup step (6.1). |
 | G3 | Any setting is findable by typing a word into one search box. |
 | G4 | Refactor never introduces taint and never touches secure or combat-protected frames. |
 | G5 | One broken module never breaks another module. |
 | G6 | Refactor detects neighbouring addons and defers rather than duplicating. |
-| G7 | Nothing makes an irreversible decision on the player's behalf unless the player explicitly turned that specific thing on. Presets may include actions that are reversible in the same session (selling junk is undone by buyback). Anything irreversible, or anything that answers another player or an NPC for the player, is Automation (6.3). |
+| G7 | Nothing makes an irreversible decision on the player's behalf unless the player explicitly turned that specific thing on. Defaults may include actions that are reversible in the same session (selling junk is undone by buyback). Anything irreversible, or anything that answers another player or an NPC for the player, is Automation and starts off (6.2). |
 
 ### Non-goals
 
@@ -95,7 +95,7 @@ Three axes where Refactor can be better:
 
 | Axis | Incumbent behaviour | Refactor |
 |---|---|---|
-| Configuration | Long scrolling lists of checkboxes | Searchable, categorised, preset-driven, with per-setting explanations |
+| Configuration | Long scrolling lists of checkboxes | Searchable, categorised, sensible defaults, with per-setting explanations |
 | Alt handling | Per-character or one global profile | Three-state inheritance: account default, per-character override, explicit off |
 | Neighbours | Overlaps silently, user resolves conflicts | Detects neighbours, defers, and says so in the UI |
 
@@ -196,38 +196,28 @@ Hard rules, enforced by code review and a CI lint:
 
 ---
 
-## 6. Settings posture and presets
+## 6. Settings posture and defaults
 
-### 6.1 First run
+Decided 21 Sep 2026: no presets, no first-run screen and no confirmation dialogs. A preset asked
+the player to choose a bundle before they knew what was in it. Instead each module declares
+`defaultEnabled`, and the Refactor developer makes that call once.
 
-On first login, a single centred panel appears. Not a wizard, one screen:
+### 6.1 What starts on
 
-> **Refactor**
-> Pick a starting point. You can change anything later, and everything is searchable.
-> [ Minimal ] [ Standard ] [ Full ] [ Nothing, let me browse ]
+A module starts on when it adds information or removes a click, and decides nothing for the
+player: fast loot, sell grey items, auto repair, vendor summary, the merchant window modules,
+clickable chat links, chat copy, tooltip rarity border, nameplate quest progress, map zone
+levels, the update notice.
 
-Each option shows a live count ("enables 9 features") and expands to list them. The choice writes the account profile, so it happens once per account, not once per character.
+### 6.2 What starts off
 
-### 6.2 Preset rules
-
-Each tier has a defensible rule, not an arbitrary size:
-
-| Tier | Rule | Example members |
-|---|---|---|
-| **Minimal** | Removes clicks the player never wanted in the first place, with no decision involved | Fast loot, auto stand when looting, auto-fill DELETE confirmation |
-| **Standard** | Minimal, plus anything reversible in the same session | Skip single-option gossip, auto repair, sell grey items, extended vendor UI, bag junk value, mail take-all |
-| **Full** | Standard, plus anything that changes what is on screen | Loot toasts, nameplate quest progress, ActionCam, hidden UI elements, tooltip prices |
-
-### 6.3 What is never in a preset
-
-Anything that makes a decision on the player's behalf lives in a separate **Automation** category, ships off in every preset including Full, and requires:
-
-1. An individual toggle, and
-2. A one-time confirmation dialog describing exactly what will happen and what the escape hatch is.
-
-This keeps the claim "no automation is on unless you turned it on" literally true, which is worth more than the convenience of bundling it.
-
-Members: auto accept quests, auto turn in quests, auto select quest rewards, auto accept party and guild invites, auto decline duels, auto release in battlegrounds, repair from guild bank funds.
+- Anything that acts on the player's behalf (`risk = "automation"`): auto accept and turn in
+  quests, party invites, resurrection, duels, quick invite, placing new spells. The player turns
+  each on with its own toggle. There is no confirmation dialog.
+- Anything that changes the camera or how the default UI looks or sits: ActionCam, camera
+  distance, UI visibility, tooltip anchor, hiding the tooltip health bar, map reveal, loot feed.
+- Anything that removes a safeguard or writes files: DELETE fill, screenshot on level up.
+- Auto gossip, farm session HUD.
 
 ---
 
@@ -581,7 +571,7 @@ Applied across the catalogue, the steady-state handler count while questing drop
 
 Heavy modules ship as load-on-demand sub-addons declared in the TOC with `## LoadOnDemand: 1`. The core checks the saved profile at login and calls `C_AddOns.LoadAddOn` only for enabled ones.
 
-Consequence: a user on the Minimal preset never loads the nameplate, toast, or tooltip code at all. Their memory readout reflects what they actually use, which is also the number other players will judge the addon by.
+Consequence: a user who leaves those features off never loads the nameplate, toast, or tooltip code at all. Their memory readout reflects what they actually use, which is also the number other players will judge the addon by.
 
 ### 9.6 Nameplate quest progress, the one genuinely dangerous module
 
@@ -776,7 +766,6 @@ On tag: packager publishes to CurseForge, Wago, and a GitHub release. Changelog 
 
 | Metric | Target |
 |---|---|
-| First-run completion (a preset chosen, not dismissed) | > 80 percent |
 | Median modules enabled per user after 7 days | > 12 |
 | Sessions with zero caught module errors | > 99 percent |
 | Memory reported in the addon list, Standard preset | < 1.0 MB |

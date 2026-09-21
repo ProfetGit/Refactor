@@ -12,7 +12,7 @@ local Loot = R:RegisterModule({
     requires = { "UnitGUID", "GetMoney", "C_Item.GetItemQualityByID", "C_Item.GetItemIconByID",
         "C_Item.GetItemQualityColor", "C_CurrencyInfo.GetCurrencyInfo",
         "C_CurrencyInfo.GetCoinTextureString" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = false,
 })
 
 local MONEY_GRACE = 0.5
@@ -221,7 +221,12 @@ function Loot:OnLootClosed()
     R:After(self, MONEY_GRACE, self.StopMoney)
 end
 
-function Loot:OnSettingsChanged()
+-- Only the feed's own options, or a change with no key (a profile), lay the feed out again:
+-- the size sliders write on every step of a drag.
+function Loot:OnSettingsChanged(_, key)
+    if key ~= nil and string.sub(key, 1, 5) ~= "toast" then
+        return
+    end
     self.host:ApplySettings()
 end
 

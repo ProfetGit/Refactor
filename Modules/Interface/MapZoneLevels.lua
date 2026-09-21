@@ -11,7 +11,7 @@ local MapZoneLevels = R:RegisterModule({
     descriptionKey = "MAP_LEVELS_DESC", detailKey = "MAP_LEVELS_DETAIL",
     requires = { "WorldMapFrame", "hooksecurefunc", "C_Map.GetMapInfoAtPosition", "C_Map.GetMapLevels",
         "UnitLevel", "GetQuestDifficultyColor" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = true,
 })
 
 -- Level ranges by the zone name the client's own label shows. Forever 1.60.1 returns

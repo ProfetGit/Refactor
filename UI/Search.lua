@@ -7,8 +7,7 @@ function UI:ModuleText(module, field)
     return key and R.L[key] or module[field] or module.id
 end
 
--- Automation lists under its own category: the confirmation dialog and preset exclusion
--- (PRD 6.3) already keep it apart, and a separate Automation entry hid what a feature was for.
+-- Automation lists under its own category: a separate Automation entry hid what a feature was for.
 function UI:Category(module)
     return module.category
 end

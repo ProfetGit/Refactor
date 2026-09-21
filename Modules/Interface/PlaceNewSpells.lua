@@ -13,7 +13,7 @@ local PlaceNewSpells = R:RegisterModule({
     requires = { "C_Spell.PickupSpell", "C_Spell.IsSpellPassive", "C_Spell.GetSpellName",
         "C_ActionBar.HasAction", "C_ActionBar.PutActionInSlot", "C_ActionBar.IsOnBarOrSpecialBar",
         "C_SpellBook.FindBaseSpellByID", "GetCursorInfo", "ClearCursor", "InCombatLockdown" },
-    tier = "manual", risk = "automation", defaultEnabled = false,
+    risk = "automation", defaultEnabled = false,
 })
 
 -- The eight player bars, in the order a free slot is looked for: the main bar first, then

@@ -22,7 +22,7 @@ Built for Retail 12.1.0 first. WoW Forever support follows once that client can 
   - [Interface and camera](#interface-and-camera)
   - [Tooltips](#tooltips)
   - [Nameplates](#nameplates)
-- [Presets](#presets)
+- [Defaults](#defaults)
 - [Profiles and per-character settings](#profiles-and-per-character-settings)
 - [Price sources](#price-sources)
 - [Plays nicely with](#plays-nicely-with)
@@ -40,8 +40,8 @@ Built for Retail 12.1.0 first. WoW Forever support follows once that client can 
 
 ## Getting started
 
-On first login Refactor asks once for a starting point: **Minimal**, **Standard**, **Full**, or
-nothing. The choice is account wide, so a new character inherits it without a click.
+Refactor starts with a sensible set of features on, see [Defaults](#defaults). Switches are account
+wide, so a new character inherits them without a click.
 
 Open the window any of these ways:
 
@@ -61,87 +61,81 @@ Hold the **pause modifier** (Ctrl by default) at the moment of any automatic act
 
 ## Features
 
-Legend for the **Tier** column: which preset turns the feature on. **Manual** features are in no
-preset and are switched on one at a time. Automation features also ask once, in a dialog, before
-their first run.
+The **Default** column says whether a feature is on before you touch it.
 
 ### Loot
 
-| Feature | What it does | Tier |
+| Feature | What it does | Default |
 |---|---|---|
-| **Fast loot** | Collects everything the moment the loot window opens, when auto-loot is on. | Minimal |
-| **Loot feed** | One rolling list of what you just looted: icon, name, count and price. Repeated drops bump a row, a multi-slot loot collapses into one row, rows fade one at a time. Minimum quality, price line, gold and currency rows, opacity, lifetime, row cap and size are settings. Move it in Edit Mode. Right click dismisses a row. | Full |
-| **Farm session HUD** | A small display of what this farming session earns per hour: gold, items, kills, and a goal meter. Starts on the first loot, pauses when you idle, and hands you a summary you can copy. | Manual |
+| **Fast loot** | Collects everything the moment the loot window opens, when auto-loot is on. | On |
+| **Loot feed** | One rolling list of what you just looted: icon, name, count and price. Repeated drops bump a row, a multi-slot loot collapses into one row, rows fade one at a time. Minimum quality, price line, gold and currency rows, opacity, lifetime, row cap and size are settings. Move it in Edit Mode. Right click dismisses a row. | Off |
+| **Farm session HUD** | A small display of what this farming session earns per hour: gold, items, kills, and a goal meter. Starts on the first loot, pauses when you idle, and hands you a summary you can copy. | Off |
 
 ### Vendor
 
-| Feature | What it does | Tier |
+| Feature | What it does | Default |
 |---|---|---|
-| **Sell junk** | Sells every grey stack when a merchant window opens. A never-sell list of item IDs always wins. | Standard |
-| **Auto repair** | Repairs with your own gold, under a cap you set. Never touches guild funds. | Standard |
-| **Vendor summary** | One chat line with what was actually sold and repaired when you leave. | Standard |
-| **Bigger merchant window** | More rows and columns in Blizzard's own merchant window, from two by five up to five by eight. Paging and the wheel follow. | Standard |
-| **Clearer merchant costs** | Greys out only the currency you are short of, and lists what the merchant takes in the coin box, including item costs like Glowcaps. | Standard |
-| **Merchant filter** | A dropdown to show only mounts, pets, toys, appearances or recipes, owned or missing, laid out on pages of their own. | Standard |
+| **Sell junk** | Sells every grey stack when a merchant window opens. A never-sell list of item IDs always wins. | On |
+| **Auto repair** | Repairs with your own gold, under a cap you set. Never touches guild funds. | On |
+| **Vendor summary** | One chat line with what was actually sold and repaired when you leave. | On |
+| **Bigger merchant window** | More rows and columns in Blizzard's own merchant window, from two by five up to five by eight. Paging and the wheel follow. | On |
+| **Clearer merchant costs** | Greys out only the currency you are short of, and lists what the merchant takes in the coin box, including item costs like Glowcaps. | On |
+| **Merchant filter** | A dropdown to show only mounts, pets, toys, appearances or recipes, owned or missing, laid out on pages of their own. | On |
 
 ### Quest
 
-| Feature | What it does | Tier |
+| Feature | What it does | Default |
 |---|---|---|
-| **Auto gossip** | Picks the gossip option you would have picked: an NPC's only quest, a finished hand-in, the one shop or trainer option among small talk. Shift click any option to teach it a choice for that NPC. Never picks payments, spells or rewards. | Standard |
-| **Auto accept quests** | Accepts a quest as soon as its dialog opens, and works through every quest an NPC offers. Skips PvP and repeatable quests. | Manual |
-| **Auto turn in quests** | Completes a quest when there is nothing to choose. A reward choice always stays yours. | Manual |
+| **Auto gossip** | Picks the gossip option you would have picked: an NPC's only quest, a finished hand-in, the one shop or trainer option among small talk. Shift click any option to teach it a choice for that NPC. Never picks payments, spells or rewards. | Off |
+| **Auto accept quests** | Accepts a quest as soon as its dialog opens, and works through every quest an NPC offers. Skips PvP and repeatable quests. | Off |
+| **Auto turn in quests** | Completes a quest when there is nothing to choose. A reward choice always stays yours. | Off |
 
 ### Items
 
-| Feature | What it does | Tier |
+| Feature | What it does | Default |
 |---|---|---|
-| **Fill DELETE confirmation** | Types DELETE into the item deletion confirmation for you. You still click Yes. | Minimal |
+| **Fill DELETE confirmation** | Types DELETE into the item deletion confirmation for you. You still click Yes. | Off |
 
 ### Chat and social
 
-| Feature | What it does | Tier |
+| Feature | What it does | Default |
 |---|---|---|
-| **Clickable links in chat** | Web addresses become links that open a copy box. | Standard |
-| **Auto decline duels** | Declines every duel request without a popup. | Manual |
-| **Auto accept resurrection** | Accepts a player's resurrection out of combat. Choose where: battlegrounds, dungeons and raids, the open world. | Manual |
-| **Auto accept party invites** | Joins a group when a friend, Battle.net friend or guild member invites you. Anyone else still gets the popup. | Manual |
+| **Clickable links in chat** | Web addresses become links that open a copy box. | On |
+| **Auto decline duels** | Declines every duel request without a popup. | Off |
+| **Auto accept resurrection** | Accepts a player's resurrection out of combat. Choose where: battlegrounds, dungeons and raids, the open world. | Off |
+| **Auto accept party invites** | Joins a group when a friend, Battle.net friend or guild member invites you. Anyone else still gets the popup. | Off |
 
 ### Interface and camera
 
-| Feature | What it does | Tier |
+| Feature | What it does | Default |
 |---|---|---|
-| **ActionCam** | Camera profiles. Blizzard's Basic, On and Full, plus Refactor's **Immersive** (close, over the shoulder, tilting as it comes in, tuned for mouse and keyboard) **Controller: Ranged** and **Controller: Melee** (a gentle or a strong pull toward the target, no head sway, tuned for a gamepad), **Cinematic**, **Raider**, **Melee** and **Comfort**. Each profile names a camera distance and shoulder offset for where you are: indoors, in a city or inn, on a mount, in combat, talking to an NPC, or in a dungeon, raid, battleground or arena. Distances are absolute, so the camera never ends up inside your character, and a situation can leave the camera where you had it. Leaving a situation gives your own distance back. Save a copy of any profile, tune it on sliders, and share it as a string. | Full |
-| **Maximum camera distance** | Lets the camera zoom out further than the options menu allows. | Full |
-| **Screenshot on level up** | Takes a screenshot a moment after you level, so the effect is in frame. | Full |
+| **ActionCam** | Camera profiles. Blizzard's Basic, On and Full, plus Refactor's **Immersive** (close, over the shoulder, tilting as it comes in, tuned for mouse and keyboard) **Controller: Ranged** and **Controller: Melee** (a gentle or a strong pull toward the target, no head sway, tuned for a gamepad), **Cinematic**, **Raider**, **Melee** and **Comfort**. Each profile names a camera distance and shoulder offset for where you are: indoors, in a city or inn, on a mount, in combat, talking to an NPC, or in a dungeon, raid, battleground or arena. Distances are absolute, so the camera never ends up inside your character, and a situation can leave the camera where you had it. Leaving a situation gives your own distance back. Save a copy of any profile, tune it on sliders, and share it as a string. | Off |
+| **Maximum camera distance** | Lets the camera zoom out further than the options menu allows. | Off |
+| **Screenshot on level up** | Takes a screenshot a moment after you level, so the effect is in frame. | Off |
 
 ### Tooltips
 
-| Feature | What it does | Tier |
+| Feature | What it does | Default |
 |---|---|---|
-| **Rarity-coloured border** | Tints the tooltip border with the item's quality colour, on the main, linked and comparison tooltips. | Full |
-| **Tooltip anchor** | Moves the default tooltip to the cursor or a fixed screen point, with offsets. | Full |
-| **Hide the health bar** | Removes the green health bar under a unit tooltip. | Full |
+| **Rarity-coloured border** | Tints the tooltip border with the item's quality colour, on the main, linked and comparison tooltips. | On |
+| **Tooltip anchor** | Moves the default tooltip to the cursor or a fixed screen point, with offsets. | Off |
+| **Hide the health bar** | Removes the green health bar under a unit tooltip. | Off |
 
 ### Nameplates
 
-| Feature | What it does | Tier |
+| Feature | What it does | Default |
 |---|---|---|
-| **Quest progress on nameplates** | A ring that fills as the objective advances, an icon for kills, items or a skull for the last one. Choose the side, dim completed mobs, reduce animation. | Full |
+| **Quest progress on nameplates** | A ring that fills as the objective advances, an icon for kills, items or a skull for the last one. Choose the side, dim completed mobs, reduce animation. | On |
 
 ---
 
-## Presets
+## Defaults
 
-| Preset | Rule | Examples |
-|---|---|---|
-| **Minimal** | Removes clicks you never wanted. Nothing changes on screen. | Fast loot, fill DELETE confirmation |
-| **Standard** | Minimal, plus anything you can undo in the same session. | Sell junk, auto repair, auto gossip, merchant window |
-| **Full** | Standard, plus things that change what is on screen. | Loot feed, nameplate progress, ActionCam, tooltip border |
-
-Anything that decides on your behalf, such as accepting quests or invites, is in no preset. It has
-its own toggle and asks once before its first run. "No automation is on unless you turned it on"
-stays literally true.
+There is no setup screen. Features that only add information or save a click start on: fast
+loot, sell junk, auto repair, the vendor summary, the merchant window changes, clickable chat
+links, the rarity border and quest progress on nameplates. Anything that acts on your behalf,
+such as accepting quests or invites, or that changes the camera or how the screen looks, starts
+off. Every feature has its own toggle.
 
 ## Profiles and per-character settings
 

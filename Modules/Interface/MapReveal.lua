@@ -10,7 +10,7 @@ local MapReveal = R:RegisterModule({
     descriptionKey = "MAP_REVEAL_DESC", detailKey = "MAP_REVEAL_DETAIL",
     requires = { "WorldMapFrame", "hooksecurefunc", "C_Map.GetMapArtID", "C_Map.GetMapArtLayers",
         "GetBuildInfo" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = false,
 })
 
 local PIN_TEMPLATE = "MapExplorationPinTemplate"

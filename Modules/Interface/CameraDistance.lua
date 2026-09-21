@@ -8,7 +8,7 @@ local CameraDistance = R:RegisterModule({
     id = "interface.cameraDistance", category = "Interface", nameKey = "CAMERA_DISTANCE_NAME",
     descriptionKey = "CAMERA_DISTANCE_DESC", detailKey = "CAMERA_DISTANCE_DETAIL",
     requires = { "C_CVar.SetCVar", "C_CVar.GetCVarDefault" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = false,
 })
 
 local CVAR, OPTION, FALLBACK = "cameraDistanceMaxZoomFactor", "cameraMaxZoom", "1.9"
@@ -23,9 +23,17 @@ function CameraDistance:Apply()
     C_CVar.SetCVar(CVAR, string.format("%.2f", factor))
 end
 
+-- Every other setting's change lands here too, some of them once per step of a slider drag;
+-- a CVar write for each would be work for nothing.
+function CameraDistance:OnSettingsChanged(_, key)
+    if key == nil or key == OPTION then
+        self:Apply()
+    end
+end
+
 function CameraDistance:OnEnable()
     self:Apply()
-    R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.Apply, self)
+    R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.OnSettingsChanged, self)
 end
 
 function CameraDistance:OnDisable()

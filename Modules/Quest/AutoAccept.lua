@@ -17,7 +17,7 @@ local AutoAccept = R:RegisterModule({
         "UnitGUID", "C_QuestLog.IsRepeatableQuest", "C_QuestLog.GetNumQuestLogEntries",
         "C_QuestLog.GetMaxNumQuestsCanAccept", "C_GossipInfo.GetAvailableQuests",
         "C_GossipInfo.SelectAvailableQuest" },
-    tier = "manual", risk = "automation", defaultEnabled = false,
+    risk = "automation", defaultEnabled = false,
 })
 
 -- Offers opened at one NPC before the player takes over. More than this on a single unit is

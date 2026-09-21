@@ -15,7 +15,7 @@ local RarityBorder = R:RegisterModule({
         "Enum.TooltipDataType.Unit", "TooltipUtil.GetDisplayedUnit", "UnitIsPlayer", "UnitClassBase",
         "C_Item.GetItemQualityByID", "C_Item.GetItemQualityColor", "GameTooltip", "ItemRefTooltip",
         "ShoppingTooltip1", "ShoppingTooltip2" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = true,
 })
 
 local watched = {}

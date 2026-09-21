@@ -18,7 +18,7 @@ local ActionCam = R:RegisterModule({
     requires = { "ConsoleExec", "C_CVar.SetCVar", "C_CVar.GetCVarDefault", "StaticPopup_Hide",
         "CameraZoomIn", "CameraZoomOut", "GetCameraZoom", "IsPlayerInWorld", "IsInInstance", "IsIndoors",
         "IsResting", "IsMounted", "UnitOnTaxi", "UnitInVehicle", "InCombatLockdown" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = false,
 })
 
 -- Every test_camera CVar the installed client registers. A Blizzard preset is free to touch

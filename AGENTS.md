@@ -92,8 +92,8 @@ local AutoSell = R:RegisterModule({
     category  = "Vendor",
     requires  = { "C_Container.GetContainerItemInfo", "C_Container.UseContainerItem" },
     conflicts = { "LeatrixPlus.sellJunk" },
-    tier      = "standard",   -- minimal | standard | full | manual
     risk      = "safe",       -- safe | visible | automation
+    defaultEnabled = true,
 })
 
 function AutoSell:OnEnable()
@@ -107,7 +107,7 @@ end
 
 Rules that follow from it:
 
-- `tier` decides preset membership. `risk = "automation"` means the module is never in any preset, including Full, and requires a one-time confirmation dialog on first enable. See PRD 6.3.
+- There are no presets and no first-run screen. `defaultEnabled` is the whole default: on only for a module that adds information or saves a click without deciding anything for the player. `risk = "automation"` modules are always `defaultEnabled = false`.
 - Expensive events are registered when the module's context opens and dropped when it closes, not at enable. See PRD 9.4. A vendor module holds one handler while the player is questing.
 - `Broker:Subscribe(event, handler, self, throttle)` takes a throttle. Hot events must pass one.
 

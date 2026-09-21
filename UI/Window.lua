@@ -129,11 +129,6 @@ end
 -- through Inherit, so the checkbox always shows exactly what this character will do.
 function UI:SetModuleEnabled(module, enabled)
     if not Settings.account then return end
-    if enabled and module.risk == "automation" and not Settings:IsConfirmed(module.id) then
-        self:Refresh()
-        self:ConfirmAutomation(module, function() self:SetModuleEnabled(module, true) end)
-        return
-    end
     if self.mode == "account" then
         Settings:SetAccount(module.id, enabled)
         self:DropOverride(module)
@@ -449,8 +444,38 @@ function UI:OpenModule(id)
     self:SelectCategory(self:Category(module))
 end
 
+-- The settings blocks are part of the list now, so their own controls are re-read here
+-- rather than by a panel that is about to be shown.
+function UI:LoadControls()
+    self:LoadGeneral()
+    self:LoadDisplay()
+    self:LoadTooltips()
+    self:LoadCamera()
+    self:LoadVisibility()
+    self:RefreshNameplateOptions()
+end
+
+-- No option decides where anything in the list sits, so an option changing re-reads the
+-- controls and leaves the layout be. A slider writes its option on every step of a drag,
+-- and laying the whole list out for each step is what made dragging one stutter.
+function UI:OnSettingsChanged(_, key)
+    if key == nil or Settings.optionDefaults[key] == nil then
+        self:Refresh()
+        return
+    end
+    if not self.frame or not self.frame:IsShown() then return end
+    local panel = self.panels and self.panels[self.category]
+    if panel and panel:IsShown() then
+        if panel.Update then panel:Update() end
+    else
+        self:LoadControls()
+    end
+end
+
 function UI:Refresh()
-    if not self.frame then return end
+    -- A hidden window lays nothing out: every way of showing it refreshes it, and a slider
+    -- elsewhere, the Edit Mode companion's, saves on every step of a drag.
+    if not self.frame or not self.frame:IsShown() then return end
     self:RestorePosition()
     local query = self.search:GetText() or ""
     local panel = query == "" and self.panels and self.panels[self.category] or nil
@@ -476,14 +501,7 @@ function UI:Refresh()
         row.toggle:SetChecked(self:DisplayedValue(row.module))
         row.toggle:SetEnabled(Settings.account ~= nil and not row.module.unavailableReasonKey)
     end
-    -- The settings blocks are part of the list now, so their own controls are re-read here
-    -- rather than by a panel that is about to be shown.
-    self:LoadGeneral()
-    self:LoadDisplay()
-    self:LoadTooltips()
-    self:LoadCamera()
-    self:LoadVisibility()
-    self:RefreshNameplateOptions()
+    self:LoadControls()
     -- One block per category, headed by its name: the list carries the same structure as
     -- the sidebar, and a search result says which category each row came from.
     local count, offset, lastTop = 0, LIST_LEAD, LIST_LEAD
@@ -576,7 +594,6 @@ function UI:RefreshRow(row)
     -- account value while the game runs the override, so the row names it instead.
     local pinned = self.mode == "account" and Settings:GetOverride(module.id) ~= nil
     row.meta:SetText(reason and (module.state == "failed" and L.UI_FAILED_SHORT or L.UI_UNAVAILABLE_SHORT)
-        or module.state == "unconfirmed" and L.UI_STATE_UNCONFIRMED
         or pinned and L.UI_SCOPE_PINNED or "")
     Theme:Color(row.meta, reason and "TEXT_WARNING" or "TEXT_MUTED", true)
     row.undo:SetShown(self:IsModified(module))
@@ -829,7 +846,6 @@ function UI:Initialize()
         self.collapsing = nil
         self:SavePosition()
         self:HideDetails()
-        self.confirmFrame:Hide()
     end)
     Theme:Panel(frame)
     -- Only the main window gets it: a dialog is shorter than two bands and would come out
@@ -929,8 +945,7 @@ function UI:Initialize()
     self:BuildConflicts(frame)
     self:BuildDiagnostics(frame)
     self:BuildChangelog(frame)
-    self:BuildConfirm(frame)
-    R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.Refresh, self)
+    R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.OnSettingsChanged, self)
     R.Broker:Subscribe("REFACTOR_MODULE_CHANGED", self.Refresh, self)
     -- The two events that change how many pixels a UI unit is worth, and so how tall a
     -- hairline has to be to survive rounding.

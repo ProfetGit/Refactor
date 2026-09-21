@@ -8,7 +8,7 @@ local ScreenshotLevelUp = R:RegisterModule({
     id = "interface.screenshotLevelUp", category = "Interface", nameKey = "SCREENSHOT_NAME",
     descriptionKey = "SCREENSHOT_DESC", detailKey = "SCREENSHOT_DETAIL",
     requires = { "Screenshot" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = false,
 })
 
 local DELAY = 1.5

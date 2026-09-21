@@ -8,7 +8,7 @@ local Anchor = R:RegisterModule({
     id = "tooltips.anchor", category = "Tooltips", nameKey = "TOOLTIP_ANCHOR_NAME",
     descriptionKey = "TOOLTIP_ANCHOR_DESC", detailKey = "TOOLTIP_ANCHOR_DETAIL",
     requires = { "hooksecurefunc", "GameTooltip_SetDefaultAnchor", "UIParent" },
-    tier = "full", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = false,
 })
 
 -- ANCHOR_CURSOR takes no offset, the other two do. These are the only cursor anchor

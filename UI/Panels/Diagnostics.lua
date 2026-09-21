@@ -5,7 +5,6 @@ local Theme = R.Theme
 local STATE_KEYS = {
     enabled = "UI_STATE_ENABLED", disabled = "UI_STATE_DISABLED",
     unavailable = "UI_STATE_UNAVAILABLE", failed = "UI_STATE_FAILED",
-    unconfirmed = "UI_STATE_UNCONFIRMED",
 }
 
 local ROW_HEIGHT, LIST_HEIGHT = 22, 250

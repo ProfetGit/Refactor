@@ -8,7 +8,7 @@ local DeclineDuels = R:RegisterModule({
     id = "social.declineDuels", category = "Social", nameKey = "SOCIAL_DUEL_NAME",
     descriptionKey = "SOCIAL_DUEL_DESC", detailKey = "SOCIAL_DUEL_DETAIL",
     requires = { "CancelDuel", "StaticPopup_Hide" },
-    tier = "manual", risk = "automation", defaultEnabled = false,
+    risk = "automation", defaultEnabled = false,
 })
 
 function DeclineDuels:OnRequest()

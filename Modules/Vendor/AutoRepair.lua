@@ -11,7 +11,7 @@ local AutoRepair = R:RegisterModule({
     descriptionKey = "AUTO_REPAIR_DESC", detailKey = "AUTO_REPAIR_DETAIL",
     requires = { "InCombatLockdown", "MerchantFrame", "CanMerchantRepair",
         "GetRepairAllCost", "GetMoney", "RepairAllItems" },
-    tier = "standard", risk = "safe", defaultEnabled = false,
+    risk = "safe", defaultEnabled = true,
 })
 
 function AutoRepair:Stop()

@@ -8,7 +8,7 @@ local DeleteFill = R:RegisterModule({
     id = "items.deleteFill", category = "Items", nameKey = "DELETE_FILL_NAME",
     descriptionKey = "DELETE_FILL_DESC", detailKey = "DELETE_FILL_DETAIL",
     requires = { "InCombatLockdown", "StaticPopup_FindVisible", "DELETE_ITEM_CONFIRM_STRING" },
-    tier = "minimal", risk = "safe", defaultEnabled = false,
+    risk = "safe", defaultEnabled = false,
 })
 
 function DeleteFill:Fill()

@@ -151,7 +151,6 @@ function R:InitSavedVariables(guid)
     probe.atLogin = shapeOf(_G.RefactorDB)
     probe.atLoginChar = shapeOf(_G.RefactorCharDB)
     probe.clientGave = type(_G.RefactorDB) == "table"
-    probe.firstRun = tostring(type(_G.RefactorDB) == "table" and _G.RefactorDB.firstRun or nil)
     -- Forever hands back nothing (see Restore.lua). Its copy of the last session is used
     -- only then, so a client that restores properly never reaches this.
     if type(_G.RefactorDB) ~= "table" then

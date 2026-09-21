@@ -28,7 +28,6 @@ Core/Settings.lua
 Core/Pools.lua
 Core/Fade.lua
 Core/Safety.lua
-Core/Presets.lua
 
 Locales/Modules.enUS.lua
 Locales/UI.enUS.lua
@@ -54,8 +53,6 @@ UI/Panels/Profiles.lua
 UI/Panels/Conflicts.lua
 UI/Panels/Diagnostics.lua
 UI/Panels/Changelog.lua
-UI/Confirm.lua
-UI/FirstRun.lua
 UI/Minimap.lua
 UI/LootFeed.lua
 UI/FarmHud.lua

@@ -37,7 +37,7 @@ local Filter = R:RegisterModule({
         "C_TransmogCollection.PlayerHasTransmogByItemInfo", "C_TooltipInfo.GetMerchantItem", "ITEM_SPELL_KNOWN",
         "Enum.ItemClass.Miscellaneous", "Enum.ItemClass.Recipe", "Enum.ItemClass.Armor", "Enum.ItemClass.Weapon",
         "Enum.ItemMiscellaneousSubclass.CompanionPet" },
-    tier = "standard", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = true,
 })
 
 function Filter:OnShow()

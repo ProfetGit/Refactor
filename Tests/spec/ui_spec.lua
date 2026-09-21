@@ -190,6 +190,19 @@ describe("window chrome", function()
         end
     end)
 
+    it("lays nothing out while hidden and catches up when shown", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        local row = UI.rows[1]
+        UI:Toggle()
+        UI.mode = "character"
+        R.Settings:SetOverride(row.module.id, not UI:DisplayedValue(row.module))
+        assert.is_not.equal(UI:DisplayedValue(row.module), row.toggle:GetChecked())
+        UI:Toggle()
+        assert.equal(UI:DisplayedValue(row.module), row.toggle:GetChecked())
+    end)
+
     it("shows undo only while the value differs from what it would inherit", function()
         local _, R = loaded()
         local UI = R.UI
@@ -197,7 +210,7 @@ describe("window chrome", function()
         UI.mode = "character"
         local row = UI.rows[1]
         assert.is_false(row.undo:IsShown())
-        R.Settings:SetOverride(row.module.id, true)
+        R.Settings:SetOverride(row.module.id, not R.Settings:GetInherited(row.module.id))
         UI:Refresh()
         assert.is_true(row.undo:IsShown())
         row.undo:GetScript("OnClick")(row.undo)
@@ -410,6 +423,30 @@ describe("window chrome", function()
             assert.equal(high, shown)
             Settings:SetOption(spec.key, Settings.optionDefaults[spec.key])
         end
+    end)
+
+    it("re-reads controls on a slider step without laying the list out or reconciling", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        local opacity
+        for _, slider in ipairs(UI.optionSliders) do
+            if slider.spec.key == "farmOpacity" then opacity = slider end
+        end
+        local placed, reconciled = 0, 0
+        local place, reconcile = UI.Place, R.Registry.ReconcileAll
+        UI.Place = function(...) placed = placed + 1; return place(...) end
+        R.Registry.ReconcileAll = function(...) reconciled = reconciled + 1; return reconcile(...) end
+        opacity.slider:GetScript("OnValueChanged")(opacity.slider, 50)
+        assert.equal(0.5, Settings:GetOption("farmOpacity"))
+        assert.is_true(opacity.undo:IsShown())
+        assert.equal(0, placed)
+        assert.equal(0, reconciled)
+        -- A feature switched on or off still lays the list out and reconciles.
+        R.Settings:SetAccount(UI.rows[1].module.id, true)
+        assert.is_true(placed > 0)
+        assert.equal(1, reconciled)
+        UI.Place, R.Registry.ReconcileAll = place, reconcile
     end)
 
     it("writes a dragged slider through, and undoes it back to the default", function()
@@ -684,7 +721,7 @@ describe("editing scope", function()
         UI:ResetModule(module)
         assert.is_nil(R.Settings:GetOverride(module.id))
         assert.is_nil(R.Settings.account.modules[module.id])
-        assert.is_false(R.Settings:Get(module.id))
+        assert.equal(R.Settings.defaults[module.id] == true, R.Settings:Get(module.id))
     end)
 
     it("names a character override while the account layer is on screen", function()

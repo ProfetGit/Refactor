@@ -26,8 +26,12 @@ function bootstrap:OnLogin()
     local guid = R.Capabilities:Resolve("UnitGUID")
     R:InitSavedVariables(guid and guid("player") or nil)
     -- Reconciling on every settings change is what makes the three-state toggle live.
-    function R.Settings:OnChanged()
-        R.Registry:ReconcileAll()
+    -- An option is a value inside a feature, never whether one is on, and a slider writes
+    -- its option on every step of a drag.
+    function R.Settings:OnChanged(id)
+        if id == nil or self.optionDefaults[id] == nil then
+            R.Registry:ReconcileAll()
+        end
         if R.Integrations and R.Integrations.ApplyPriceOptions then
             R.Integrations:ApplyPriceOptions()
         end
@@ -37,7 +41,6 @@ function bootstrap:OnLogin()
         R.Integrations:RegisterPriceProviders()
     end
     R.Registry:ReconcileAll()
-    R.UI:ShowFirstRun()
     -- Restore.lua is dead weight the moment the client does its own job again. See the
     -- removal list under Temporary workarounds in docs/ROADMAP.md.
     if R.loadProbe.clientGave and R.restoreAccount ~= nil then

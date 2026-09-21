@@ -18,7 +18,6 @@ end
 
 local function enable(env, path, id)
     env:Load(path)
-    env.R.Settings:Confirm(id, true)
     assert.is_true(env.R.Registry:Enable(id), id .. " did not enable: "
         .. tostring(env.R.moduleByID[id].failure) .. " " .. table.concat(env.R.moduleByID[id].missing or {}, ","))
     return env.R.moduleByID[id]
@@ -1262,6 +1261,13 @@ describe("M4 interface, mail, vendor", function()
         assert.is_false(env.R.Settings:SetOption("cameraMaxZoom", 3))
         assert.is_false(env.R.Settings:SetOption("cameraMaxZoom", 0.5))
         assert.equal("1.50", env.cvars.cameraDistanceMaxZoomFactor)
+        -- Another setting changing leaves the CVar unwritten.
+        local writes = 0
+        local set = env.C_CVar.SetCVar
+        env.C_CVar.SetCVar = function(...) writes = writes + 1; set(...) end
+        assert.is_true(env.R.Settings:SetOption("farmOpacity", 0.5))
+        assert.equal(0, writes)
+        env.C_CVar.SetCVar = set
         env.R.Registry:Disable(camera)
         assert.equal("1.9", env.cvars.cameraDistanceMaxZoomFactor)
         -- Off, the option moving changes nothing until the feature is on again.

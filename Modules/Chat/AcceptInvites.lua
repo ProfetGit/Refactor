@@ -10,7 +10,7 @@ local AcceptInvites = R:RegisterModule({
     descriptionKey = "SOCIAL_INVITE_DESC", detailKey = "SOCIAL_INVITE_DETAIL",
     requires = { "AcceptGroup", "StaticPopup_Hide", "StaticPopup_FindVisible", "C_FriendList.IsFriend",
         "C_BattleNet.GetAccountInfoByGUID", "IsGuildMember" },
-    tier = "manual", risk = "automation", defaultEnabled = false,
+    risk = "automation", defaultEnabled = false,
 })
 
 function AcceptInvites:IsTrusted(name, guid)

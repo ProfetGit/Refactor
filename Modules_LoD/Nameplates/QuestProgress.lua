@@ -15,9 +15,8 @@ local QuestProgress = R:RegisterModule({
     detailKey = "NAMEPLATE_QUEST_DETAIL",
     requires = { "C_NamePlate.GetNamePlateForUnit", "UnitGUID" },
     conflicts = { "Questie.nameplateObjectives", "Plater.questProgress" },
-    tier = "full",
     risk = "visible",
-    defaultEnabled = false,
+    defaultEnabled = true,
 })
 
 local PLATE_BUDGET, POOL_SIZE, ANCHOR_GAP = 4, 20, 6

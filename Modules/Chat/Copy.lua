@@ -12,7 +12,7 @@ local Copy = R:RegisterModule({
     id = "chat.copy", category = "Chat", nameKey = "CHAT_COPY_NAME",
     descriptionKey = "CHAT_COPY_DESC", detailKey = "CHAT_COPY_DETAIL",
     requires = { "ChatFrame1" },
-    tier = "standard", risk = "visible", defaultEnabled = false,
+    risk = "visible", defaultEnabled = true,
 })
 
 local WINDOW_NAME, MAX_WINDOWS = "ChatFrame", 10

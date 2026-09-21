@@ -7,7 +7,7 @@ local _, R = ...
 local Summary = R:RegisterModule({
     id = "vendor.summary", category = "Vendor", nameKey = "VENDOR_SUMMARY_NAME",
     descriptionKey = "VENDOR_SUMMARY_DESC", detailKey = "VENDOR_SUMMARY_DETAIL", requires = {},
-    tier = "standard", risk = "safe", defaultEnabled = false,
+    risk = "safe", defaultEnabled = true,
 })
 
 local function moneyText(amount)

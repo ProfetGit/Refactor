@@ -225,10 +225,8 @@ function Settings:Init(account, character, guid)
             account.assignments[identity] = nil
         end
     end
-    -- Confirmations are account wide: an automation feature is explained once, not once
-    -- per character (PRD 6.3).
-    account.confirmed = sanitizeValues(account.confirmed)
-    account.firstRun = type(account.firstRun) == "string" and account.firstRun or nil
+    account.confirmed = nil
+    account.firstRun = nil
     account.options = type(account.options) == "table" and account.options or {}
     for key, default in pairs(OPTION_DEFAULTS) do
         if not validOption(key, account.options[key]) then
@@ -310,29 +308,6 @@ function Settings:SetOverride(id, value)
         return false
     end
     self.character.overrides[id] = value
-    self:Changed(id)
-    return true
-end
-
-function Settings:IsFirstRun()
-    return self.account ~= nil and self.account.firstRun == nil
-end
-
-function Settings:MarkFirstRunDone(choice)
-    if self.account then
-        self.account.firstRun = type(choice) == "string" and choice or "none"
-    end
-end
-
-function Settings:IsConfirmed(id)
-    return self.account ~= nil and self.account.confirmed[id] == true
-end
-
-function Settings:Confirm(id, confirmed)
-    if not self.account or not R.Codec:ValidID(id) then
-        return false
-    end
-    self.account.confirmed[id] = confirmed == true or nil
     self:Changed(id)
     return true
 end
