@@ -836,7 +836,9 @@ function UI:Initialize()
     -- shaded end to end.
     Theme:Vignette(frame, Theme.panelInset)
     local close = Theme:CloseButton(frame, function() frame:Hide() end)
-    close:SetPoint("TOPRIGHT", -14, -14)
+    -- On the border's top right corner, half of it outside the window, as Blizzard's panels
+    -- carry it. Offsets are to the button's centre and match LibRefactorUI's window.
+    close:SetPoint("CENTER", frame, "TOPRIGHT", -10, -10)
     -- The one control that sits inside the shade and must not be dimmed by it.
     close:SetFrameLevel(frame:GetFrameLevel() + Theme.vignetteLevel + 1)
     -- Search sits at the head of the sidebar column, above the categories it filters.
@@ -937,6 +939,22 @@ function UI:Initialize()
     frame:Hide()
     self:CreateMinimapButton()
     self:RegisterSettings()
+    self:RegisterSideTab()
+end
+
+-- Gear Refactor embeds LibRefactorUI; with it loaded the two windows share a tab strip on
+-- the right edge, Refactor on top. Without Gear Refactor there is no library and no strip.
+function UI:RegisterSideTab()
+    local shared = LibStub("LibRefactorUI-1.0", true)
+    if not shared or not shared.RegisterSideTab then return end
+    shared:RegisterSideTab("Refactor", {
+        title = L.UI_TITLE, icon = Theme.icons.app, order = 10,
+        open = function()
+            if not self.frame:IsShown() then self:Toggle() end
+            return self.frame
+        end,
+    })
+    self.frame:HookScript("OnShow", function(frame) shared:AttachSideTabs(frame, "Refactor") end)
 end
 
 function UI:RegisterSettings()
