@@ -1511,7 +1511,7 @@ function Theme:EditModeSelection(parent, labelText)
     return selection
 end
 
-local MINIMAP_ICON_NUDGE_X, MINIMAP_ICON_NUDGE_Y = 0.5, 0.5
+local MINIMAP_ICON_NUDGE_X, MINIMAP_ICON_NUDGE_Y = 0, 0
 
 -- Refactor's own button, parented to the minimap but never altering it.
 function Theme:MinimapButton(parent, size, inset)
@@ -1528,7 +1528,7 @@ function Theme:MinimapButton(parent, size, inset)
     button.backdrop:SetPoint("TOPLEFT", inset, -inset)
     button.backdrop:SetPoint("BOTTOMRIGHT", -inset, inset)
     button.icon = self:Texture(button, "minimapIcon", "ARTWORK")
-    -- The mark is not centred in its own texture, so it is nudged back into the ring.
+    -- The mark sits centred at zero nudge (checked in game); the offset stays for art that is not.
     button.icon:SetPoint("TOPLEFT", inset + MINIMAP_ICON_NUDGE_X, -inset + MINIMAP_ICON_NUDGE_Y)
     button.icon:SetPoint("BOTTOMRIGHT", -inset + MINIMAP_ICON_NUDGE_X, inset + MINIMAP_ICON_NUDGE_Y)
     -- Match the Retail border used by BugSack's LibDBIcon; the old path missed a hyphen.
