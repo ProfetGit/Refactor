@@ -270,7 +270,8 @@ function R.UI:CreateLootFeed(owner)
     dialog.title:SetPoint("TOPRIGHT", -DIALOG_PADDING, -14)
     dialog.title:SetJustifyH("CENTER")
     dialog.close = Theme:CloseButton(dialog, function() dialog:Hide() end)
-    dialog.close:SetPoint("TOPRIGHT", -6, -6)
+    -- Flush on the corner, where Blizzard's Edit Mode dialogs anchor theirs.
+    dialog.close:SetPoint("TOPRIGHT")
     dialog:Hide()
     host.dialog = dialog
 

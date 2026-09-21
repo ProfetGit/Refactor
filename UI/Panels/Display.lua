@@ -127,8 +127,11 @@ end
 function UI:OptionSlider(block, spec, y)
     local slider = Theme:Slider(block, SLIDER_WIDTH, spec.minimum, spec.maximum, spec.step,
         function(value)
-            Settings:SetOption(spec.key, spec.store and spec.store(value) or value)
-            self:LoadDisplay()
+            -- A write that lands reloads the panel through the settings event; only a
+            -- refused one has to put the slider back itself.
+            if not Settings:SetOption(spec.key, spec.store and spec.store(value) or value) then
+                self:LoadDisplay()
+            end
         end)
     slider:SetPoint("TOPLEFT", 0, y)
     slider:SetLabel(L[spec.labelKey], spec.formatter)

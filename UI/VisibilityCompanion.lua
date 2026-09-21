@@ -7,8 +7,6 @@ local DROPDOWN_STEP, NOTE_HEIGHT, LABEL_STEP = 36, 44, 20
 local BOX_WIDTH, BOX_STEP, BOX_COLUMNS = 190, 26, 2
 local SLIDER_STEP = LibStub("LibRefactorTheme-1.0").sliderRowHeight + 6
 local TAB_GAP, TAB_ROW = 4, 30
--- UIPanelCloseButton is 32 px anchored on the corner, so its X sits 16 px in on each axis.
-local CLOSE_CENTER = 16
 -- A system stands for at most the four chat elements, so four tabs are built and shown as needed.
 local MAX_TABS = 4
 
@@ -81,10 +79,11 @@ function Companion:Build()
     Theme:Dialog(frame)
     self.title = Theme:Text(frame, "", "body", "TEXT_TITLE")
     self.title:SetPoint("TOPLEFT", PAD, -PAD)
-    -- Over the corner, its centre where Blizzard's own close button puts its X, so the two
-    -- dialogs side by side close the same way.
+    -- Flush on the corner, over the border, where EditModeSystemSettingsDialog anchors its
+    -- own UIPanelCloseButton (EditModeDialogs.xml, 12.1.0), so the two dialogs side by side
+    -- close the same way.
     local close = Theme:CloseButton(frame, function() self:Close() end)
-    close:SetPoint("CENTER", frame, "TOPRIGHT", -CLOSE_CENTER, -CLOSE_CENTER)
+    close:SetPoint("TOPRIGHT")
     local y = -PAD - 22
 
     self.tabs = {}
