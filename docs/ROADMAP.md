@@ -243,6 +243,88 @@ the cursor leaves a unit, stands in for `mouseover` in case the client clears it
 click. One limitation is inherent and now documented in the feature text: clicking a
 player you already have selected fires no event and so sends nothing.
 
+Added to M4 on 20 Sep 2026 at the owner's request, and to PRD 7.4: place new abilities, as
+`interface.placeNewSpells`. Tier manual, risk automation, in no preset, off by default.
+
+Retail does this itself. `AutoPushSpellToActionBar` is a per-character CVar, default 1, and the
+placement happens client side with no Lua involved, so on Retail this module is the "native, so not
+built" case. On Forever it does not happen, which is the only reason the module exists. Check the
+CVar before assuming a bug: `/dump C_CVar.GetCVar("AutoPushSpellToActionBar")`.
+
+What is not settled by source: no Blizzard Lua anywhere places an action into a slot except from a
+drag or a click on an action button, and the New Player Experience points the player at the
+spellbook rather than placing for them. So whether `C_Spell.PickupSpell` and
+`C_ActionBar.PutActionInSlot` work from an event handler in addon code, on 12.1 or on Forever, is a
+question only the client answers. Both are documented `SecretArguments = "AllowedWhenUntainted"`,
+which is about secret argument values rather than about who may call, but a spellID that arrives as
+a secret value would fail the same way. The module assumes nothing: it checks the slot actually
+filled afterwards and reports a refusal once rather than retrying.
+
+Free slots are read from the client's own bar frames, `MainActionBar` and the seven multibars,
+button by button, so the slot ids stay right on a paged main bar and a bar showing six buttons owns
+six slots. Bars drawn by Bartender4, Dominos or ElvUI are not those frames: the module sees no bars
+at all and says so rather than guessing at slot numbers.
+
+Added to M4 on 20 Sep 2026 at the owner's request, and to PRD 7.4: zone levels on the map, as
+`interface.mapZoneLevels`. Tier full, risk visible, off by default.
+
+Retail draws this itself: `AreaLabelDataProvider.lua` appends "(1-10)" to the hovered zone's name in
+the quest difficulty colour, so on 12.1 this is the "native, so not built" case. Forever's map draws
+the name alone, and `C_Map.GetMapLevels` returns 0, 0, 0, 0 there (dump, 20 Sep 2026), so no API has
+the data. The module post-hooks Blizzard's own label frame, found by shape among the map's data
+providers, and writes the range in a font string of its own beside the name, from a table keyed by
+the zone name the label shows. The table holds the original zones' ranges as listed for the Classic
+client, unverified on Forever, plus Zephras Isle (1-12, Blizzard's panel recap) and Riverglades
+(35-45, the wiki infobox, matching Blizzard's "mid-30s to mid-40s"). Mount Hyjal and Shen'dralas
+have no published range anywhere, wowhead's Forever data shows them blank, so they stay out until
+one exists. Wherever the client does answer, the module clears its text, so it is inert on Retail.
+Forever's map IDs are unprobed, which is why the key is the name and not the ID.
+
+Seen working on Forever 1.60.1.69913 on 20 Sep 2026: the label hook resolved, and Burning Steppes
+read "(50-58)" in red beside the name at a low level.
+
+Added to M4 on 20 Sep 2026 at the owner's request, and to PRD 7.4: reveal the map, as
+`interface.mapReveal`. Tier full, risk visible, off by default.
+
+The client hands addons only the overlays a character has explored
+(`C_MapExplorationInfo.GetExploredMapTextures`); the unexplored ones exist only in Blizzard's
+WorldMapOverlay and WorldMapOverlayTile tables. `Tools/map-overlays.py` turns wago.tools' CSV
+export of those tables for one build into `Data/MapOverlays.lua`, keyed by map art ID, and the
+module is unavailable on a client whose interface number differs from the data's, because
+another build's art IDs would put the wrong art on the wrong map. Drawing: one Refactor frame
+the size of the map canvas, one level under Blizzard's exploration pin, holding the same tiles
+Blizzard would draw, greyed and dimmed through a theme token; the explored ones Blizzard paints
+over it at full colour, so nothing is diffed. Redraws ride on post-hooks of the pin's own refresh,
+clear and alpha, so the module polls nothing and appears with the map's own fade-in. Rule 12
+reading: nothing of Blizzard's is restyled or moved; Refactor adds its own frame under Blizzard's
+layer, the way map addons add pins. Without a generated data file the module reads unavailable.
+
+Added to M4 on 20 Sep 2026 at the owner's request, and to PRD 7.8: What's new, a page under
+Tools that shows the changelog, also reached by `/refactor changelog`. `Tools/changelog.lua`
+turns `CHANGELOG.md` into `Locales/Changelog.enUS.lua` through `make changelog`, so the text is
+written once, and `Tests/spec/changelog_spec.lua` fails while the generated file is behind.
+Nothing is parsed in game: the client cannot open a markdown file, and a table does the job.
+Generated for Forever 1.60.1.69913 on 20 Sep 2026: 572 overlays on 45 maps. Every live map's
+overlays carry flag 4 in that build and only superseded art carries 0, so the flag is not a
+filter; art no map references is dropped instead.
+
+Added to M4 on 20 Sep 2026 at the owner's request, and to PRD 7.5: update notice, as
+`social.updateNotice`. Tier standard, risk safe, off by default.
+
+An addon cannot look online, so the only way to learn that a newer Refactor exists is from
+another copy of it. The module is the idiom DBM, BigWigs and WeakAuras use. Ten seconds after
+enable it sends its version to the guild and to the group it is in, on the addon message
+channel players never see, again on joining a group, and it listens for the same message from
+others. Hearing a newer version prints one chat line per session per version. Hearing an older
+one answers with its own after a one to four second jitter, dropped if a copy at least as new
+answers first, so a guild of fifty on one build sends about one answer per login, not fifty.
+Sends on one channel are at least five seconds apart. The version is the TOC's, read through
+`C_AddOns.GetAddOnMetadata` and reduced to major.minor.patch; a copy whose version does not
+parse, a packager token say, neither speaks nor compares. It is a notice only: nothing is
+downloaded, and the line does not yet say where to get the update, because no download page
+exists. The limitation is inherent: with nobody nearby on a newer build, nothing is said.
+`/refactor update` reports what has been seen and asks again.
+
 Status 18 Sep 2026: every deliverable above is written and specced headless except the
 native ones listed. Manual checklist for the in-game pass, none of it done yet:
 
@@ -296,11 +378,26 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   its quest; a dungeon NPC is left alone until taught; the flagged single option is still
   skipped by the client alone, once, with no double selection
 - Chat link click opens the copy box; duel declined; resurrection accepted out of combat
+- Copy chat: the button sits in the top right of every chat window, dim until the mouse is on it,
+  and does not cover a line being read. Click it after a fight with loot, a whisper and an item
+  link: the box holds those lines oldest first, with the item link as its bracketed name, no icon
+  escapes and no colour codes, and Ctrl C pastes them outside the game. A second chat tab copies
+  its own text and not the first one's. With the feature off, no button is left on any window. With UI
+  element visibility on, the Chat buttons group's rule moves the Copy button exactly as it moves
+  Blizzard's chat buttons, hovering the Copy button itself reveals the group, and turning copy chat off
+  while the group is faded leaves nothing dimmed behind
 - Resurrection areas: with only battlegrounds ticked, a res in a dungeon and one in the
   open world still show the popup and one inside a battleground is taken
 - A friend's invite is accepted with no popup left on screen and no decline afterwards;
   a stranger's invite still shows the normal popup
 - Camera CVars set on enable and restored on disable; screenshot 1.5 s after level up
+- Maximum camera distance: the slider at 2.6 zooms out as far as it did before it existed, dragging
+  it to 1.0 pulls the camera in while the feature stays on, and
+  `/dump C_CVar.GetCVar("cameraDistanceMaxZoomFactor")` follows the slider without a reload. Off, it
+  reads 1.9 again
+- Class border: hovering a player of each of two classes tints the tooltip border with that class
+  colour and the colour clears when the tooltip does; a mob, an NPC and a totem leave it white; with
+  the option off, an item still tints the border and a player does not
 - ActionCam profiles: with Immersive on, `/dump C_CVar.GetCVar("test_cameraOverShoulder")`
   reads 0.6 outdoors, 0 the moment you step into a building, 0.3 in an inn, 0 mounted,
   0.9 in combat and 0.8 with a gossip open, and `CameraKeepCharacterCentered` reads 0;
@@ -345,6 +442,41 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   zero target changes means the click never moved the selection, zero modified changes
   means the modifier was not read at that instant, and a CURSOR verdict means neither
   `mouseover` nor the remembered hover GUID matched the new target
+- Place new abilities: on Forever, `/dump C_CVar.GetCVar("AutoPushSpellToActionBar")` first, to be
+  sure the client is not meant to be doing this itself. Then learn an ability with a gap on bar 1:
+  it lands in the gap, one chat line names the bar, and nothing else on the bars moved. Learn one
+  with bar 1 full: it goes to the next bar that is on screen. Hide a bar with free slots and learn
+  another: the hidden bar is skipped. Fill every visible bar and learn one: nothing is placed and
+  `/refactor spelltest` says every slot is taken. Learn one in combat: it lands when the fight ends.
+  Hold the pause modifier as you learn: nothing is placed, and it does not arrive later. Learn a
+  passive: nothing happens. If nothing is ever placed, `/refactor spelltest` separates the causes,
+  and a BLOCKED verdict with an entry in `/refactor errors` means the client refuses the call from
+  addon code, which ends the feature on that client
+- Zone levels on the map: on Forever at a low level, open the map, go up to Kalimdor and hover
+  Durotar: "(1-10)" beside the name, yellow. Hover Ashenvale: red. Hover Orgrimmar and a subzone on
+  the Durotar map: nothing. Level up with the map open on the same zone: the colour changes without
+  the mouse moving. Off again: no text beside any name, and nothing left after a reload. On Retail:
+  nothing of ours draws and Blizzard's own range stays. A "failed" state in Diagnostics naming the
+  zone label means Forever keeps the label somewhere other than the map's data providers
+- Reveal the map: on Forever, generate the data for the installed build first
+  (`python3 Tools/map-overlays.py --build 1.60.1.69913 --interface 16001 --download`), then open
+  Durotar: the unexplored parts are drawn dim and grey, the explored ones as before, and the
+  borders between them line up with no seam or offset; zoom in and out and the dim art scales with
+  the map; walk into a new subzone with the map open and it turns to full colour; a continent map
+  shows dim zone shapes; a dungeon map draws nothing extra; opening the map shows no dim layer
+  before the map itself fades in; off again, the map is Blizzard's. Unavailable with the data
+  message means the script has not run for this build
+- What's new: opens from Tools and from `/refactor changelog`; every version heading and entry of
+  CHANGELOG.md reads in full, wrapped inside the page with bullets set in under a copper square;
+  the page scrolls to its last line; the bar and the sidebar behave as on Diagnostics; nothing
+  in `/refactor errors`
+- Update notice: two characters in one guild, one with the TOC version bumped. Log the older
+  one in: within about fifteen seconds one chat line names the newer version and the
+  character it was seen on, and `/refactor update` repeats it. Log in again: the line appears
+  once more, and only once. Party the two up: nothing new is said, both already know. With
+  equal versions nothing is said either way. No chat window shows any of it as text, and
+  `/refactor errors` stays empty. On Forever, check first that `C_ChatInfo.SendAddonMessage`
+  exists, or the feature reads unavailable and names it
 - Conflict panel with Leatrix Plus installed (carried from M3)
 
 Exit criteria:

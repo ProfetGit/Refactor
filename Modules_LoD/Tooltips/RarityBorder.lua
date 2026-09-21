@@ -1,6 +1,8 @@
 --- @module tooltips.rarityBorder
---- Purpose: tint the tooltip border with the shown item's quality colour, and untint on clear.
---- Requires: TooltipDataProcessor.AddTooltipPostCall, Enum.TooltipDataType.Item, C_Item.GetItemQualityByID,
+--- Purpose: tint the tooltip border with the shown item's quality colour, or a hovered player's class
+--- colour, and untint on clear.
+--- Requires: TooltipDataProcessor.AddTooltipPostCall, Enum.TooltipDataType.Item, Enum.TooltipDataType.Unit,
+---     TooltipUtil.GetDisplayedUnit, UnitIsPlayer, UnitClassBase, C_Item.GetItemQualityByID,
 ---     C_Item.GetItemQualityColor, GameTooltip, ItemRefTooltip, ShoppingTooltip1, ShoppingTooltip2
 --- Events: GET_ITEM_INFO_RECEIVED (contextual, only while a quality lookup is pending)
 --- Hot: yes, see RarityBorder_Data.lua
@@ -10,6 +12,7 @@ local RarityBorder = R:RegisterModule({
     id = "tooltips.rarityBorder", category = "Tooltips", nameKey = "TOOLTIP_BORDER_NAME",
     descriptionKey = "TOOLTIP_BORDER_DESC", detailKey = "TOOLTIP_BORDER_DETAIL",
     requires = { "TooltipDataProcessor.AddTooltipPostCall", "Enum.TooltipDataType.Item",
+        "Enum.TooltipDataType.Unit", "TooltipUtil.GetDisplayedUnit", "UnitIsPlayer", "UnitClassBase",
         "C_Item.GetItemQualityByID", "C_Item.GetItemQualityColor", "GameTooltip", "ItemRefTooltip",
         "ShoppingTooltip1", "ShoppingTooltip2" },
     tier = "full", risk = "visible", defaultEnabled = false,
@@ -67,6 +70,26 @@ function RarityBorder:OnItem(tooltip, data)
     Border:Tint(tooltip, quality)
 end
 
+-- A unit tooltip carries a GUID, not a unit; the client's own helper turns it back into a
+-- token. Only players are coloured: a mob's class is not something the rest of the UI
+-- colours, and the border staying white is how you tell one from a player.
+function RarityBorder:OnUnit(tooltip)
+    if self.state ~= "enabled" or not watched[tooltip] then
+        return
+    end
+    if R.Settings:GetOption("tooltipClassBorder") ~= true then
+        return
+    end
+    local _, unit = TooltipUtil.GetDisplayedUnit(tooltip)
+    if unit == nil or not UnitIsPlayer(unit) then
+        return
+    end
+    local classFile = UnitClassBase(unit)
+    if type(classFile) == "string" then
+        Border:TintClass(tooltip, classFile)
+    end
+end
+
 function RarityBorder:OnEnable()
     Border:LoadColors()
     self:Watch(GameTooltip)
@@ -77,6 +100,9 @@ function RarityBorder:OnEnable()
         self.installed = true
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
             R:SafeCall(self, self.OnItem, "tooltip", tooltip, data)
+        end)
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
+            R:SafeCall(self, self.OnUnit, "unit tooltip", tooltip)
         end)
     end
 end

@@ -9,6 +9,9 @@
 --     texcoords = { 0, 1, 0, 1 },
 -- })
 -- Theme:SetColor("ACCENT_COPPER", { 0.78, 0.54, 0.30, 1 })
+-- Unexplored map areas: brightness as a colour, grey as a share from 0 to 1.
+-- Theme:SetColor("MAP_UNEXPLORED", { 0.72, 0.72, 0.72, 1 })
+-- Theme.unexploredDesaturation = 0.6
 -- The window border is a Blizzard nine-slice layout; pick another by name, for example
 -- Theme.panelLayout = "GenericMetal" or "SimplePanelTemplate". The fill is panelFill.
 -- Button keys: button{Left,Center,Right}, plus Pressed and Disabled variants,

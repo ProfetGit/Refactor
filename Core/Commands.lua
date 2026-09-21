@@ -98,11 +98,31 @@ function Commands:Dispatch(input)
         R.Broker:Emit("REFACTOR_INVITE_TEST")
         return nil
     end
+    if command == "spelltest" then
+        if not R.Broker.events.REFACTOR_SPELL_TEST then
+            return { R.L.CMD_SPELL_TEST_OFF }
+        end
+        R.Broker:Emit("REFACTOR_SPELL_TEST")
+        return nil
+    end
+    if command == "changelog" then
+        if R.UI and R.UI.OpenPanel then
+            R.UI:OpenPanel("Changelog")
+        end
+        return nil
+    end
+    if command == "update" then
+        if not R.Broker.events.REFACTOR_UPDATE_REPORT then
+            return { R.L.CMD_UPDATE_OFF }
+        end
+        R.Broker:Emit("REFACTOR_UPDATE_REPORT")
+        return nil
+    end
     if command == "bench" and R.Bench then
         R.Bench:Start(function(line) R:Print(line) end)
         return nil
     end
-    return { R.L.CMD_HELP_HEADER, R.L.CMD_HELP_OPEN, R.L.CMD_HELP_ERRORS, R.L.CMD_HELP_ERRORS_CLEAR,
-        R.L.CMD_HELP_SAVED, R.L.CMD_HELP_BENCH, R.L.CMD_HELP_LOOT_TEST, R.L.CMD_HELP_FARM_TEST,
-        R.L.CMD_HELP_INVITE_TEST }
+    return { R.L.CMD_HELP_HEADER, R.L.CMD_HELP_OPEN, R.L.CMD_HELP_CHANGELOG, R.L.CMD_HELP_ERRORS,
+        R.L.CMD_HELP_ERRORS_CLEAR, R.L.CMD_HELP_SAVED, R.L.CMD_HELP_BENCH, R.L.CMD_HELP_LOOT_TEST,
+        R.L.CMD_HELP_FARM_TEST, R.L.CMD_HELP_INVITE_TEST, R.L.CMD_HELP_SPELL_TEST, R.L.CMD_HELP_UPDATE }
 end

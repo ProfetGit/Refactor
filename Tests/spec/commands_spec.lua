@@ -58,7 +58,7 @@ describe("slash dispatch", function()
         local env = base()
         local lines = env.R.Commands:Dispatch("wat")
         assert.equal(env.R.L.CMD_HELP_HEADER, lines[1])
-        assert.equal(9, #lines)
+        assert.equal(12, #lines)
     end)
 
     it("reports whether the client restored the saved variables", function()

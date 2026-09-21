@@ -73,6 +73,13 @@ function UI:BuildTooltipSettings(parent)
     self:RegisterModuleSettings("tooltips.anchor", section)
 end
 
+function UI:BuildTooltipBorderSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_TOOLTIP_BORDER_HELP)
+    self:OptionCheckbox(block, "tooltipClassBorder", "UI_TOOLTIP_CLASS_BORDER", block.top)
+    block:SetBodyHeight(32)
+    self:RegisterModuleSettings("tooltips.rarityBorder", block)
+end
+
 -- Which placement setting the one placement dropdown is standing in for.
 function UI:TooltipPlacementKey()
     return Settings:GetOption("tooltipAnchor") == "point" and "tooltipPoint" or "tooltipCursorSide"

@@ -17717,6 +17717,11 @@
       "line": 94,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoSharedDocumentation.lua"
     },
+    "Enum.TooltipDataType.Unit": {
+      "kind": "source-reference",
+      "line": 96,
+      "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoSharedDocumentation.lua"
+    },
     "EquipCursorItem": {
       "line": 64,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/GameCursorDocumentation.lua"
@@ -18389,6 +18394,11 @@
       "line": 735,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
     },
+    "GetQuestDifficultyColor": {
+      "kind": "source-reference",
+      "line": 68,
+      "path": "Interface/AddOns/Blizzard_FrameXMLUtil/Mainline/DifficultyUtil.lua"
+    },
     "GetQuestID": {
       "kind": "source-reference",
       "line": 1962,
@@ -18846,6 +18856,11 @@
       "line": 1125,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
     },
+    "IsInRaid": {
+      "kind": "source-reference",
+      "line": 6,
+      "path": "Interface/AddOns/Blizzard_UnitFrame/Shared/GroupFrameVisibility.lua"
+    },
     "IsIndoors": {
       "line": 1134,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
@@ -19080,6 +19095,16 @@
       "kind": "source-reference",
       "line": 5,
       "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/ItemRef.xml"
+    },
+    "LE_PARTY_CATEGORY_HOME": {
+      "kind": "source-reference",
+      "line": 564,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameEditBox.lua"
+    },
+    "LE_PARTY_CATEGORY_INSTANCE": {
+      "kind": "source-reference",
+      "line": 573,
+      "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameEditBox.lua"
     },
     "LaunchURL": {
       "line": 10,
@@ -19992,6 +20017,11 @@
       "line": 9,
       "path": "Interface/AddOns/Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua"
     },
+    "TooltipUtil.GetDisplayedUnit": {
+      "kind": "source-reference",
+      "line": 34,
+      "path": "Interface/AddOns/Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua"
+    },
     "UIDropDownMenu_AddButton": {
       "kind": "source-reference",
       "line": 414,
@@ -20727,6 +20757,11 @@
     "WorldLootObjectExists": {
       "line": 3379,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua"
+    },
+    "WorldMapFrame": {
+      "kind": "source-reference",
+      "line": 28,
+      "path": "Interface/AddOns/Blizzard_WorldMap/Blizzard_WorldMap.xml"
     },
     "canaccessallvalues": {
       "line": 20,

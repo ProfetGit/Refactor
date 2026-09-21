@@ -23,6 +23,7 @@ local TOOL_ENTRIES = {
     { key = "Profiles", labelKey = "UI_Profiles", tools = true },
     { key = "Conflicts", labelKey = "UI_Conflicts", tools = true },
     { key = "Diagnostics", labelKey = "UI_Diagnostics", tools = true },
+    { key = "Changelog", labelKey = "UI_Changelog", tools = true },
 }
 UI.categoryOrder = CATEGORY_ORDER
 UI.sidebar = {}
@@ -917,12 +918,15 @@ function UI:Initialize()
     self:BuildResurrectSettings(self.scroll.child)
     self:BuildQuickInviteSettings(self.scroll.child)
     self:BuildTooltipSettings(self.scroll.child)
+    self:BuildTooltipBorderSettings(self.scroll.child)
     self:BuildCameraSettings(self.scroll.child)
+    self:BuildCameraDistanceSettings(self.scroll.child)
     self:BuildVisibilitySettings(self.scroll.child)
     self.panels = {}
     self:BuildProfiles(frame)
     self:BuildConflicts(frame)
     self:BuildDiagnostics(frame)
+    self:BuildChangelog(frame)
     self:BuildConfirm(frame)
     R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.Refresh, self)
     R.Broker:Subscribe("REFACTOR_MODULE_CHANGED", self.Refresh, self)

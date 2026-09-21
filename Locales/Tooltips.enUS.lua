@@ -2,10 +2,12 @@ local _, R = ...
 R.L = R.L or {}
 local L = R.L
 L.UI_Tooltips = "Tooltips"
-L.TOOLTIP_BORDER_NAME = "Rarity-coloured tooltip border"
-L.TOOLTIP_BORDER_DESC = "Tint the tooltip border with the item's quality colour."
-L.TOOLTIP_BORDER_DETAIL = "Applies to the main, linked and comparison tooltips. The border returns to normal as "
-    .. "soon as the tooltip clears, so a recycled tooltip never keeps the previous item's colour."
+L.TOOLTIP_BORDER_NAME = "Coloured tooltip border"
+L.TOOLTIP_BORDER_DESC = "Tint the tooltip border with the item's quality colour, or a player's class colour."
+L.TOOLTIP_BORDER_DETAIL = "Applies to the main, linked and comparison tooltips. Hovering a player tints the "
+    .. "border with their class colour, which you can turn off below; everything that is not a player, a mob "
+    .. "included, leaves the border white, so the colour is how you tell them apart. The border returns to "
+    .. "normal as soon as the tooltip clears, so a recycled tooltip never keeps the previous colour."
 L.TOOLTIP_HEALTHBAR_NAME = "Hide the tooltip health bar"
 L.TOOLTIP_HEALTHBAR_DESC = "Remove the green health bar the game draws under a unit tooltip."
 L.TOOLTIP_HEALTHBAR_DETAIL = "The bar is the only part of a tooltip that updates every frame, so hiding it also "

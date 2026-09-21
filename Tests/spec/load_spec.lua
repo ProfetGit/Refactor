@@ -28,7 +28,7 @@ describe("the real load sequence", function()
             end
         end
         assert.is_table(env.LibStub)
-        assert.equal(26, #R.modules)
+        assert.equal(31, #R.modules)
         env:Fire("PLAYER_LOGIN")
         assert.is_function(env.SlashCmdList.REFACTOR)
         assert.is_table(R.UI.frame)
@@ -60,7 +60,8 @@ describe("the real load sequence", function()
             button:GetScript("OnClick")(button)
             if button.category == "General" then generalButton = button end
         end
-        assert.is_true(UI.panels.Diagnostics:IsShown())
+        -- The last sidebar entry is What's new, so that is the panel left showing.
+        assert.is_true(UI.panels.Changelog:IsShown())
         generalButton:GetScript("OnClick")(generalButton)
         assert.is_true(UI.general:IsShown())
         UI:SaveNeverSell()

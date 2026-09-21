@@ -15,6 +15,17 @@ end
 -- the profile leaves the camera alone; the profile stores that as its LEAVE value.
 local LEAVE_STOP_OFFSET = 1
 
+-- Stored as the factor the CVar takes; the slider works in hundredths so a step never
+-- lands on a value that cannot be written back exactly.
+local function zoomText(value)
+    return string.format(L.UI_CAMERA_ZOOM_FACTOR, value / 100)
+end
+
+local MAX_ZOOM = { key = "cameraMaxZoom", minimum = 100, maximum = 260, step = 10,
+    labelKey = "UI_CAMERA_MAX_ZOOM", formatter = zoomText,
+    show = function(stored) return math.floor((stored or 2.6) * 100 + 0.5) end,
+    store = function(value) return value / 100 end }
+
 local function yardsText(value)
     return string.format(L.UI_CAMERA_YARDS, value)
 end
@@ -244,6 +255,14 @@ function UI:BuildCameraSettings(parent)
     self.cameraStatus:SetPoint("RIGHT")
     block:SetBodyHeight(top - y + 20)
     self:RegisterModuleSettings("interface.actionCam", block)
+end
+
+-- The maximum camera distance feature is one number, so its whole panel is one slider.
+function UI:BuildCameraDistanceSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_CAMERA_DISTANCE_HELP)
+    self.cameraZoomSlider = self:OptionSlider(block, MAX_ZOOM, block.top)
+    block:SetBodyHeight(SLIDER_STEP)
+    self:RegisterModuleSettings("interface.cameraDistance", block)
 end
 
 function UI:LoadCamera()

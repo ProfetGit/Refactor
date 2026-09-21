@@ -1,6 +1,6 @@
 --- @module tooltips.rarityBorder (hot half, registers nothing)
 --- Purpose: quality lookup and border tint with no allocation per tooltip shown.
---- Requires: C_Item.GetItemQualityByID, C_Item.GetItemQualityColor
+--- Requires: C_Item.GetItemQualityByID, C_Item.GetItemQualityColor, C_ClassColor.GetClassColor
 --- Events: none, the module owns the pending lookup
 --- Hot: yes
 -- @hot
@@ -42,6 +42,27 @@ function Border:TintColor(tooltip, r, g, b)
         nineSlice:SetBorderColor(r, g, b, 1)
         return true
     end
+end
+
+-- Class colours are the client's own and do not change while you are logged in, so each is
+-- read the first time a player of that class is hovered and kept. Permanent by design, the
+-- same exception the quality cache above is, and keyed by the client's class string rather
+-- than anything built here.
+local classReds = {}
+local classGreens = {}
+local classBlues = {}
+
+function Border:TintClass(tooltip, classFile)
+    local red = classReds[classFile]
+    if red == nil then
+        local color = C_ClassColor.GetClassColor(classFile)
+        if type(color) ~= "table" or type(color.GetRGB) ~= "function" then
+            return false
+        end
+        classReds[classFile], classGreens[classFile], classBlues[classFile] = color:GetRGB()
+        red = classReds[classFile]
+    end
+    return self:TintColor(tooltip, red, classGreens[classFile], classBlues[classFile]) == true
 end
 
 function Border:Clear(tooltip)

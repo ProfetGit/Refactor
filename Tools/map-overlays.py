@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Generate Data/MapOverlays.lua from Blizzard's WorldMapOverlay and WorldMapOverlayTile tables.
+
+The client hands addons only the overlays a character has explored
+(C_MapExplorationInfo.GetExploredMapTextures). The unexplored ones exist only in the client's
+own tables, which wago.tools publishes as CSV per build:
+
+    python3 Tools/map-overlays.py --build 1.60.1.69913 --interface 16001 --download
+
+or from CSVs already on disk (WorldMapOverlay.csv and WorldMapOverlayTile.csv; UiMapXMapArt.csv
+and UiMap.csv name the maps in comments and drop art no map uses, and are worth having):
+
+    python3 Tools/map-overlays.py --build 1.60.1.69913 --interface 16001 --source DIR
+
+The interface number is the one the client reports as the fourth return of GetBuildInfo, and
+the module refuses to run when the installed client reports another: map art IDs are only
+meaningful for the build they came from.
+"""
+import argparse
+import csv
+import datetime
+import math
+import sys
+import urllib.request
+from pathlib import Path
+
+TABLES = ["WorldMapOverlay", "WorldMapOverlayTile"]
+NAME_TABLES = ["UiMapXMapArt", "UiMap"]
+OUTPUT = Path("Data/MapOverlays.lua")
+
+
+def fetch(table, build, target):
+    url = f"https://wago.tools/db2/{table}/csv?build={build}"
+    request = urllib.request.Request(url, headers={"User-Agent": "Refactor map-overlays"})
+    with urllib.request.urlopen(request) as response:
+        text = response.read().decode("utf-8")
+    if not text.startswith("ID,") and "ID" not in text.split("\n", 1)[0]:
+        raise SystemExit(f"{url} did not return a CSV table")
+    target.write_text(text)
+    print(f"fetched {table}: {len(text)} bytes")
+
+
+def read(path):
+    with path.open(newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--build", required=True, help="client build, for example 1.60.1.69913")
+    parser.add_argument("--interface", required=True, type=int, help="interface number GetBuildInfo reports")
+    parser.add_argument("--source", help="directory holding the CSV files")
+    parser.add_argument("--download", action="store_true", help="fetch the CSVs from wago.tools into --source")
+    args = parser.parse_args()
+
+    source = Path(args.source) if args.source else Path(".tools/map-overlays") / args.build
+    if args.download:
+        source.mkdir(parents=True, exist_ok=True)
+        for table in TABLES + NAME_TABLES:
+            try:
+                fetch(table, args.build, source / f"{table}.csv")
+            except Exception as error:  # noqa: BLE001 - the name tables are optional
+                if table in TABLES:
+                    raise
+                print(f"skipped {table}: {error}")
+    for table in TABLES:
+        if not (source / f"{table}.csv").exists():
+            raise SystemExit(f"missing {source / f'{table}.csv'}; pass --download or --source")
+
+    tiles = {}
+    otherLayers = 0
+    for row in read(source / "WorldMapOverlayTile.csv"):
+        if int(row["LayerIndex"]) != 0:
+            otherLayers += 1
+            continue
+        tiles.setdefault(int(row["WorldMapOverlayID"]), []).append(
+            (int(row["RowIndex"]), int(row["ColIndex"]), int(row["FileDataID"])))
+
+    # Only art a map actually uses: the table also carries superseded art that
+    # C_Map.GetMapArtID never returns. Flags are kept whatever they are; on Forever 1.60.1
+    # every live map's overlays carry 4 and only the superseded art carries 0.
+    names = {}
+    artPath, mapPath = source / "UiMapXMapArt.csv", source / "UiMap.csv"
+    if artPath.exists() and mapPath.exists():
+        mapNames = {int(row["ID"]): row["Name_lang"] for row in read(mapPath)}
+        for row in read(artPath):
+            names[int(row["UiMapArtID"])] = f'{mapNames.get(int(row["UiMapID"]), "?")} ({row["UiMapID"]})'
+
+    maps = {}
+    conditional = unused = missing = 0
+    flags = {}
+    for row in read(source / "WorldMapOverlay.csv"):
+        overlayID = int(row["ID"])
+        if int(row["PlayerConditionID"]) != 0:
+            conditional += 1
+            continue
+        if names and int(row["UiMapArtID"]) not in names:
+            unused += 1
+            continue
+        flags[row["Flags"]] = flags.get(row["Flags"], 0) + 1
+        overlayTiles = sorted(tiles.get(overlayID, []))
+        if not overlayTiles:
+            missing += 1
+            continue
+        ids = ",".join(str(fileID) for _, _, fileID in overlayTiles)
+        entry = f'"{row["TextureWidth"]}:{row["TextureHeight"]}:{row["OffsetX"]}:{row["OffsetY"]}:{ids}"'
+        maps.setdefault(int(row["UiMapArtID"]), []).append((int(row["OffsetY"]), int(row["OffsetX"]), entry))
+
+    count = sum(len(entries) for entries in maps.values())
+    flagText = ", ".join(f"{n} with flags {f}" for f, n in sorted(flags.items()))
+    lines = [
+        "-- Generated by Tools/map-overlays.py. Do not edit by hand.",
+        f"-- Source: wago.tools WorldMapOverlay and WorldMapOverlayTile for build {args.build},",
+        f"-- read {datetime.date.today().isoformat()}. Every map overlay of that build by map art ID",
+        '-- (C_Map.GetMapArtID), as "width:height:x:y:tiles" with the tiles\' file data IDs row by row,',
+        "-- so the unexplored ones can be drawn under Blizzard's explored ones. Static data, never",
+        f"-- invalidated. {count} overlays on {len(maps)} maps ({flagText}); left out: {conditional}",
+        f"-- conditional, {unused} on art no map uses, {missing} without tiles, {otherLayers} tiles on",
+        "-- other art layers.",
+        "local _, R = ...",
+        "R.MapOverlays = {",
+        f"    interface = {args.interface},",
+        f'    build = "{args.build}",',
+        "    maps = {",
+    ]
+    for artID in sorted(maps):
+        label = f" -- {names[artID]}" if artID in names else ""
+        lines.append(f"        [{artID}] = {{{label}")
+        for _, _, entry in sorted(maps[artID]):
+            lines.append(f"            {entry},")
+        lines.append("        },")
+    lines += ["    },", "}", ""]
+    OUTPUT.write_text("\n".join(lines))
+    print(f"wrote {OUTPUT}: {count} overlays on {len(maps)} maps ({flagText}); skipped {conditional} "
+          f"conditional, {unused} on art no map uses, {missing} without tiles, {otherLayers} tiles on "
+          "other layers")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -5,6 +5,7 @@ local L = R.L
 L.UI_Profiles = "Profiles"
 L.UI_Conflicts = "Conflicts"
 L.UI_Diagnostics = "Diagnostics"
+L.UI_Changelog = "What's new"
 
 L.UI_FIRST_RUN_INTRO = "Pick a starting point. You can change anything later, and everything is searchable."
 L.UI_FIRST_RUN_NOTE = "This choice applies to every character on the account. Nothing decides for you: "
@@ -76,3 +77,7 @@ L.UI_DIAG_EXPORT = "Config string for support"
 L.UI_DIAG_COPY = "Build string"
 L.UI_DIAG_SNAPSHOT = "Support snapshot"
 L.UI_DIAG_ART = "Art this client did not recognise, drawn as flat colour instead: %s"
+
+L.UI_CHANGELOG_TITLE = "What's new"
+L.UI_CHANGELOG_HELP = "Everything that changed, newest first. The same text as CHANGELOG.md in the addon folder."
+L.UI_CHANGELOG_EMPTY = "Nothing to show: this build shipped without a changelog."

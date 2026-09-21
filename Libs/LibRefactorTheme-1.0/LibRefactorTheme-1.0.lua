@@ -38,6 +38,7 @@ Theme.colors = {
     QUEST_TOTAL = { 0.90, 0.90, 0.86, 1 },
     TEXT_LAST = { 1, 0.86, 0.36, 1 },
     PLATE_DIM = { 0, 0, 0, 0.55 },
+    MAP_UNEXPLORED = { 0.72, 0.72, 0.72, 1 },
 }
 -- Shared immutable gradient endpoints; allocated once, never during progress updates.
 Theme.ringShadeBottom = CreateColor(0.55, 0.55, 0.55, 1)
@@ -211,6 +212,15 @@ end
 function Theme:Color(region, token, text)
     if text then region:SetTextColor(unpack(self.colors[token]))
     else region:SetVertexColor(unpack(self.colors[token])) end
+end
+
+-- An unexplored map overlay: the art the client shows once explored, part greyed and dimmed.
+-- Full grey at 55 percent read as a black slab in game (20 Sep 2026); this keeps the terrain
+-- readable while still plainly not the explored art. Tunable from Media/CustomTheme.lua.
+Theme.unexploredDesaturation = 0.6
+function Theme:Unexplored(texture)
+    texture:SetDesaturation(self.unexploredDesaturation)
+    self:Color(texture, "MAP_UNEXPLORED")
 end
 
 -- "ff" plus six hex digits, for text markup that cannot take a colour object.

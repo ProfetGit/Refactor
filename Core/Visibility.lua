@@ -270,6 +270,51 @@ function Visibility:Group(id)
     return GROUP_BY_ID[id]
 end
 
+-- Frames Refactor makes itself can join a group. Nothing Refactor creates carries a global
+-- name, because only Namespace writes globals, so the catalogue above cannot name one: the
+-- module that owns the frame hands it over here and the visibility module reads it back.
+-- That keeps the two modules from ever naming each other.
+local CONTRIBUTED = {}
+local NO_FRAMES = {}
+
+function Visibility:Contribute(groupId, frame)
+    if not GROUP_BY_ID[groupId] or type(frame) ~= "table" then
+        return false
+    end
+    local frames = CONTRIBUTED[groupId]
+    if not frames then
+        frames = {}
+        CONTRIBUTED[groupId] = frames
+    end
+    for _, existing in ipairs(frames) do
+        if existing == frame then
+            return true
+        end
+    end
+    frames[#frames + 1] = frame
+    R.Broker:Emit("REFACTOR_VISIBILITY_FRAMES", groupId)
+    return true
+end
+
+function Visibility:Withdraw(groupId, frame)
+    local frames = CONTRIBUTED[groupId]
+    if not frames then
+        return false
+    end
+    for index = #frames, 1, -1 do
+        if frames[index] == frame then
+            table.remove(frames, index)
+            R.Broker:Emit("REFACTOR_VISIBILITY_FRAMES", groupId)
+            return true
+        end
+    end
+    return false
+end
+
+function Visibility:Contributions(groupId)
+    return CONTRIBUTED[groupId] or NO_FRAMES
+end
+
 function Visibility:Preset(id)
     return PRESET_BY_ID[id]
 end

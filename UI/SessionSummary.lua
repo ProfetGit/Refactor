@@ -19,7 +19,8 @@ end
 
 -- A plain text block, selected and ready for Ctrl C. The client cannot put anything on the
 -- system clipboard for us, so the honest answer is to hand the player the text itself.
-function R.UI:ShowSessionText(text)
+-- Shared: the farm summary and the chat copy button both end here, with their own title.
+function R.UI:ShowSessionText(text, title)
     if not self.sessionTextFrame then
         local frame = CreateFrame("Frame", nil, UIParent, "BasicFrameTemplateWithInset")
         frame:SetSize(COPY_WIDTH, COPY_HEIGHT)
@@ -30,7 +31,6 @@ function R.UI:ShowSessionText(text)
         frame:RegisterForDrag("LeftButton")
         frame:SetScript("OnDragStart", frame.StartMoving)
         frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-        frame.TitleText:SetText(L.FARM_COPY_TITLE)
         R:OwnFrame(frame)
 
         local scroll = CreateFrame("ScrollFrame", nil, frame)
@@ -49,6 +49,7 @@ function R.UI:ShowSessionText(text)
         self.sessionTextFrame = frame
     end
     local frame = self.sessionTextFrame
+    frame.TitleText:SetText(title or L.FARM_COPY_TITLE)
     frame.box:SetText(text or "")
     frame:Show()
     frame.box:SetFocus()

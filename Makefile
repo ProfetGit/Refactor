@@ -1,7 +1,7 @@
 LUA ?= lua5.1
 RUN = sh Tools/dev-env.sh
 
-.PHONY: check lint test api-check api-index package dev-setup
+.PHONY: check lint test api-check api-index package dev-setup changelog
 # Checkout the API index is generated from: git clone --branch live https://github.com/Gethe/wow-ui-source
 SOURCE ?= $(HOME)/wow-ui-source
 check: lint test api-check
@@ -18,6 +18,9 @@ api-check:
 
 package: check
 	python3 Tools/package.py
+
+changelog:
+	$(RUN) $(LUA) Tools/changelog.lua
 
 api-index:
 	python3 Tools/source-index.py "$(SOURCE)"

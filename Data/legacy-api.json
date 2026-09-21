@@ -466,6 +466,10 @@
     "needle": "Name = \"Item\", Type = \"TooltipDataType\"",
     "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoSharedDocumentation.lua"
   },
+  "Enum.TooltipDataType.Unit": {
+    "needle": "Name = \"Unit\", Type = \"TooltipDataType\"",
+    "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoSharedDocumentation.lua"
+  },
   "EventRegistry": {
     "needle": "EventRegistry = CreateFromMixins(CallbackRegistryMixin);",
     "path": "Interface/AddOns/Blizzard_SharedXMLBase/GlobalCallbackRegistry.lua"
@@ -554,6 +558,10 @@
     "needle": "GetNumQuestChoices()",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
   },
+  "GetQuestDifficultyColor": {
+    "needle": "function GetQuestDifficultyColor(",
+    "path": "Interface/AddOns/Blizzard_FrameXMLUtil/Mainline/DifficultyUtil.lua"
+  },
   "GetQuestID": {
     "needle": "local questID = GetQuestID();",
     "path": "Interface/AddOns/Blizzard_BoostTutorial/Blizzard_TutorialLogic.lua"
@@ -589,6 +597,10 @@
     "needle": "IsInGroup() and not IsInRaid()",
     "path": "Interface/AddOns/Blizzard_UnitFrame/Shared/GroupFrameVisibility.lua"
   },
+  "IsInRaid": {
+    "needle": "IsInRaid()",
+    "path": "Interface/AddOns/Blizzard_UnitFrame/Shared/GroupFrameVisibility.lua"
+  },
   "IsModifiedClick": {
     "path": "Interface/AddOns/Blizzard_WeeklyRewards/Blizzard_WeeklyRewards.lua"
   },
@@ -599,6 +611,14 @@
   "ItemRefTooltip": {
     "needle": "name=\"ItemRefTooltip\"",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/ItemRef.xml"
+  },
+  "LE_PARTY_CATEGORY_HOME": {
+    "needle": "IsInGroup(LE_PARTY_CATEGORY_HOME)",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameEditBox.lua"
+  },
+  "LE_PARTY_CATEGORY_INSTANCE": {
+    "needle": "IsInGroup(LE_PARTY_CATEGORY_INSTANCE)",
+    "path": "Interface/AddOns/Blizzard_ChatFrameBase/Shared/ChatFrameEditBox.lua"
   },
   "LootSlot": {
     "needle": "LootSlot(",
@@ -930,6 +950,10 @@
     "needle": "function TooltipUtil.GetDisplayedItem",
     "path": "Interface/AddOns/Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua"
   },
+  "TooltipUtil.GetDisplayedUnit": {
+    "needle": "function TooltipUtil.GetDisplayedUnit",
+    "path": "Interface/AddOns/Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua"
+  },
   "UIDropDownMenu_AddButton": {
     "needle": "function UIDropDownMenu_AddButton(info, level)",
     "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
@@ -945,6 +969,10 @@
   "UIParent": {
     "needle": "parent=\"UIParent\"",
     "path": "Interface/AddOns/Blizzard_GameTooltip/Mainline/GameTooltip.xml"
+  },
+  "WorldMapFrame": {
+    "needle": "name=\"WorldMapFrame\"",
+    "path": "Interface/AddOns/Blizzard_WorldMap/Blizzard_WorldMap.xml"
   },
   "hash_SlashCmdList": {
     "needle": "_G.hash_SlashCmdList = {}",

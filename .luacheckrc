@@ -54,9 +54,17 @@ read_globals = {
     -- Quick invite: the unit tests Blizzard's own invite entry uses, and the invite itself
     "C_PartyInfo", "UnitExists", "UnitIsUnit", "UnitIsPlayer", "UnitIsHumanPlayer", "UnitIsConnected",
     "UnitCanCooperate", "UnitInParty", "UnitInRaid", "UnitName",
+    -- Update notice: guild and group membership, and the addon message channel
+    "C_ChatInfo", "IsInGuild", "IsInGroup", "IsInRaid", "LE_PARTY_CATEGORY_HOME", "LE_PARTY_CATEGORY_INSTANCE",
+    -- Class coloured tooltip border
+    "UnitClassBase", "C_ClassColor",
+    -- Placing a newly learned ability: the spellbook queries, the cursor and the action slots
+    "C_Spell", "C_SpellBook", "C_ActionBar", "GetCursorInfo", "ClearCursor",
     -- ActionCam profiles: situation queries and the two camera zoom calls
     "IsIndoors", "IsResting", "IsMounted", "UnitOnTaxi", "UnitInVehicle", "IsPlayerInWorld",
     "CameraZoomIn", "CameraZoomOut", "GetCameraZoom",
+    -- Zone levels on the map: Blizzard's map frame, the label it hooks and the difficulty colour
+    "WorldMapFrame", "C_Map", "UnitLevel", "GetQuestDifficultyColor",
 }
 
 files["Tests/"] = { std = "+busted" }

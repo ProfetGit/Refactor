@@ -1,12 +1,7 @@
 - Auto complete not working on all quests, one scenario i had was that it had 1 quest reward, i didnt need to select anything, but it still didnt auto complete even when it should have.
-- When switching the "Editing" profile from character to account, it seems like some settings get bugged, maby require reload when switching profile or make other improvements. Make it account profile by default
-- In wow forever the Refactor addon specific configurations are not saved, they reset when i restart the game.
+- In wow forever the Refactor addon specific configurations are not saved, they reset when i restart/reload the game.
 - Remove the Forever saved variables workaround once Blizzard fixes the client. The addon
   tells you at login when it is safe; the removal list is in docs/ROADMAP.md.
 - Add feature to display Refactor changelogs.
 - Add a feature to notify user when an update is available.
-- Add a slider to the maximum camera distance to allow user define it himslef.
-- Class colored tooltip border when hovering a player.
-- Feature to allow user to copy chat texts.
-- Feature that moves new learned abilities to a free slot in actionbars automatically when learned
-- When hovering over a zone in the map, display zone level gap, like "10-15" for example, so if i hover over Durotar, it would say at the top "Durotar 1-10" or something like that, i dont actually know the level gap for durotar, diplay the level gap in color depending on the users level, so red would mean player is not strong enough for the given zone. Make this a toggleable option.
+- Some setting in refactor show a popup when enabled first time, remove this. For example auto accept quest does this.

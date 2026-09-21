@@ -35,6 +35,7 @@ local BOOLEAN_OPTIONS = {
     gossipOpenQuests = true, gossipOpenServices = true, gossipSkipDialogue = true, gossipInInstances = true,
     resurrectPvp = true, resurrectInstance = true, resurrectWorld = true,
     uiVisibilityBlobs = true,
+    tooltipClassBorder = true,
 }
 -- Which layer the window's feature checkboxes write to.
 local SCOPES = { account = true, character = true }
@@ -48,6 +49,9 @@ local OPTION_DEFAULTS = {
     nameplateSide = "RIGHT", nameplateShowIcon = true, nameplateShowRing = true,
     nameplateReduceAnimation = false, nameplateDimCompleted = true,
     minimapButton = true,
+    -- On: someone who turned the tooltip border on and hovers a player expects the colour
+    -- the rest of the UI uses for that class.
+    tooltipClassBorder = true,
     tooltipAnchor = "cursor", tooltipPoint = "BOTTOMRIGHT", tooltipX = -80, tooltipY = 120,
     tooltipCursorSide = "RIGHT", tooltipCursorX = 16, tooltipCursorY = 0,
     toastMinQuality = 0, toastShowPrice = true, toastGold = true, toastCurrency = true,
@@ -74,6 +78,9 @@ local OPTION_DEFAULTS = {
     -- three cover every instanceType between them, so turning two off is how a player says
     -- "battlegrounds only".
     resurrectPvp = true, resurrectInstance = true, resurrectWorld = true,
+    -- The client's own ceiling for cameraDistanceMaxZoomFactor, which is what the feature
+    -- set flat out before the slider existed. Its own default is 1.9.
+    cameraMaxZoom = 2.6,
     -- Blizzard's window is two by five. Three by six nearly doubles the page and stays
     -- inside the left panel area at the default UI scale.
     vendorColumns = 3, vendorRows = 6,
@@ -152,6 +159,10 @@ local function validOption(key, value)
         return type(value) == "number" and value >= 0 and value <= 10000000 and value % 1 == 0
     elseif key == "tsmPriceString" then
         return type(value) == "string" and #value > 0 and #value <= 64 and not value:find("[%c]")
+    elseif key == "cameraMaxZoom" then
+        -- Below the client's own 1.9 is a closer camera, which is a choice; above 2.6 the
+        -- client clamps it anyway.
+        return type(value) == "number" and value >= 1 and value <= 2.6
     elseif key == "vendorColumns" then
         -- One column would leave the page buttons and repair row overlapping.
         return type(value) == "number" and value >= 2 and value <= 5 and value % 1 == 0

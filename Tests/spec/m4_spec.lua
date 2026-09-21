@@ -24,6 +24,14 @@ local function enable(env, path, id)
     return env.R.moduleByID[id]
 end
 
+local function strsplit_lines(text)
+    local lines = {}
+    for line in tostring(text):gmatch("[^\n]+") do
+        lines[#lines + 1] = line
+    end
+    return unpack(lines)
+end
+
 local function noResidue(env, module)
     env.R.Registry:Disable(module)
     assert.equals(0, env:ActiveTimers())
@@ -39,8 +47,19 @@ end
 local function tooltipEnv()
     local env = base()
     env.postCalls = {}
-    env.TooltipDataProcessor = { AddTooltipPostCall = function(_, fn) env.postCalls[#env.postCalls + 1] = fn end }
-    env.Enum = { TooltipDataType = { Item = 0 } }
+    env.TooltipDataProcessor = { AddTooltipPostCall = function(dataType, fn)
+        env.postCalls[#env.postCalls + 1] = { dataType = dataType, fn = fn }
+    end }
+    env.Enum = { TooltipDataType = { Item = 0, Unit = 2 } }
+    env.units = { player1 = { player = true, class = "MAGE" } }
+    env.UnitIsPlayer = function(unit) return (env.units[unit] or {}).player == true end
+    env.UnitClassBase = function(unit) return (env.units[unit] or {}).class end
+    env.classColors = { MAGE = { 0.41, 0.8, 0.94 }, WARLOCK = { 0.58, 0.51, 0.79 } }
+    env.C_ClassColor = { GetClassColor = function(classFile)
+        local color = env.classColors[classFile]
+        if not color then return nil end
+        return { GetRGB = function() return color[1], color[2], color[3] end }
+    end }
     env.MerchantFrame = { IsShown = function() return env.merchantOpen == true end }
     env.hooks = {}
     env.hooksecurefunc = function(name, fn) env.hooks[name] = fn end
@@ -62,7 +81,10 @@ local function tooltipEnv()
     env.GameTooltip, env.ItemRefTooltip = tooltip("GameTooltip"), tooltip("ItemRefTooltip")
     env.ShoppingTooltip1, env.ShoppingTooltip2 = tooltip("ShoppingTooltip1"), tooltip("ShoppingTooltip2")
     env.SetTooltipMoney = function(tip, amount, _, label) tip.money[#tip.money + 1] = { amount, label } end
-    env.TooltipUtil = { GetDisplayedItem = function() return "Sword", env.link, 7 end }
+    env.TooltipUtil = {
+        GetDisplayedItem = function() return "Sword", env.link, 7 end,
+        GetDisplayedUnit = function() return "Someone", env.hoveredUnit end,
+    }
     env.link = "|cffffffff|Hitem:7::::::::1:::::|h[Sword]|h|r"
     env.qualities = { [7] = 3 }
     env.C_Item = {
@@ -71,12 +93,57 @@ local function tooltipEnv()
         GetItemQualityColor = function(q) return q / 10, q / 20, q / 40, "hex" end,
     }
     function env:PostCall(tip, data)
-        for _, fn in ipairs(self.postCalls) do fn(tip, data or { id = 7 }) end
+        for _, call in ipairs(self.postCalls) do
+            if call.dataType == self.Enum.TooltipDataType.Item then call.fn(tip, data or { id = 7 }) end
+        end
+    end
+    -- A unit post call takes the tooltip alone: the unit comes back from the client.
+    function env:HoverUnit(tip, unit)
+        self.hoveredUnit = unit
+        for _, call in ipairs(self.postCalls) do
+            if call.dataType == self.Enum.TooltipDataType.Unit then call.fn(tip) end
+        end
     end
     return env
 end
 
 describe("M4 tooltips", function()
+    it("tints the border with a hovered player's class colour, and only a player's", function()
+        local env = tooltipEnv()
+        env.units.mob = { class = "MAGE" }
+        env.units.warlock = { player = true, class = "WARLOCK" }
+        env.units.nobody = { player = true, class = "TINKER" }
+        env:Load("Modules_LoD/Tooltips/RarityBorder_Data.lua")
+        local module = enable(env, "Modules_LoD/Tooltips/RarityBorder.lua", "tooltips.rarityBorder")
+        env:HoverUnit(env.GameTooltip, "player1")
+        assert.same({ 0.41, 0.8, 0.94, 1 }, env.GameTooltip.border)
+        env.GameTooltip.scripts.OnTooltipCleared(env.GameTooltip)
+        assert.same({ 1, 1, 1, 1 }, env.GameTooltip.border)
+        -- A second class is read once and kept; the first is answered from the cache.
+        env:HoverUnit(env.GameTooltip, "warlock")
+        assert.same({ 0.58, 0.51, 0.79, 1 }, env.GameTooltip.border)
+        env.classColors.MAGE = nil
+        env.GameTooltip.scripts.OnTooltipCleared(env.GameTooltip)
+        env:HoverUnit(env.GameTooltip, "player1")
+        assert.same({ 0.41, 0.8, 0.94, 1 }, env.GameTooltip.border)
+        -- A mob, a unit the client gives no colour for, and no unit at all: border left white.
+        for _, unit in ipairs({ "mob", "nobody" }) do
+            env.GameTooltip.scripts.OnTooltipCleared(env.GameTooltip)
+            env:HoverUnit(env.GameTooltip, unit)
+            assert.same({ 1, 1, 1, 1 }, env.GameTooltip.border)
+        end
+        env.GameTooltip.scripts.OnTooltipCleared(env.GameTooltip)
+        env:HoverUnit(env.GameTooltip, nil)
+        assert.same({ 1, 1, 1, 1 }, env.GameTooltip.border)
+        -- Off, the item half of the feature carries on alone.
+        env.R.Settings:SetOption("tooltipClassBorder", false)
+        env:HoverUnit(env.GameTooltip, "player1")
+        assert.same({ 1, 1, 1, 1 }, env.GameTooltip.border)
+        env:PostCall(env.GameTooltip)
+        assert.same({ 0.3, 0.15, 0.075, 1 }, env.GameTooltip.border)
+        noResidue(env, module)
+    end)
+
     it("rarity border tints, resets on clear, fills a miss when item data arrives", function()
         local env = tooltipEnv()
         env:Load("Modules_LoD/Tooltips/RarityBorder_Data.lua")
@@ -1188,8 +1255,17 @@ describe("M4 interface, mail, vendor", function()
     it("camera distance sets its CVar on enable and restores the default on disable", function()
         local env = cameraEnv()
         local camera = enable(env, "Modules/Interface/CameraDistance.lua", "interface.cameraDistance")
-        assert.equal("2.6", env.cvars.cameraDistanceMaxZoomFactor)
+        assert.equal("2.60", env.cvars.cameraDistanceMaxZoomFactor)
+        -- The slider writes the option; the module follows it without being re-enabled.
+        assert.is_true(env.R.Settings:SetOption("cameraMaxZoom", 1.5))
+        assert.equal("1.50", env.cvars.cameraDistanceMaxZoomFactor)
+        assert.is_false(env.R.Settings:SetOption("cameraMaxZoom", 3))
+        assert.is_false(env.R.Settings:SetOption("cameraMaxZoom", 0.5))
+        assert.equal("1.50", env.cvars.cameraDistanceMaxZoomFactor)
         env.R.Registry:Disable(camera)
+        assert.equal("1.9", env.cvars.cameraDistanceMaxZoomFactor)
+        -- Off, the option moving changes nothing until the feature is on again.
+        assert.is_true(env.R.Settings:SetOption("cameraMaxZoom", 2.2))
         assert.equal("1.9", env.cvars.cameraDistanceMaxZoomFactor)
         noResidue(env, camera)
     end)
@@ -2141,5 +2217,661 @@ describe("M4 price providers and bench", function()
         assert.matches("CPU: 0.050 ms", env.messages[5])
         assert.matches("OnUpdate handlers on Refactor frames: 0", env.messages[7])
         assert.equal(0, env:ActiveTimers())
+    end)
+end)
+
+describe("M4 new ability placement", function()
+    local function spellEnv(layout)
+        local env = base()
+        env:Load("Locales/Visibility.enUS.lua")
+        env.slots, env.cursor, env.placed = {}, nil, {}
+        env.spells = {
+            [1001] = { name = "Frostbolt" },
+            [1002] = { name = "Ice Barrier" },
+            [1003] = { name = "Permafrost", passive = true },
+            [1004] = { name = "Frostbolt Rank 2", base = 1001 },
+        }
+        env.C_Spell = {
+            PickupSpell = function(spellID)
+                if not env.refusePickup then env.cursor = spellID end
+            end,
+            IsSpellPassive = function(spellID) return (env.spells[spellID] or {}).passive == true end,
+            GetSpellName = function(spellID) return (env.spells[spellID] or {}).name end,
+        }
+        env.C_SpellBook = {
+            FindBaseSpellByID = function(spellID) return (env.spells[spellID] or {}).base or spellID end,
+        }
+        env.C_ActionBar = {
+            HasAction = function(slot) return env.slots[slot] ~= nil end,
+            IsOnBarOrSpecialBar = function(spellID)
+                for _, held in pairs(env.slots) do
+                    if held == spellID then return true end
+                end
+                return false
+            end,
+            PutActionInSlot = function(slot)
+                if env.refusePlace or not env.cursor then return end
+                env.slots[slot] = env.cursor
+                env.placed[#env.placed + 1] = { slot = slot, spell = env.cursor }
+                env.cursor = nil
+            end,
+        }
+        env.GetCursorInfo = function()
+            if env.cursor == nil then return nil end
+            return "spell", env.cursor
+        end
+        env.ClearCursor = function() env.cursor = nil end
+        -- Three of the eight bars, laid out as the client does: the main bar on slots 1 to
+        -- 12, and two multibars whose slot ids are nowhere near their position.
+        local function bar(first, count, shown, showable)
+            local frame = { shown = shown, actionButtons = {} }
+            function frame:IsShown() return self.shown end
+            for index = 1, count do
+                local button = { action = first + index - 1, shown = index <= (showable or count) }
+                function button:IsShown() return self.shown end
+                frame.actionButtons[index] = button
+            end
+            return frame
+        end
+        layout = layout or {}
+        env.MainActionBar = bar(1, 12, layout.main ~= false, layout.mainShowable)
+        env.MultiBarBottomLeft = bar(61, 12, layout.bottomLeft ~= false)
+        env.MultiBarBottomRight = bar(49, 12, layout.bottomRight == true)
+        local module = enable(env, "Modules/Interface/PlaceNewSpells.lua", "interface.placeNewSpells")
+        function env:Learn(spellID, guildPerk)
+            self:Fire("LEARNED_SPELL_IN_SKILL_LINE", spellID, 1, guildPerk == true)
+            self:Advance(1)
+        end
+        return env, module
+    end
+
+    it("fills the first free slot on a bar that is on screen and leaves everything else alone", function()
+        local env, module = spellEnv()
+        for slot = 1, 12 do env.slots[slot] = 900 + slot end
+        env.slots[5] = nil
+        env:Learn(1001)
+        assert.equal(1001, env.slots[5])
+        assert.equal("Frostbolt went on Action bar 1 (main).", env.messages[#env.messages])
+        assert.equal(1, #env.placed)
+        -- Nothing that was already in a slot moved.
+        assert.equal(901, env.slots[1])
+        assert.is_nil(env.cursor)
+        -- The main bar is full now, so the next one walks on to the bar after it.
+        env:Learn(1002)
+        assert.equal(1002, env.slots[61])
+        assert.equal("Ice Barrier went on Action bar 2 (bottom left).", env.messages[#env.messages])
+        assert.equal("PLACED", module.report.verdict)
+        noResidue(env, module)
+    end)
+
+    it("skips passives, guild perks, ranks of something already placed, and repeat events", function()
+        local env, module = spellEnv()
+        env:Learn(1003)
+        assert.equal(0, #env.placed)
+        assert.equal("PASSIVE", module.report.verdict)
+        env:Learn(1002, true)
+        assert.equal(0, #env.placed)
+        env:Learn(1001)
+        assert.equal(1001, env.slots[1])
+        -- A second event for the same spell, and a rank of it, are both already on the bar.
+        env:Learn(1001)
+        env:Learn(1004)
+        assert.equal(1, #env.placed)
+        assert.equal("ONBAR", module.report.verdict)
+    end)
+
+    it("uses only bars and buttons that are visible", function()
+        local env, module = spellEnv({ main = false, mainShowable = 12 })
+        env:Learn(1001)
+        -- The main bar is hidden, so its empty slots are not somewhere the player can see.
+        assert.is_nil(env.slots[1])
+        assert.equal(1001, env.slots[61])
+        -- A bar showing six of its twelve buttons owns six slots.
+        local env2, module2 = spellEnv({ main = true, mainShowable = 6 })
+        for slot = 1, 6 do env2.slots[slot] = 900 + slot end
+        env2:Learn(1001)
+        assert.equal(1001, env2.slots[61])
+        assert.equal("Frostbolt went on Action bar 2 (bottom left).", env2.messages[#env2.messages])
+        assert.equal("PLACED", module.report.verdict)
+        noResidue(env2, module2)
+    end)
+
+    it("says so and places nothing when every visible slot is taken", function()
+        local env, module = spellEnv()
+        for slot = 1, 12 do env.slots[slot] = 900 + slot end
+        for slot = 61, 72 do env.slots[slot] = 900 + slot end
+        env:Learn(1001)
+        assert.equal(0, #env.placed)
+        assert.equal("NOSLOT", module.report.verdict)
+        env.R.Broker:Emit("REFACTOR_SPELL_TEST")
+        assert.matches("2 of 3 action bars on screen", env.messages[#env.messages - 2])
+        assert.equal("No free slot on any bar you can see.", env.messages[#env.messages - 1])
+        assert.matches("Every slot on the bars you can see is taken", env.messages[#env.messages])
+    end)
+
+    it("waits for combat to end and drops the queue when the pause modifier is held", function()
+        local env, module = spellEnv()
+        env.combat = true
+        env:Learn(1001)
+        assert.equal(0, #env.placed)
+        assert.equal("COMBAT", module.report.verdict)
+        env.combat = false
+        env:Fire("PLAYER_REGEN_ENABLED")
+        env:Advance(1)
+        assert.equal(1001, env.slots[1])
+        env.control = true
+        env:Learn(1002)
+        assert.equal(1, #env.placed)
+        assert.equal("PAUSED", module.report.verdict)
+        env.control = false
+        -- Dropped, not deferred: the next fight ending does not place it after all.
+        env:Fire("PLAYER_REGEN_ENABLED")
+        env:Advance(1)
+        assert.equal(1, #env.placed)
+        assert.equal(0, env:ActiveTimers())
+    end)
+
+    it("leaves a held cursor alone and places the ability once it is free", function()
+        local env, module = spellEnv()
+        env.cursor = 77
+        env:Learn(1001)
+        assert.equal(0, #env.placed)
+        assert.equal(77, env.cursor)
+        assert.equal("CURSOR", module.report.verdict)
+        env.cursor = nil
+        env:Advance(2)
+        assert.equal(1001, env.slots[1])
+        assert.equal(0, env:ActiveTimers())
+    end)
+
+    it("gives up on a client that refuses, clears the cursor, and runs again on demand", function()
+        local env, module = spellEnv()
+        env.refusePlace = true
+        env:Learn(1001)
+        assert.equal(0, #env.placed)
+        assert.equal("BLOCKED", module.report.verdict)
+        -- Whatever the refusal was, the cursor is not left holding the spell.
+        assert.is_nil(env.cursor)
+        -- One attempt, not a retry loop: a client that refuses once refuses every time.
+        env:Advance(5)
+        assert.equal(0, #env.placed)
+        assert.equal(0, env:ActiveTimers())
+        env.refusePlace = false
+        env.R.Broker:Emit("REFACTOR_SPELL_TEST")
+        -- The command says what happened last, then runs the queue again, so the placement
+        -- line lands after the verdict it explains.
+        assert.matches("The client refused the placement", env.messages[#env.messages - 1])
+        assert.equal("Frostbolt went on Action bar 1 (main).", env.messages[#env.messages])
+        assert.equal(1001, env.slots[1])
+        noResidue(env, module)
+    end)
+
+    it("reports nothing learned yet, and the command says when the module is off", function()
+        local env, module = spellEnv()
+        env:Load("Core/Commands.lua")
+        env.R.Broker:Emit("REFACTOR_SPELL_TEST")
+        assert.equal("Nothing learned yet this session.", env.messages[#env.messages])
+        assert.equal("Next free slot: 1, on Action bar 1 (main).", env.messages[#env.messages - 1])
+        env.R.Registry:Disable(module)
+        local lines = env.R.Commands:Dispatch("spelltest")
+        assert.equal(env.R.L.CMD_SPELL_TEST_OFF, lines[1])
+    end)
+end)
+
+describe("M4 chat copy", function()
+    local function chatEnv(windows)
+        local env = base()
+        env.shown, env.buttons, env.hidden = {}, {}, 0
+        env.R.UI.ShowSessionText = function(_, text, title) env.shown = { text = text, title = title } end
+        env.R.UI.ChatCopyButton = function(_, chatFrame, onClick)
+            env.buttons[chatFrame] = onClick
+            return { chatFrame = chatFrame }
+        end
+        env.R.UI.HideChatCopyButtons = function() env.hidden = env.hidden + 1 end
+        for index = 1, (windows or 1) do
+            local frame = { lines = {} }
+            function frame:GetNumMessages() return #self.lines end
+            function frame:GetMessageInfo(at) return self.lines[at] end
+            env["ChatFrame" .. index] = frame
+        end
+        local module = enable(env, "Modules/Chat/Copy.lua", "chat.copy")
+        function env:Click(index)
+            self.buttons[self["ChatFrame" .. (index or 1)]]()
+        end
+        return env, module
+    end
+
+    it("copies the window's lines, oldest first, with the escapes the box cannot show removed", function()
+        local env, module = chatEnv()
+        env.ChatFrame1.lines = {
+            "|cffffffffTester|r says hello",
+            "You receive loot: |cffa335ee|Hitem:12345::::::::70:::::|h[Thunderfury]|h|r",
+            "|TInterface\\Icons\\Spell:16|t |A:atlas-name:12:12|a Kill it",
+            "Use || as a bar",
+        }
+        env:Click()
+        assert.equal("Chat text", env.shown.title)
+        assert.same({
+            "Tester says hello",
+            "You receive loot: [Thunderfury]",
+            "Kill it",
+            "Use | as a bar",
+        }, { strsplit_lines(env.shown.text) })
+        noResidue(env, module)
+    end)
+
+    it("counts the lines the client will not hand over rather than dropping them quietly", function()
+        local env = chatEnv()
+        local secret = setmetatable({}, { __tostring = function() return "secret" end })
+        env.issecretvalue = function(value) return value == secret end
+        env.R.Registry:Disable("chat.copy")
+        assert.is_true(env.R.Registry:Enable("chat.copy"))
+        env.ChatFrame1.lines = { "plain one", secret, "plain two" }
+        env:Click()
+        assert.matches("1 lines the client would not hand over", env.shown.text)
+        assert.matches("plain one\nplain two", env.shown.text)
+    end)
+
+    it("says when a window has nothing in it, and keeps only the newest lines of a long one", function()
+        local env = chatEnv()
+        env:Click()
+        assert.equal("This chat window has no lines yet.", env.shown.text)
+        for index = 1, 620 do
+            env.ChatFrame1.lines[index] = "line " .. index
+        end
+        env:Click()
+        local lines = { strsplit_lines(env.shown.text) }
+        assert.equal(500, #lines)
+        assert.equal("line 121", lines[1])
+        assert.equal("line 620", lines[#lines])
+    end)
+
+    it("gives every chat window its own button and takes them all back on disable", function()
+        local env, module = chatEnv(3)
+        assert.equal(3, #module.windows)
+        env.ChatFrame2.lines = { "second window" }
+        env.ChatFrame3.lines = { "third window" }
+        env:Click(2)
+        assert.equal("second window", env.shown.text)
+        env:Click(3)
+        assert.equal("third window", env.shown.text)
+        -- Every button is handed to the Chat buttons group, so the visibility panel can
+        -- hide it with Blizzard's own.
+        assert.equal(3, #env.R.Visibility:Contributions("chat.buttons"))
+        env.R.Registry:Disable(module)
+        assert.equal(1, env.hidden)
+        assert.equal(0, #env.R.Visibility:Contributions("chat.buttons"))
+        assert.is_nil(module.windows)
+        -- Enabling again reuses the same buttons rather than leaving a second set behind.
+        assert.is_true(env.R.Registry:Enable(module))
+        assert.equal(3, #module.windows)
+        noResidue(env, module)
+    end)
+end)
+
+describe("M4 map zone levels", function()
+    local RED, ORANGE, YELLOW = { r = 1, g = 0.1, b = 0.1 }, { r = 1, g = 0.5, b = 0.25 }, { r = 1, g = 0.82, b = 0 }
+    local GREEN, GREY = { r = 0.25, g = 0.75, b = 0.25 }, { r = 0.5, g = 0.5, b = 0.5 }
+    local ID = "interface.mapZoneLevels"
+
+    local function fontString()
+        local region = { shown = true, text = "" }
+        function region:SetText(text) self.text = text end
+        function region:GetText() return self.text end
+        function region:SetTextColor(r, g, b) self.color = { r, g, b } end
+        function region:SetJustifyH() end
+        function region:SetFontObject(font) self.font = font end
+        function region:GetFontObject() return "WorldMapTextFont" end
+        function region:SetPoint(point, relative, relativePoint, x, y)
+            self.point = { point, relative, relativePoint, x, y }
+        end
+        function region:Show() self.shown = true end
+        function region:Hide() self.shown = false end
+        return region
+    end
+
+    local function mapEnv()
+        local env = base()
+        env.level, env.mapID, env.hovered, env.levels, env.lookups = 5, 1414, nil, {}, 0
+        env.UnitLevel = function() return env.level end
+        -- Blizzard's relative difficulty bands, with the trivial range fixed at five levels.
+        env.GetQuestDifficultyColor = function(level)
+            local diff = level - env.level
+            if diff >= 5 then return RED
+            elseif diff >= 3 then return ORANGE
+            elseif diff >= -4 then return YELLOW
+            elseif -diff <= 5 then return GREEN
+            else return GREY end
+        end
+        env.C_Map = {
+            GetMapInfoAtPosition = function()
+                env.lookups = env.lookups + 1
+                return env.hovered
+            end,
+            GetMapLevels = function(mapID)
+                local known = env.levels[mapID]
+                if known then return known[1], known[2], 0, 0 end
+                return 0, 0, 0, 0
+            end,
+        }
+        env.hooksecurefunc = function(target, name, fn)
+            local original = target[name]
+            target[name] = function(...) original(...) fn(...) end
+        end
+        local label = { Name = fontString(), created = 0, evaluated = 0 }
+        function label:CreateFontString()
+            self.created = self.created + 1
+            self.last = fontString()
+            return self.last
+        end
+        function label:EvaluateLabels() self.evaluated = self.evaluated + 1 end
+        env.label = label
+        env.WorldMapFrame = {
+            dataProviders = { [{ pins = {} }] = true, [{ Label = label }] = true },
+            GetMapID = function() return env.mapID end,
+            GetNormalizedCursorPosition = function() return 0.5, 0.5 end,
+        }
+        -- Blizzard's label writes its name text and then evaluates; the hook sees the result.
+        function env.hover(name, info)
+            label.Name:SetText(name)
+            env.hovered = info
+            label:EvaluateLabels()
+        end
+        return env
+    end
+
+    local function zone(mapID, name) return { mapID = mapID, name = name } end
+
+    it("draws the range in the difficulty colour, only for a hovered zone the client has no levels for", function()
+        local env = mapEnv()
+        enable(env, "Modules/Interface/MapZoneLevels.lua", ID)
+        local label = env.label
+        assert.equal(1, label.created)
+        assert.equal("WorldMapTextFont", label.last.font)
+        assert.same({ "LEFT", label.Name, "RIGHT", 4, 0 }, label.last.point)
+        env.hover("Tirisfal Glades", zone(1420, "Tirisfal Glades"))
+        assert.equal("(1-10)", label.last.text)
+        assert.same({ 1, 0.82, 0 }, label.last.color)
+        assert.is_true(label.last.shown)
+        env.level = 1
+        env.hover("Westfall", zone(1436, "Westfall"))
+        assert.equal("(10-20)", label.last.text)
+        assert.same({ 1, 0.1, 0.1 }, label.last.color)
+        env.level = 12
+        env.hover("Redridge Mountains", zone(1433, "Redridge Mountains"))
+        assert.same({ 1, 0.5, 0.25 }, label.last.color)
+        -- Above the range Blizzard colours two below the top: 30 over a 10-20 zone is twelve
+        -- past 18 and grey, 13 over 1-10 is five past 8 and green, and 12 over 1-10 is four
+        -- past 8, still yellow.
+        env.level = 30
+        env.hover("Westfall", zone(1436, "Westfall"))
+        assert.same({ 0.5, 0.5, 0.5 }, label.last.color)
+        env.level = 13
+        env.hover("Durotar", zone(1411, "Durotar"))
+        assert.same({ 0.25, 0.75, 0.25 }, label.last.color)
+        env.level = 12
+        env.hover("Tirisfal Glades", zone(1420, "Tirisfal Glades"))
+        assert.same({ 1, 0.82, 0 }, label.last.color)
+        -- The article is optional either way round.
+        env.hover("Barrens", zone(1413, "Barrens"))
+        assert.equal("(10-25)", label.last.text)
+        env.hover("The Hinterlands", zone(1425, "The Hinterlands"))
+        assert.equal("(40-50)", label.last.text)
+        env.hover("The Durotar", zone(1411, "The Durotar"))
+        assert.equal("(1-10)", label.last.text)
+        -- Forever's own zones, the two with a published range.
+        env.hover("Riverglades", zone(16600, "Riverglades"))
+        assert.equal("(35-45)", label.last.text)
+        env.hover("Zephras Isle", zone(16593, "Zephras Isle"))
+        assert.equal("(1-12)", label.last.text)
+        -- A client that answers is drawing the range itself.
+        env.levels[1436] = { 10, 20 }
+        env.hover("Westfall", zone(1436, "Westfall"))
+        assert.equal("", label.last.text)
+        assert.is_false(label.last.shown)
+        -- A subzone of the open map, a label that is not the hovered map's name, a city and
+        -- no map under the cursor all draw nothing.
+        env.hover("Brill", zone(1414, "Brill"))
+        assert.equal("", label.last.text)
+        env.hover("Tirisfal Glades", zone(1420, "Tirisfal Glades"))
+        assert.equal("(1-10)", label.last.text)
+        env.hover("Some banner", zone(1420, "Tirisfal Glades"))
+        assert.equal("", label.last.text)
+        env.hover("Orgrimmar", zone(1454, "Orgrimmar"))
+        assert.equal("", label.last.text)
+        env.hover("Tirisfal Glades", zone(1420, "Tirisfal Glades"))
+        env.hover("", nil)
+        assert.equal("", label.last.text)
+        assert.is_false(label.last.shown)
+        assert.equal(0, #env.R.errors)
+    end)
+
+    it("looks the zone up once per change of the label, again on a level up, never while off", function()
+        local env = mapEnv()
+        local module = enable(env, "Modules/Interface/MapZoneLevels.lua", ID)
+        local label = env.label
+        env.hover("Tirisfal Glades", zone(1420, "Tirisfal Glades"))
+        assert.equal(1, env.lookups)
+        label:EvaluateLabels()
+        label:EvaluateLabels()
+        assert.equal(1, env.lookups)
+        env.level = 20
+        label:EvaluateLabels()
+        assert.same({ 1, 0.82, 0 }, label.last.color)
+        env:Fire("PLAYER_LEVEL_UP", 20)
+        label:EvaluateLabels()
+        assert.equal(2, env.lookups)
+        assert.same({ 0.5, 0.5, 0.5 }, label.last.color)
+        env.R.Registry:Disable(module)
+        assert.equal("", label.last.text)
+        assert.is_false(label.last.shown)
+        env.hover("Westfall", zone(1436, "Westfall"))
+        assert.equal(2, env.lookups)
+        assert.is_false(label.last.shown)
+        noResidue(env, module)
+        assert.is_true(env.R.Registry:Enable(module))
+        env.hover("Westfall", zone(1436, "Westfall"))
+        assert.equal("(10-20)", label.last.text)
+        assert.equal(1, label.created)
+    end)
+
+    it("fails with a reason when the map has no zone label to attach to", function()
+        local env = mapEnv()
+        env.WorldMapFrame.dataProviders = { [{ pins = {} }] = true }
+        env:Load("Modules/Interface/MapZoneLevels.lua")
+        assert.is_false(env.R.Registry:Enable(ID))
+        local module = env.R.moduleByID[ID]
+        assert.equal("failed", module.state)
+        assert.matches("zone label", module.failure)
+        assert.equal(1, #env.R.errors)
+        assert.equal(0, env.label.created)
+    end)
+end)
+
+describe("M4 map reveal", function()
+    local ID = "interface.mapReveal"
+
+    local function texture()
+        local region = { shown = false }
+        function region:SetSize(width, height) self.width, self.height = width, height end
+        function region:SetTexCoord(left, right, top, bottom) self.coords = { left, right, top, bottom } end
+        function region:SetPoint(point, relative, relativePoint, x, y)
+            self.point = { point, relative, relativePoint, x, y }
+        end
+        function region:ClearAllPoints() self.point = nil end
+        function region:SetTexture(file, _, _, filter) self.file, self.filter = file, filter end
+        function region:SetDesaturation(amount) self.desaturation = amount end
+        function region:SetVertexColor(r, g, b, a) self.color = { r, g, b, a } end
+        function region:Show() self.shown = true end
+        function region:Hide() self.shown = false end
+        return region
+    end
+
+    local function revealEnv()
+        local env = base()
+        env.R.MapOverlays = { interface = 120100, build = "test", maps = {
+            [1244] = { "160:210:382:281:272826", "315:256:101:247:272806,272812" },
+            [1300] = { "100:100:0:0:1,2" },
+        } }
+        env.artID, env.mapID, env.layerIndex, env.created = 1244, 1411, 1, 0
+        env.layers = { { tileWidth = 256, tileHeight = 256 } }
+        env.C_Map = {
+            GetMapArtID = function() return env.artID end,
+            GetMapArtLayers = function() return env.layers end,
+        }
+        env.hooksecurefunc = function(target, name, fn)
+            local original = target[name]
+            target[name] = function(...) original(...) fn(...) end
+        end
+        local pin = { alpha = 1, level = 2002, refreshed = 0 }
+        function pin:RefreshOverlays() self.refreshed = self.refreshed + 1 end
+        function pin:RemoveAllData() end
+        function pin:RefreshAlpha() end
+        function pin:GetAlpha() return self.alpha end
+        function pin:GetFrameLevel() return self.level end
+        env.pin = pin
+        local canvas = { name = "canvas" }
+        env.CreateFrame = function(_, _, parent)
+            env.created = env.created + 1
+            local frame = { parent = parent, textures = nil, shown = false, count = 0 }
+            function frame:SetAllPoints(target) self.fill = target end
+            function frame:SetFrameLevel(level) self.level = level end
+            function frame:SetAlpha(alpha) self.alpha = alpha end
+            function frame:Show() self.shown = true end
+            function frame:Hide() self.shown = false end
+            function frame:CreateTexture()
+                self.count = self.count + 1
+                self.last = texture()
+                self.all = self.all or {}
+                self.all[#self.all + 1] = self.last
+                return self.last
+            end
+            env.frame = frame
+            return frame
+        end
+        env.WorldMapFrame = {
+            shown = true, pins = { pin },
+            EnumeratePinsByTemplate = function(self, template)
+                local list = template == "MapExplorationPinTemplate" and self.pins or {}
+                local index = 0
+                return function()
+                    index = index + 1
+                    return list[index]
+                end
+            end,
+            GetCanvas = function() return canvas end,
+            GetMapID = function() return env.mapID end,
+            GetCanvasContainer = function() return { GetCurrentLayerIndex = function() return env.layerIndex end } end,
+            IsShown = function(self) return self.shown end,
+        }
+        env.canvas = canvas
+        return env
+    end
+
+    local function drawn(frame)
+        local list = {}
+        for _, region in ipairs(frame.all or {}) do
+            if region.shown then list[#list + 1] = region end
+        end
+        table.sort(list, function(a, b) return a.file < b.file end)
+        return list
+    end
+
+    it("draws the open map's overlays as cut tiles under Blizzard's exploration pin", function()
+        local env = revealEnv()
+        env:Load("UI/MapReveal.lua")
+        enable(env, "Modules/Interface/MapReveal.lua", ID)
+        local frame = env.frame
+        assert.equal(1, env.created)
+        assert.equal(env.canvas, frame.parent)
+        assert.equal(env.canvas, frame.fill)
+        assert.is_true(frame.shown)
+        assert.equal(2001, frame.level)
+        assert.equal(1, frame.alpha)
+        local tiles = drawn(frame)
+        assert.equal(3, #tiles)
+        -- A 315 by 256 overlay at 101, 247: one whole tile, then a 59 wide strip cut from a
+        -- 64 wide file. A 160 by 210 overlay fits one tile, cut both ways from a 256 file.
+        assert.equal(272806, tiles[1].file)
+        assert.same({ 256, 256 }, { tiles[1].width, tiles[1].height })
+        assert.same({ 0, 1, 0, 1 }, tiles[1].coords)
+        assert.same({ "TOPLEFT", frame, "TOPLEFT", 101, -247 }, tiles[1].point)
+        assert.equal(272812, tiles[2].file)
+        assert.same({ 59, 256 }, { tiles[2].width, tiles[2].height })
+        assert.same({ 0, 59 / 64, 0, 1 }, tiles[2].coords)
+        assert.same({ "TOPLEFT", frame, "TOPLEFT", 357, -247 }, tiles[2].point)
+        assert.equal(272826, tiles[3].file)
+        assert.same({ 160, 210 }, { tiles[3].width, tiles[3].height })
+        assert.same({ 0, 160 / 256, 0, 210 / 256 }, tiles[3].coords)
+        assert.same({ "TOPLEFT", frame, "TOPLEFT", 382, -281 }, tiles[3].point)
+        assert.equal("TRILINEAR", tiles[3].filter)
+        assert.equal(0.6, tiles[3].desaturation)
+        assert.same({ 0.72, 0.72, 0.72, 1 }, tiles[3].color)
+        assert.equal(0, #env.R.errors)
+    end)
+
+    it("follows the pin's refresh, clear and alpha, reuses textures, and skips what it cannot place", function()
+        local env = revealEnv()
+        env:Load("UI/MapReveal.lua")
+        local module = enable(env, "Modules/Interface/MapReveal.lua", ID)
+        local frame, pin = env.frame, env.pin
+        assert.equal(3, frame.count)
+        pin.alpha = 0.4
+        pin:RefreshAlpha()
+        assert.equal(0.4, frame.alpha)
+        pin:RemoveAllData()
+        assert.equal(0, #drawn(frame))
+        pin.level = 2010
+        pin:RefreshOverlays(true)
+        assert.equal(3, #drawn(frame))
+        assert.equal(3, frame.count)
+        assert.equal(2009, frame.level)
+        -- A map without data, a layer the client cannot describe, and an overlay whose tile
+        -- count does not fit its size all draw nothing.
+        env.artID = 9999
+        pin:RefreshOverlays()
+        assert.equal(0, #drawn(frame))
+        env.artID = 1300
+        pin:RefreshOverlays()
+        assert.equal(0, #drawn(frame))
+        env.artID, env.layers = 1244, nil
+        pin:RefreshOverlays()
+        assert.equal(0, #drawn(frame))
+        env.layers = { { tileWidth = 256, tileHeight = 256 } }
+        pin:RefreshOverlays()
+        assert.equal(3, #drawn(frame))
+        env.R.Registry:Disable(module)
+        assert.is_false(frame.shown)
+        assert.equal(0, #drawn(frame))
+        pin:RefreshOverlays()
+        assert.equal(0, #drawn(frame))
+        noResidue(env, module)
+        assert.is_true(env.R.Registry:Enable(module))
+        assert.equal(1, env.created)
+        assert.equal(3, #drawn(frame))
+        assert.equal(3, frame.count)
+        assert.equal(0, #env.R.errors)
+    end)
+
+    it("is unavailable on a client the data was not made for, and fails without a pin", function()
+        local env = revealEnv()
+        env.R.MapOverlays.interface = 16001
+        env:Load("UI/MapReveal.lua")
+        env:Load("Modules/Interface/MapReveal.lua")
+        assert.is_false(env.R.Registry:Enable(ID))
+        local module = env.R.moduleByID[ID]
+        assert.equal("unavailable", module.state)
+        assert.matches("another client build", module.unavailableReason)
+        assert.equal(0, env.created)
+
+        env = revealEnv()
+        env.WorldMapFrame.pins = {}
+        env:Load("UI/MapReveal.lua")
+        env:Load("Modules/Interface/MapReveal.lua")
+        assert.is_false(env.R.Registry:Enable(ID))
+        module = env.R.moduleByID[ID]
+        assert.equal("failed", module.state)
+        assert.matches("exploration layer", module.failure)
+        assert.equal(0, env.created)
     end)
 end)

@@ -93,9 +93,25 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   pushes a rule to the whole kind. Refactor's window keeps the preset. Hover comes from the
   tooltip an element shows, so no secure button is ever hooked; leaving is watched, not
   trusted to an event; elements in the same zone reveal together; a spell on the cursor
-  shows everything.
+  shows everything. A frame that takes no mouse gets no hook, so an overlay never swallows
+  the hover and tooltip of what sits under it.
 - Interface: maximum camera distance, ActionCam through its three CVars, screenshot on
   level up. Mail: remember last recipient per character.
+- Zone levels on the map: hover a zone on a continent map and its level range appears beside
+  the name in the quest difficulty colour. Forever's map draws the name alone and returns no
+  level data, so the ranges come from Refactor's own table, keyed by the name the label shows:
+  the original zones, Riverglades and Zephras Isle. Mount Hyjal and Shen'dralas wait for a
+  published range. Where the client answers, as Retail does, nothing of ours draws.
+- Reveal the map: the parts of a map you have not explored are drawn too, grey and dimmer,
+  under the client's own explored areas, so a zone's shape and what is left to explore show
+  at a glance. The art comes from Blizzard's overlay tables for one client build through
+  `Tools/map-overlays.py`; on another build the feature stays unavailable.
+- Update notice: guild and group members swap Refactor version numbers on the addon channel,
+  and a newer one in your guild or group is announced once per session in chat, with
+  `/refactor update` to ask again. Nothing is downloaded and nothing is looked up online.
+- What's new: the changelog in the window, under Tools, and at `/refactor changelog`. The
+  page is generated from CHANGELOG.md by `make changelog`, and the checks fail while it is
+  behind, so the two cannot drift.
 - Price providers: TradeSkillMaster (custom price string) and Auctionator, opt-in under
   Display options, labelled wherever a price is shown.
 - `/refactor bench`: load time, memory, garbage rate, CPU per frame when scriptProfile is

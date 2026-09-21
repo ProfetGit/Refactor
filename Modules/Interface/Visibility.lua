@@ -41,7 +41,9 @@ local function isFrame(value)
     return type(value) == "table" and type(value.GetAlpha) == "function"
 end
 
--- Secure and forbidden frames are Blizzard's alone: no script of ours goes on one.
+-- Secure and forbidden frames are Blizzard's alone: no script of ours goes on one. Nor does one
+-- that takes no mouse: giving a frame an OnEnter turns its mouse on, and an overlay that
+-- suddenly catches the pointer steals the hover, and the tooltip, from whatever sits under it.
 local function hookable(frame)
     if type(frame) ~= "table" or type(frame.HookScript) ~= "function" then
         return false
@@ -49,7 +51,11 @@ local function hookable(frame)
     if type(frame.IsForbidden) == "function" and frame:IsForbidden() then
         return false
     end
-    return not (type(frame.IsProtected) == "function" and frame:IsProtected())
+    if type(frame.IsProtected) == "function" and frame:IsProtected() then
+        return false
+    end
+    local takesMouse = frame.IsMouseMotionEnabled or frame.IsMouseEnabled
+    return type(takesMouse) == "function" and takesMouse(frame) == true
 end
 
 function Visibility:Group(id)
@@ -472,12 +478,50 @@ function Visibility:PrepareGroup(def)
             group.frames[#group.frames + 1] = frame
         end
     end
+    -- Frames another part of Refactor handed to this group, the chat copy button being one.
+    -- They join a group that exists; they cannot bring a missing one back.
+    for _, frame in ipairs(Rules:Contributions(def.id)) do
+        if isFrame(frame) then
+            group.frames[#group.frames + 1] = frame
+        end
+    end
     for _, frame in ipairs(group.frames) do
-        self.captured[frame] = frame:GetAlpha()
+        -- Only ever captured once. A group rebuilt while it is faded would otherwise take
+        -- the faded alpha for the frame's own, and every rebuild would dim it again.
+        if self.captured[frame] == nil then
+            self.captured[frame] = frame:GetAlpha()
+        end
         self.frameGroup[frame] = def.id
     end
     self:PrepareExtras(group)
     self:InstallHooks(group)
+end
+
+-- A frame joined or left a group after it was built. Building that one group again is
+-- cheaper than working out which half of it moved, and every hook it installs is guarded.
+function Visibility:OnFramesChanged(_, groupId)
+    local def = Rules:Group(groupId)
+    if not self.active or not def then
+        return
+    end
+    local before, group = {}, self.groups[groupId]
+    for _, frame in ipairs(group and group.frames or EMPTY) do
+        before[#before + 1] = frame
+    end
+    self:PrepareGroup(def)
+    -- A frame that left goes back to the alpha the group found it at, or it would be
+    -- stranded wherever the rule last put it.
+    for _, frame in ipairs(before) do
+        local kept = false
+        for _, current in ipairs(self.groups[groupId].frames) do
+            kept = kept or current == frame
+        end
+        if not kept and self.captured[frame] then
+            Fade:Snap(frame, self.captured[frame])
+            self.captured[frame], self.frameGroup[frame] = nil, nil
+        end
+    end
+    self:ApplyGroup(groupId, true)
 end
 
 function Visibility:OnEnable()
@@ -511,6 +555,7 @@ function Visibility:OnEnable()
     Conditions:Start(self)
     R.Broker:Subscribe("REFACTOR_CONDITIONS_CHANGED", self.OnConditions, self)
     R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.OnSettingsChanged, self)
+    R.Broker:Subscribe("REFACTOR_VISIBILITY_FRAMES", self.OnFramesChanged, self)
     if self.cursor then
         R.Broker:Subscribe("CURSOR_CHANGED", self.OnCursor, self)
     end

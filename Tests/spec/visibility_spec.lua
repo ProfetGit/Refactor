@@ -6,8 +6,9 @@ local MODULE = "interface.visibility"
 -- A Blizzard frame as the module sees it: alpha, script hooks, children and a mouse flag.
 local function fakeFrame(name, alpha, children)
     local frame = { name = name, alpha = alpha or 1, scripts = {}, children = children or {}, mouseOver = false,
-        shown = false, protected = false }
+        shown = false, protected = false, mouse = true }
     function frame:IsShown() return self.shown end
+    function frame:IsMouseMotionEnabled() return self.mouse end
     function frame:IsProtected() return self.protected end
     function frame:IsForbidden() return false end
     function frame:GetAlpha() return self.alpha end
@@ -552,6 +553,18 @@ describe("interface.visibility", function()
         assert.equal(0, #R.errors)
     end)
 
+    it("never hooks a frame that takes no mouse, so nothing under it loses its tooltip", function()
+        local env, R = base()
+        local overlay, blip = fakeFrame("MinimapBackdrop"), fakeFrame("MinimapPin")
+        overlay.mouse = false
+        env.MinimapCluster.children = { env.GameTimeFrame, overlay, blip }
+        R.Visibility:ApplyPreset("immersion")
+        assert.is_true(R.Registry:Enable(MODULE))
+        assert.is_nil(overlay.scripts.OnEnter)
+        assert.equal(1, #blip.scripts.OnEnter)
+        assert.equal(0, #R.errors)
+    end)
+
     it("reveals a whole zone from any of its elements and only that element outside one", function()
         local env, R = base()
         R.Visibility:ApplyPreset("immersion")
@@ -791,6 +804,47 @@ describe("interface.visibility", function()
         assert.equal(0, env.MultiBar6.alpha)
         assert.is_true(R.Registry:Disable(MODULE))
         assert.equal(1, env.MultiBar6.alpha)
+    end)
+
+    it("fades a frame another feature hands to a group, and gives it back when it leaves", function()
+        local env, R, module = base()
+        local copy = fakeFrame("RefactorChatCopy")
+        assert.is_false(R.Visibility:Contribute("chat.nosuchgroup", copy))
+        assert.is_true(R.Visibility:Contribute("chat.buttons", copy))
+        -- Twice is once: a second enable of the owning module must not double the group.
+        assert.is_true(R.Visibility:Contribute("chat.buttons", copy))
+        assert.equal(1, #R.Visibility:Contributions("chat.buttons"))
+        R.Visibility:ApplyPreset("immersion")
+        assert.is_true(R.Registry:Enable(MODULE))
+        assert.equal(0, copy.alpha)
+        -- It hovers like any other frame in the group, so reaching for it reveals it.
+        copy.mouseOver = true
+        copy:Fire("OnEnter")
+        settle(env, R)
+        assert.equal(1, copy.alpha)
+        assert.equal(1, env.ChatFrame1ButtonFrame.alpha / 0.2)
+        copy.mouseOver = false
+        settle(env, R)
+        assert.equal(0, copy.alpha)
+        -- Handed over while the module is already running, a frame joins there and then.
+        local second = fakeFrame("RefactorChatCopy2")
+        assert.is_true(R.Visibility:Contribute("chat.buttons", second))
+        settle(env, R)
+        assert.equal(0, second.alpha)
+        -- Withdrawn, it goes back to the alpha the group found it at rather than staying faded.
+        assert.is_true(R.Visibility:Withdraw("chat.buttons", second))
+        assert.equal(1, second.alpha)
+        assert.is_false(R.Visibility:Withdraw("chat.buttons", second))
+        local frames = module.groups["chat.buttons"].frames
+        local held = false
+        for _, frame in ipairs(frames) do
+            held = held or frame == second
+        end
+        assert.is_false(held)
+        assert.is_true(R.Registry:Disable(MODULE))
+        assert.equal(1, copy.alpha)
+        assert.is_true(R.Visibility:Withdraw("chat.buttons", copy))
+        assert.equal(0, #R.Visibility:Contributions("chat.buttons"))
     end)
 
     it("stands down per group behind a bar addon and as a whole behind ElvUI", function()

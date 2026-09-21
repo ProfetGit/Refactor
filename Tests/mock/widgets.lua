@@ -109,6 +109,11 @@ function Widgets.install(env)
     function Frame:SetText(text) self.text = text end
     function Frame:GetText() return self.text or "" end
     function Frame:GetStringWidth() return #(self.text or "") * 8 end
+    -- The What's new page lays paragraphs out by their wrapped height, estimated here from
+    -- the same eight pixels a character GetStringWidth reports, fourteen a line.
+    function Frame:GetStringHeight()
+        return 14 * math.max(1, math.ceil(self:GetStringWidth() / math.max(1, self:GetWidth())))
+    end
     function Frame:SetTexture(texture) self.texture = texture end
     -- The loot feed asks whether the client accepted a custom file path, and a mock that
     -- answered nil would report every one of them missing.
