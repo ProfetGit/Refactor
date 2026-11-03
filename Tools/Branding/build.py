@@ -4,6 +4,7 @@
 Needs rsvg-convert (librsvg) and Pillow. Dev only: nothing here is packaged.
 
     python3 Tools/Branding/build.py            # everything
+    python3 Tools/Branding/build.py --icons    # icons only
     python3 Tools/Branding/build.py --stills   # one PNG per banner beat in .preview/branding, no WebP
 """
 import math
@@ -401,6 +402,9 @@ def build_icons():
     for size in (128, 64):
         rasterise(doc, size, size).save(ROOT / f"docs/Icon{size}.png")
         print(f"wrote docs/Icon{size}.png")
+    for size in (512, 256):
+        rasterise(doc, size, size).save(ROOT / f"Icon{size}.png")
+        print(f"wrote Icon{size}.png")
 
 
 def animate(draw, w, h, loop, path):
@@ -426,6 +430,8 @@ def stills():
 if __name__ == "__main__":
     if "--stills" in sys.argv:
         stills()
+    elif "--icons" in sys.argv:
+        build_icons()
     else:
         build_icons()
         animate(banner, BW, BH, B_LOOP, ROOT / "docs/media/banner.webp")
