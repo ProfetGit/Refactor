@@ -1,13 +1,40 @@
-# Refactor
+<p align="center">
+  <img src="docs/media/banner.webp" alt="Refactor: quality of life for WoW Forever" width="100%">
+</p>
 
-**Quality of life for World of Warcraft. Small features, each explained in a line, each switchable per character.**
+<p align="center">
+  <img src="https://img.shields.io/badge/WoW_Forever-1.60-c0703a?style=flat-square" alt="WoW Forever 1.60">
+  <img src="https://img.shields.io/badge/Retail-12.1-a67a42?style=flat-square" alt="Retail 12.1">
+  <img src="https://img.shields.io/badge/Lua-5.1-6e4b24?style=flat-square" alt="Lua 5.1">
+</p>
+
+<p align="center">
+  <b>Small features, each explained in a line, each switchable per character.</b><br>
+  <a href="#install">Install</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#slash-commands">Commands</a> &middot;
+  <a href="#support">Support</a>
+</p>
+
+---
 
 Refactor removes the clicks you never wanted and leaves everything else alone. It never touches
 secure frames, never reskins Blizzard's UI, and no automation runs unless you turned it on yourself.
 
 Built for Retail 12.1.0 first. WoW Forever support follows once that client can be probed.
 
----
+## Why Refactor
+
+- **One list.** Every feature is a row with a checkbox and a line saying what it does. Search
+  finds any feature or setting by name, description or option.
+- **Your call, per character.** Switches are account wide, a profile can cover a group of
+  characters, and any character can override any feature.
+- **Nothing acts for you by default.** Features that accept, decline or invite start off. Hold
+  the pause modifier, Ctrl by default, at the moment of any automatic action to skip it.
+- **No taint.** No secure templates, no protected calls, no changes to secure frames in combat.
+- **Light.** Load time, memory and CPU have budgets that gate every release, down to zero
+  `OnUpdate` handlers while idle. See [Performance budgets](#performance-budgets).
+- **Plays nicely.** Where another addon owns a job, Refactor steps aside and says so.
 
 ## Contents
 
@@ -28,6 +55,9 @@ Built for Retail 12.1.0 first. WoW Forever support follows once that client can 
 - [Plays nicely with](#plays-nicely-with)
 - [Slash commands](#slash-commands)
 - [Development](#development)
+- [Performance budgets](#performance-budgets)
+- [Support](#support)
+- [License](#license)
 
 ---
 
@@ -186,6 +216,9 @@ make api-index # regenerate Data/api-retail.json from a wow-ui-source checkout
 
 `make dev-setup` installs busted, luacheck and dkjson into a local `.tools` tree.
 
+`python3 Tools/Branding/build.py` draws the icon, the in-game icon TGAs and both banners on this
+page from one set of shapes. It needs `rsvg-convert` and Pillow.
+
 Every API symbol a module uses is declared in its `requires` list and verified against
 `Data/api-retail.json`, which is generated from Blizzard's own interface source for the
 installed build. A symbol that cannot be found there does not ship.
@@ -205,3 +238,13 @@ These are release gates, measured by `/refactor bench`.
 | Memory after load | under 1.5 MB |
 | Memory growth per hour | under 100 KB |
 | Active `OnUpdate` handlers while idle | 0 |
+
+## Support
+
+Refactor is free. If it saves you some clicks, a coffee helps fund the next update.
+
+<a href="https://ko-fi.com/profetgit"><img src="docs/media/kofi.webp" alt="Support Refactor on Ko-fi" width="480"></a>
+
+## License
+
+All rights reserved.
