@@ -1,19 +1,31 @@
-# Refactor
+# CLAUDE.md
 
-Quality of life addon for World of Warcraft: Forever. Lua 5.1, WoW addon API.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Full product spec: `docs/PRD.md`. Delivery order: `docs/ROADMAP.md`. This file is the working contract, not the spec.
+Refactor: quality of life addon for World of Warcraft: Forever. Lua 5.1, WoW addon API. The TOC declares both Retail (`120100`) and Forever (`16001`), and the same files run on both.
+
+Full product spec: `docs/refactor-prd.md`. Delivery order: `docs/ROADMAP.md`. This file is the working contract, not the spec.
 
 **Before any task, read the "Current milestone" section of `docs/ROADMAP.md`.** Work only inside that milestone. If a request falls outside it, say which milestone it belongs to and ask before starting.
 
 ## Commands
 
 ```
+make dev-setup   # once: busted, luacheck and dkjson into .tools/
 make lint        # luacheck + project rules (Tools/lint.lua)
 make test        # busted against the mocked API in Tests/mock
-make api-check   # every module's `requires` verified against Data/api-retail.json (generated from Blizzard's interface source)
+make api-check   # every `requires` symbol verified against Data/api-retail.json; Forever gaps reported from Data/api-forever.json
 make check       # lint + test + api-check. Run this before saying a task is done.
-make package     # BigWigs packager dry run
+make package     # check, then Tools/package.py zips exactly the TOC's files into .release/Refactor-retail.zip (what CI runs)
+make changelog   # regenerate Locales/Changelog.enUS.lua from CHANGELOG.md; changelog_spec fails while it is stale
+make api-index   # regenerate Data/api-retail.json from a wow-ui-source checkout (SOURCE=~/wow-ui-source)
+make probe-index # regenerate Data/api-forever.json from a Tools/Probe dump (PROBE=Data/forever-probe.lua)
+```
+
+Every target runs through `Tools/dev-env.sh`, which puts the project-local `.tools/` tree on the path. One spec file, or one test by name:
+
+```
+sh Tools/dev-env.sh busted --lua=lua5.1 Tests/spec/core_spec.lua --filter "residue"
 ```
 
 `make check` must pass. If it cannot pass, say so explicitly rather than working around it.
@@ -46,32 +58,49 @@ Never write an API call from memory. Verify it, in this order:
 
 `Data/probe-answers.json` holds what a one-off in-game dump established about tooltip fields, objective type strings and atlas availability. Treat it as evidence, not as a live index.
 
+`Data/api-forever.json` is the Forever client's own answer rather than source evidence. `Tools/Probe` is a dev addon, never packaged, installed on Forever as its own `RefactorProbe` folder: it dumps every global, the fields of every API table, widget methods, CVars and documented events, and `make probe-index` converts the dump. Globals another addon wrote are kept apart in `addonGlobals`, because the dump cannot tell an addon's global from a client global the addon overwrote. Re-probe after every Forever build; the current dump is 1.60.1.70009, 25 Sep 2026.
+
 If a symbol cannot be verified, say so and stop. Do not guess a plausible name. A wrong function name that ships is the single failure mode this project is built to avoid.
 
-The baseline is the **Retail API surface** at the installed build. Blizzard has said on stream that WoW Forever uses the Retail API, which is why the addon targets Retail first, but that is a claim about a client nobody here has run. Nothing about Forever is confirmed until a Probe dump exists, which is exactly what `requires` and capability probing are for. See PRD 2.2 and section 13, and the retail-first note in `docs/ROADMAP.md`.
+The baseline is the **Retail API surface** at the installed build. The first Probe dump backed Blizzard's claim that Forever uses the Retail API: Forever reports `WOW_PROJECT_ID` 1 (Mainline), carries Retail's secret-value restrictions in its API documentation, and exposes every symbol Refactor declares. That settles existence, not behaviour on Forever. See PRD 2.2 and section 13, and the retail-first note in `docs/ROADMAP.md`.
 
-`make api-check` passing means every declared symbol appears in Blizzard's own source for that build, or in the client's own global list for the few in `Data/client-api.json`. It is not proof that the call behaves as expected, that it is unprotected, or that it exists on Forever. In-game verification is still a separate step.
+`make api-check` fails on a declared symbol found in neither index, which is the invented kind. A symbol Forever lacks is listed per file without failing, because capability probing already shows that module as unavailable there. Passing is not proof that the call behaves as expected or that it is unprotected. In-game verification is still a separate step.
 
 Scope of the requires check: globals and `C_*` namespace fields. Method calls on frame objects are out of scope for static checking, see PRD 10.4.
 
 ## Repo layout
 
 ```
-Core/           Namespace, Registry, Broker, Settings, Capabilities, Pools
-UI/             Window, Search, Widgets, Theme
-Modules/        Always-loaded modules, one folder per category
-Modules_LoD/    Load-on-demand heavy modules: Nameplates, Toasts, Tooltips
-Integrations/   TSM, Auctionator, Questie, Plater deference
-Locales/
+Core/           Namespace, Registry, Capabilities, Broker, Settings, Conditions, Visibility, Fade, Safety, Pools, Codec, Bench, Commands, Bootstrap
+UI/             Window, Search, Widgets, Panels/, and the frames modules drive (LootFeed, FarmHud, Merchant*, ChatCopy, MapReveal)
+Modules/        Feature modules, one folder per category
+Modules_LoD/    Heavy and hot modules: Nameplates, Toasts, Tooltips. Despite the name they are listed in Refactor.toc and load with the rest
+Integrations/   Neighbours (conflict panel), deference (Questie, Plater, Plumber, FrameOwners), price providers (TSM, Auctionator, Prices)
+Locales/        enUS strings; Changelog.enUS.lua is generated
+Libs/           LibStub, LibRefactorTheme-1.0, LibRefactorPrice-1.0
+Media/          Refactor's own textures, and CustomTheme.lua (theme overrides)
 Tests/mock/     Hand-written WoW API stubs
 Tests/spec/     busted specs
-Libs/           LibStub, CallbackHandler, LibDataBroker, LibDBIcon, LibRefactorPrice, LibRefactorTheme
-Tools/          lint.lua, api-check.lua, probe-to-json.lua, bench parsing
-Data/           Generated API index
-docs/           PRD.md, ROADMAP.md, ARCHITECTURE.md, style-reference.jpg
+Tools/          lint.lua, api-check.lua, source-index.py, probe-to-json.lua, Probe/, changelog.lua, package.py, map-overlays.py
+Data/           api-retail.json and its inputs (legacy-api.json, client-api.json), api-forever.json, probe-answers.json, MapOverlays.lua (shipped)
+docs/           refactor-prd.md, ROADMAP.md
 ```
 
-One module per file. New file means new entry in the TOC and a `requires` list.
+One module per file. New file means new entry in `Refactor.toc` and a `requires` list. The TOC is the load order and the package list: `Tools/package.py` ships exactly what it names.
+
+## Architecture
+
+Every file shares the addon's private table `R` (`local _, R = ...`). `Core/Namespace.lua` also publishes it as `_G.Refactor`, so `/run` diagnostics can read `Refactor.moduleByID[id].state`, `.missing`, `.failure` and `Refactor.errors`.
+
+Load order in `Refactor.toc`: Libs, Core, Locales, UI, Modules, Integrations, Modules_LoD, then `Core/Bench`, `Core/Commands` and `Core/Bootstrap` last. At file load a module only calls `R:RegisterModule`. Nothing turns on until `PLAYER_LOGIN`, when Bootstrap runs `InitSavedVariables` and `Settings:Init`, `UI:Initialize`, registers the price providers, runs `Registry:ReconcileAll` and registers the slash command.
+
+- **Registry** (`Core/Registry.lua`). States are `disabled`, `enabled`, `unavailable` and `failed`. `Enable` marks a module `unavailable` when it set `unavailableReasonKey` (how a module defers to a neighbour addon) or when `Capabilities:Check(requires)` finds a symbol missing from the live `_G`, and names the symbol in `module.missing`. `OnEnable` runs inside `R:Try`; an error leaves the module `failed` until the player toggles it. Disable always ends with `Broker:UnsubscribeAll` and `R:CancelTimers` for the module.
+- **The definition table is the module's `self`.** The table passed to `R:RegisterModule` is what every method receives, so per-visit state stored in a definition field (`self.id`, `self.requires`, `self.category`, `self.risk`) overwrites the registry's copy. Lint rejects those writes. This is how the auto gossip toggle broke once.
+- **Settings** (`Core/Settings.lua`). Whether a feature is on resolves as character override, then the profile assigned to this character's GUID, then the account value, then the module's `defaultEnabled`. The window's Editing switch chooses which layer a click writes. Options (`GetOption` and `SetOption`) are values inside a feature, validated against `OPTION_DEFAULTS` and refilled from them by `Settings:Init`. Every change emits `REFACTOR_SETTINGS_CHANGED`, and a change to a module id (not to an option) re-reconciles every module, which is what makes the toggle live.
+- **Broker** (`Core/Broker.lua`). One frame carries every Blizzard event. Events prefixed `REFACTOR_` are internal and never registered with the client (`REFACTOR_SETTINGS_CHANGED`, `REFACTOR_MODULE_CHANGED`, test events). `Subscribe(event, handler, owner, throttle, priority)`.
+- **Errors.** Handlers run through `R:Try` and `R:SafeCall` (xpcall) and land in `R.errors`, shown by `/refactor errors`. They never reach BugGrabber, so an empty BugSack does not mean no errors.
+- **Shared services modules call instead of reimplementing:** `R:Paused()` in `Core/Safety.lua` (the one pause modifier every automatic action honours), `Core/Conditions.lua` (player state flags, events held only while a consumer is started), `Core/Visibility.lua` with `Core/Fade.lua` (UI visibility rules and the only `OnUpdate` driver), `R:After` (timers cancelled with their owner), `Core/Pools.lua`, and `Core/Codec.lua` (profile share strings).
+- **Tests.** `Tests/mock/runtime.lua` builds an environment where `_G` is the env itself, loads the Libs and Core into it, and drives time with `env:Advance` and events with `env:Fire`. Each spec stubs the gameplay API it needs. Without those stubs most modules resolve as `unavailable`, so a spec that only clicks the UI never enables them: reproduce a module bug with the module's own capability stubs, as `m4_spec.lua` does.
 
 ## Module contract
 
@@ -124,7 +153,7 @@ These are release gates, measured by `/refactor bench`. Do not regress them.
 | Memory growth per hour | < 100 KB |
 | Active `OnUpdate` while idle | 0 |
 
-Three modules are hot and get real scrutiny: nameplate quest progress, tooltip modules, bag borders. Toasts are not hot because they animate with `AnimationGroup`. Everything else hangs off events that fire at human speed and needs correctness, not tuning. Do not micro-optimise cold modules.
+The hot modules get real scrutiny: nameplate quest progress and the tooltip modules. Bag quality borders were dropped as native on Retail 12.1. Toasts are not hot because they animate with `AnimationGroup`. Everything else hangs off events that fire at human speed and needs correctness, not tuning. Do not micro-optimise cold modules.
 
 ## Caching
 
@@ -142,7 +171,7 @@ Before reporting a task complete:
 2. Pure logic has a spec in `Tests/spec/`. Settings resolution, price chain, sell-list precedence, and enable/disable residue are all testable headless and must be tested.
 3. Anything needing a live client goes on the manual checklist in the PR description, not faked in the mock.
 
-In-game errors: after `/reload`, BugGrabber writes every error with a stack trace to its SavedVariables file. Ask for the path and read it rather than speculating about a runtime failure.
+In-game errors: after `/reload`, BugGrabber writes every error with a stack trace to its SavedVariables file. Ask for the path and read it rather than speculating about a runtime failure. Errors inside Refactor's own handlers are caught before BugGrabber sees them: ask for `/refactor errors` output too. `/refactor saved` reports whether the client handed the saved variables back at login.
 
 The mock in `Tests/mock` is deliberately incomplete. If a module touches an unmocked API the test fails loudly. Add the stub deliberately, do not stub broadly to make a test pass.
 

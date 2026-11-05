@@ -1,40 +1,52 @@
 --- @module toasts.loot
 --- Purpose: show what the player just looted as one anchored rolling feed of fading rows.
---- Requires: UnitGUID, GetMoney, C_Item.GetItemQualityByID, C_Item.GetItemIconByID, C_Item.GetItemQualityColor,
----     C_CurrencyInfo.GetCurrencyInfo, C_CurrencyInfo.GetCoinTextureString
---- Events: CHAT_MSG_LOOT, CURRENCY_DISPLAY_UPDATE, LOOT_OPENED; LOOT_CLOSED, PLAYER_MONEY (contextual)
+--- Requires: UnitGUID, GetMoney, InCombatLockdown, C_Item.GetItemQualityByID, C_Item.GetItemIconByID,
+---     C_Item.GetItemQualityColor, C_CurrencyInfo.GetCurrencyInfo
+--- Events: CHAT_MSG_LOOT, CURRENCY_DISPLAY_UPDATE, LOOT_OPENED; LOOT_CLOSED, PLAYER_MONEY (contextual);
+---     GET_ITEM_INFO_RECEIVED, PLAYER_EQUIPMENT_CHANGED, PLAYER_REGEN_DISABLED, PLAYER_REGEN_ENABLED
+---     (contextual, only while item rows or the upgrade prompt are on screen and Gear Refactor is loaded)
 --- Hot: no, loot arrives at human speed and the animation runs in the client
 local _, R = ...
 local Price = R.Price
 local Loot = R:RegisterModule({
-    id = "toasts.loot", category = "Toasts", nameKey = "TOAST_LOOT_NAME",
+    id = "toasts.loot", category = "Loot", nameKey = "TOAST_LOOT_NAME",
     descriptionKey = "TOAST_LOOT_DESC", detailKey = "TOAST_LOOT_DETAIL",
-    requires = { "UnitGUID", "GetMoney", "C_Item.GetItemQualityByID", "C_Item.GetItemIconByID",
-        "C_Item.GetItemQualityColor", "C_CurrencyInfo.GetCurrencyInfo",
-        "C_CurrencyInfo.GetCoinTextureString" },
+    requires = { "UnitGUID", "GetMoney", "InCombatLockdown", "C_Item.GetItemQualityByID",
+        "C_Item.GetItemIconByID", "C_Item.GetItemQualityColor", "C_CurrencyInfo.GetCurrencyInfo" },
     risk = "visible", defaultEnabled = false,
 })
 
 local MONEY_GRACE = 0.5
-local COIN_FONT_HEIGHT = 12
+local GEAR_EVENTS = { "GET_ITEM_INFO_RECEIVED", "PLAYER_EQUIPMENT_CHANGED", "PLAYER_REGEN_DISABLED",
+    "PLAYER_REGEN_ENABLED" }
 -- inv_misc_coin_01: the coin-pile icon, so the looted-gold row reads like the currency rows.
 local GOLD_ICON = 133784
 -- A multi-slot loot arrives as one burst of messages. Everything inside this window is one
 -- group; the next click of a manual loot window lands after it and gets its own row.
 local GROUP_WINDOW = 0.35
-local TEXTURE_KEYS = { "lootRow", "lootRowHover", "lootIconFrame", "lootUnderline" }
+local TEXTURE_KEYS = { "lootRow", "lootRowHover", "lootIconFrame", "lootUnderline", "coinGold", "coinSilver",
+    "coinCopper" }
 -- Real item ids so /refactor loottest shows real icons. Names are in the locale file.
 local TEST_ITEMS = { 2589, 2770, 1210, 4306, 858, 6948 }
+-- inv_belt_03, for the test upgrade: it has no item behind it, only a picture.
+local TEST_UPGRADE_ICON = 132492
 
--- The client's own coin icons, at the size of the row's second line, rather than the
--- letters g, s and c. It also drops denominations that are zero, so a grey sells for "8c"
--- and not "0g 0s 8c". The text form stays as the answer for a client without it.
-local function moneyText(amount)
-    local coins = C_CurrencyInfo.GetCoinTextureString(amount, COIN_FONT_HEIGHT)
-    if type(coins) == "string" and coins ~= "" then
-        return coins
-    end
-    return string.format(R.L.MONEY_TEXT, math.floor(amount / 10000), math.floor(amount / 100) % 100, amount % 100)
+-- The row draws money as coin textures of its own (row:SetMoney), so a line that carries an
+-- amount is formatted around a marker and split there: the words stay in the locale file,
+-- in whatever order a language puts them.
+local MONEY_SLOT = "\001"
+local function around(pattern, ...)
+    local text = string.format(pattern, ...)
+    local prefix, suffix = text:match("^(.-)\001(.*)$")
+    return prefix or text, suffix or ""
+end
+
+local function goldEntry(key, total)
+    local prefix, suffix = around(R.L.TOAST_GOLD_DETAIL, MONEY_SLOT)
+    return {
+        key = key, count = total, name = R.L.TOAST_GOLD, icon = GOLD_ICON, framed = false,
+        detail = prefix, money = total, moneyLine = "detail", moneySuffix = suffix,
+    }
 end
 
 -- Locale independent: the link and the trailing "x3" are the same in every language.
@@ -60,14 +72,24 @@ function Loot:PriceOf(link, count)
     return Price:Get(link, count)
 end
 
+-- The price line as the text before the coins, the amount, and the text after them. A vendor
+-- price is the unmarked default; only a price from an auction addon names where it came
+-- from (PRD 5.5), so a row of greys does not repeat "(vendor)" down the whole feed.
 function Loot:Detail(value, source)
     if not value then
         return nil
     end
-    if not source or R.Settings:GetOption("toastShowSource") == false then
-        return moneyText(value)
+    if not source or source == "vendor" or R.Settings:GetOption("toastShowSource") == false then
+        return "", value, ""
     end
-    return string.format(R.L.TOAST_PRICE, moneyText(value), R.L["TOAST_SOURCE_" .. tostring(source)] or source)
+    local prefix, suffix = around(R.L.TOAST_PRICE, MONEY_SLOT, R.L["TOAST_SOURCE_" .. tostring(source)] or source)
+    return prefix, value, suffix
+end
+
+function Loot:Describe(entry)
+    entry.name = self:Label(entry.itemName, entry.count)
+    entry.detail, entry.money, entry.moneySuffix = self:Detail(entry.value, entry.source)
+    entry.moneyLine = "detail"
 end
 
 function Loot:Label(name, count)
@@ -97,6 +119,141 @@ function Loot:Collect(entry)
     pending[#pending + 1] = entry
 end
 
+-- Gear Refactor's verdict on each looted item (its PRD 5.3): with this feed on, its own
+-- upgrade popup stands down. The row carries the badge and the upgrade prompt asks.
+local function magnitude(badge)
+    return tonumber(badge.text:match("%-?%d+")) or 0
+end
+
+-- Integrations/GearRefactor.lua, or nil while Gear Refactor is not there to ask.
+local function gear()
+    local integration = R.Integrations and R.Integrations.gear
+    return integration and integration:Available() and integration or nil
+end
+
+-- A collapsed group would hide an upgrade inside it, so the group's row wears the best
+-- upgrade it holds; every upgrade inside is offered in the prompt on its own. A row with no
+-- link (gold, currency, a test row) has nothing for Gear Refactor to judge.
+function Loot:Assess(entry)
+    if entry.children then
+        local best
+        for _, child in ipairs(entry.children) do
+            self:Assess(child)
+            local badge = child.badge
+            if badge and badge.state == "upgrade" and (not best or magnitude(badge) > magnitude(best)) then
+                best = badge
+            end
+        end
+        entry.badge = best
+        return
+    end
+    if not entry.link then
+        return
+    end
+    local integration = gear()
+    entry.badge = integration and integration:Badge(entry.link) or nil
+    self:Consider(entry)
+end
+
+-- Each upgrade is offered once: Not now, Equip, or equipping it some other way is final for
+-- that drop. One that stops being an upgrade while it waits leaves the queue.
+function Loot:Consider(entry)
+    local upgrade = entry.badge ~= nil and entry.badge.state == "upgrade" and not entry.equipped
+    if upgrade and not entry.offered then
+        entry.offered = true
+        entry.replacesName = gear():ReplacedName(entry.link)
+        self.prompt:Offer(entry)
+    elseif not upgrade then
+        self.prompt:Withdraw(entry)
+    end
+end
+
+function Loot:CanEquip()
+    local integration = gear()
+    return not self.inCombat and integration ~= nil and integration:CanEquip()
+end
+
+-- True once the item is on: the prompt moves on to the next upgrade. A test row has no item
+-- behind it, so there is nothing to equip and the prompt simply closes.
+function Loot:Equip(entry)
+    if not entry.link then
+        return true
+    end
+    if not self:CanEquip() then
+        return false
+    end
+    if gear():Equip(entry.link) then
+        entry.equipped = true
+        return true
+    end
+    R:Print(R.L.TOAST_EQUIP_FAILED)
+    return false
+end
+
+-- Held only while an item row or the prompt is on screen: nothing needs a verdict
+-- refreshed otherwise.
+function Loot:WatchGear(on)
+    if on == (self.watchingGear == true) then
+        return
+    end
+    self.watchingGear = on
+    if not on then
+        for _, event in ipairs(GEAR_EVENTS) do
+            R.Broker:Unsubscribe(event, self)
+        end
+        return
+    end
+    self.inCombat = InCombatLockdown()
+    R.Broker:Subscribe("GET_ITEM_INFO_RECEIVED", self.QueueBadges, self)
+    R.Broker:Subscribe("PLAYER_EQUIPMENT_CHANGED", self.QueueBadges, self)
+    R.Broker:Subscribe("PLAYER_REGEN_DISABLED", self.OnCombat, self)
+    R.Broker:Subscribe("PLAYER_REGEN_ENABLED", self.OnCombat, self)
+end
+
+-- The event is the answer: PLAYER_REGEN_DISABLED fires before lockdown begins, so asking
+-- InCombatLockdown inside it would still say no.
+function Loot:OnCombat(event)
+    self.inCombat = event == "PLAYER_REGEN_DISABLED"
+    self.prompt:Refresh()
+end
+
+function Loot:SettleGear()
+    if #self.host.items == 0 and #self.prompt.queue == 0 then
+        self:WatchGear(false)
+    end
+end
+
+-- Next frame, once per frame: Gear Refactor drops its scores on the same events, and asking
+-- before it has would read the old verdict. A burst of item loads costs one refresh.
+function Loot:QueueBadges()
+    if not self.badgeTimer then
+        self.badgeTimer = R:After(self, 0, self.RefreshBadges)
+    end
+end
+
+function Loot:RefreshBadges()
+    self.badgeTimer = nil
+    for _, item in ipairs(self.host.items) do
+        self:Assess(item.entry)
+    end
+    -- An upgrade still waiting may have left the feed already. Backwards, because one that
+    -- is no longer an upgrade is withdrawn from the queue while it is walked.
+    local queue = self.prompt.queue
+    for index = #queue, 1, -1 do
+        if queue[index] then self:Assess(queue[index]) end
+    end
+    self.host:RefreshAccessories()
+    self.prompt:Refresh()
+end
+
+function Loot:Push(entry)
+    self:Assess(entry)
+    self.host:Push(entry)
+    if gear() and (#self.host.items > 0 or #self.prompt.queue > 0) then
+        self:WatchGear(true)
+    end
+end
+
 -- A row already on screen for this item takes the new drop as a higher count rather than a
 -- second row, which is what makes "x2" appear on a repeat drop.
 function Loot:PushItem(entry)
@@ -107,9 +264,8 @@ function Loot:PushItem(entry)
             entry.value, entry.source = self:PriceOf(entry.link, entry.count)
         end
     end
-    entry.name = self:Label(entry.itemName, entry.count)
-    entry.detail = self:Detail(entry.value, entry.source)
-    self.host:Push(entry)
+    self:Describe(entry)
+    self:Push(entry)
 end
 
 function Loot:Flush()
@@ -132,14 +288,16 @@ function Loot:Flush()
         count = count + entry.count
         total = total + (entry.value or 0)
         if index <= R.UI.lootFeedMaxGroupRows then
-            entry.name = self:Label(entry.itemName, entry.count)
-            entry.detail = self:Detail(entry.value, entry.source)
+            self:Describe(entry)
             children[#children + 1] = entry
         end
     end
-    local label = total > 0 and string.format(R.L.TOAST_GROUP_PRICED, count, moneyText(total))
-        or string.format(R.L.TOAST_GROUP, count)
-    self.host:Push({ name = label, children = children })
+    if total > 0 then
+        local label, suffix = around(R.L.TOAST_GROUP_PRICED, count, MONEY_SLOT)
+        self:Push({ name = label, money = total, moneyLine = "name", moneySuffix = suffix, children = children })
+    else
+        self:Push({ name = string.format(R.L.TOAST_GROUP, count), children = children })
+    end
 end
 
 function Loot:OnLoot(_, text, _, _, _, _, _, _, _, _, _, _, guid)
@@ -194,12 +352,7 @@ function Loot:OnMoney()
         return
     end
     local existing = self.host.byKey[self]
-    local total = (existing and existing.entry.count or 0) + delta
-    self.host:Push({
-        key = self, count = total, name = R.L.TOAST_GOLD,
-        detail = string.format(R.L.TOAST_GOLD_DETAIL, moneyText(total)),
-        icon = GOLD_ICON, framed = false,
-    })
+    self.host:Push(goldEntry(self, (existing and existing.entry.count or 0) + delta))
 end
 
 function Loot:StopMoney()
@@ -231,7 +384,7 @@ function Loot:OnSettingsChanged(_, key)
 end
 
 -- /refactor loottest. Fake rows through the real path: one common item, a stack, an
--- uncommon item, gold, and a four-item group, so the feed can be judged on screen.
+-- uncommon upgrade with its prompt, gold, and a four-item group, so the feed can be judged on screen.
 function Loot:Test()
     local missing = {}
     for _, key in ipairs(TEXTURE_KEYS) do
@@ -257,10 +410,16 @@ function Loot:Test()
     end
     self:PushItem(row(1, "TOAST_TEST_COMMON", 1, 1, 89))
     self:PushItem(row(2, "TOAST_TEST_STACK", 1, 20, 2400))
-    self:PushItem(row(3, "TOAST_TEST_UNCOMMON", 2, 1, 41500))
-    self.host:Push({ key = "refactor-test-gold", count = 32000, name = R.L.TOAST_GOLD,
-        detail = string.format(R.L.TOAST_GOLD_DETAIL, moneyText(32000)),
-        icon = GOLD_ICON, framed = false })
+    -- The uncommon row is an upgrade as Gear Refactor would badge one, so the badge and the
+    -- prompt can be judged without Gear Refactor or a real upgrade to loot.
+    local upgrade = row(3, "TOAST_TEST_UPGRADE", 2, 1, 41500)
+    local tint = R.Theme.colors.RING_DONE
+    upgrade.icon, upgrade.offered = TEST_UPGRADE_ICON, true
+    upgrade.badge = { state = "upgrade", text = R.L.TOAST_TEST_BADGE, r = tint[1], g = tint[2], b = tint[3] }
+    upgrade.replacesName = R.L.TOAST_TEST_REPLACED
+    self:PushItem(upgrade)
+    self.prompt:Offer(upgrade)
+    self.host:Push(goldEntry("refactor-test-gold", 32000))
     self.pending = nil
     for index = 3, 6 do
         self:Collect(row(index, "TOAST_TEST_GROUP_" .. (index - 2), index - 2, 1, 1200 * index))
@@ -272,6 +431,11 @@ end
 function Loot:OnEnable()
     self.playerGUID = UnitGUID("player")
     self.host = R.UI:CreateLootFeed(self)
+    self.prompt = R.UI:CreateUpgradePrompt(self)
+    self.prompt.onEquip = function(entry) return self:Equip(entry) end
+    self.prompt.canEquip = function() return self:CanEquip() end
+    self.prompt.onEmpty = function() self:SettleGear() end
+    self.host.onEmpty = function() self:SettleGear() end
     self.host:ApplySettings()
     R.Broker:Subscribe("CHAT_MSG_LOOT", self.OnLoot, self)
     R.Broker:Subscribe("CURRENCY_DISPLAY_UPDATE", self.OnCurrency, self)
@@ -284,8 +448,14 @@ function Loot:OnDisable()
     R.Broker:UnsubscribeAll(self)
     R:CancelTimers(self)
     self.pending, self.flush, self.grouping = nil, nil, nil
+    self.watchingGear, self.badgeTimer, self.inCombat = nil, nil, nil
     if self.host then
         self.host:SetEditing(false)
         self.host:Clear()
+        self.host.onEmpty = nil
+    end
+    if self.prompt then
+        self.prompt:Clear()
+        self.prompt.onEquip, self.prompt.canEquip, self.prompt.onEmpty = nil, nil, nil
     end
 end

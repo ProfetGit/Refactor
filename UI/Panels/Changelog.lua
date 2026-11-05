@@ -26,7 +26,9 @@ function UI:BuildChangelog(parent)
     for _, version in ipairs(L.CHANGELOG or {}) do
         local block = { header = Theme:SectionHeader(list.child, version.title), lines = {} }
         for _, entry in ipairs(version.entries) do
-            local line = { entry = entry, text = Theme:Text(list.child, entry[1], "body", "TEXT_BODY") }
+            -- A group heading reads in the title colour, the way a section heads the feature list.
+            local token = entry.heading and "TEXT_TITLE" or "TEXT_BODY"
+            local line = { entry = entry, text = Theme:Text(list.child, entry[1], "body", token) }
             line.text:SetJustifyV("TOP")
             if entry.bullet then
                 local mark = list.child:CreateTexture(nil, "ARTWORK")

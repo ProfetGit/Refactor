@@ -13,7 +13,7 @@ local function tocFiles()
     local files = {}
     for line in assert(io.open("Refactor.toc", "r")):lines() do
         local entry = line:gsub("\\", "/"):gsub("%s+$", "")
-        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" and entry ~= "Restore.lua" then
+        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" then
             files[#files + 1] = entry
         end
     end
@@ -59,6 +59,24 @@ describe("changelog generator", function()
         assert.same({ text = 'Second entry, with "quotes" and a | pipe.', bullet = true }, entries[3])
         assert.same({ text = "After a blank line.", bullet = true, gap = true }, entries[4])
         assert.same({ { text = "Older.", bullet = true } }, versions[2].entries)
+    end)
+
+    it("reads group headings, and leaves development notes out of the game", function()
+        local versions = Changelog.parse(table.concat({
+            "# Changelog", "", "## 0.2.0", "", "Intro.", "", "### Quest", "", "- Accepts quests.", "",
+            "### Loot", "- Loots fast.", "", "## Development notes", "", "- Internal detail.", "",
+            "## 0.1.0", "- Older.",
+        }, "\n"))
+        assert.equal(2, #versions)
+        assert.equal("0.1.0", versions[2].title)
+        local entries = versions[1].entries
+        assert.same({ text = "Quest", heading = true, gap = true }, entries[2])
+        -- The line under a heading is not pushed away from it a second time.
+        assert.same({ text = "Accepts quests.", bullet = true }, entries[3])
+        assert.same({ text = "Loot", heading = true, gap = true }, entries[4])
+        local source = Changelog.render(versions)
+        assert.is_truthy(source:find('{ "Quest", gap = true, heading = true },', 1, true))
+        assert.is_nil(source:find("Internal detail", 1, true))
     end)
 
     it("refuses text that belongs to no version", function()

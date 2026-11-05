@@ -22,7 +22,10 @@ function UI:Matches(module, query, filter)
         if type(filter) == "table" then return filter[category] == true end
         return category == filter
     end
+    -- The detail is searched too: "escort" or "buyback" is a word a player remembers from the
+    -- explanation, not from the feature's name.
     local haystack = self:ModuleText(module, "name") .. " " .. self:ModuleText(module, "description")
+        .. " " .. self:ModuleText(module, "detail")
         .. " " .. (R.L["UI_" .. self:Category(module)] or self:Category(module)) .. " " .. module.id
     if module.tags then
         if type(module.tags) == "table" then haystack = haystack .. " " .. table.concat(module.tags, " ")

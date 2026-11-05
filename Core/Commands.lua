@@ -33,18 +33,16 @@ function Commands:ErrorLines()
     return lines
 end
 
--- Whether the client handed the saved variables back at all. Only interesting while
--- Forever loses them; the numbers are counts of top level keys, so "table:0" is a DB the
--- client created empty rather than one it restored.
+-- Whether the client handed the saved variables back at all. Forever beta 1.60.1.69913
+-- lost them on every load; the numbers are counts of top level keys, so "table:0" is a DB
+-- the client created empty rather than one it restored.
 function Commands:SavedLines()
     local probe = R.loadProbe or {}
     local restored = probe.clientGave == true
     return {
         string.format(R.L.CMD_SAVED_ACCOUNT, tostring(probe.atFile), tostring(probe.atLogin)),
         string.format(R.L.CMD_SAVED_CHARACTER, tostring(probe.atFileChar), tostring(probe.atLoginChar)),
-        restored and R.L.CMD_SAVED_VERDICT_OK
-            or probe.restored and R.L.CMD_SAVED_VERDICT_RESTORE_FILE
-            or R.L.CMD_SAVED_VERDICT_LOST,
+        restored and R.L.CMD_SAVED_VERDICT_OK or R.L.CMD_SAVED_VERDICT_LOST,
     }
 end
 
@@ -121,7 +119,14 @@ function Commands:Dispatch(input)
         R.Bench:Start(function(line) R:Print(line) end)
         return nil
     end
-    return { R.L.CMD_HELP_HEADER, R.L.CMD_HELP_OPEN, R.L.CMD_HELP_CHANGELOG, R.L.CMD_HELP_ERRORS,
-        R.L.CMD_HELP_ERRORS_CLEAR, R.L.CMD_HELP_SAVED, R.L.CMD_HELP_BENCH, R.L.CMD_HELP_LOOT_TEST,
-        R.L.CMD_HELP_FARM_TEST, R.L.CMD_HELP_INVITE_TEST, R.L.CMD_HELP_SPELL_TEST, R.L.CMD_HELP_UPDATE }
+    -- Anything else is a search: "/refactor junk" opens the window on what it finds, which is
+    -- quicker than opening it and typing. "help" is the one word that stays a command.
+    if command ~= "help" and R.UI and R.UI.OpenSearch and R.UI.frame then
+        R.UI:OpenSearch(tostring(input):match("^%s*(.-)%s*$"))
+        return nil
+    end
+    return { R.L.CMD_HELP_HEADER, R.L.CMD_HELP_OPEN, R.L.CMD_HELP_SEARCH, R.L.CMD_HELP_CHANGELOG,
+        R.L.CMD_HELP_ERRORS, R.L.CMD_HELP_ERRORS_CLEAR, R.L.CMD_HELP_SAVED, R.L.CMD_HELP_BENCH,
+        R.L.CMD_HELP_LOOT_TEST, R.L.CMD_HELP_FARM_TEST, R.L.CMD_HELP_INVITE_TEST, R.L.CMD_HELP_SPELL_TEST,
+        R.L.CMD_HELP_UPDATE }
 end

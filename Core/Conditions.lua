@@ -40,6 +40,9 @@ local EVENTS = {
     PLAYER_DEAD = { "dead" }, PLAYER_ALIVE = { "dead" }, PLAYER_UNGHOST = { "dead" },
     PLAYER_ENTERING_WORLD = Conditions.names,
 }
+-- PLAYER_REGEN_DISABLED fires before combat lockdown begins, so InCombatLockdown still reads
+-- false inside it. The event is the answer, the way Blizzard's own combat watchers take it.
+local EVENT_VALUES = { PLAYER_REGEN_DISABLED = { combat = true }, PLAYER_REGEN_ENABLED = { combat = false } }
 
 local function buildReader(spec)
     local functions, count = {}, #spec - 1
@@ -54,11 +57,16 @@ local function buildReader(spec)
     return function() return read(unpack(functions, 1, count)) end
 end
 
-local function refresh(self, names)
+local function refresh(self, names, known)
     local flags, changed = self.flags, false
     for _, name in ipairs(names) do
-        local reader = self.readers[name]
-        local value = reader ~= nil and reader() or false
+        local reader, value = self.readers[name], false
+        if reader ~= nil then
+            value = known and known[name]
+            if value == nil then
+                value = reader()
+            end
+        end
         if flags[name] ~= value then
             flags[name], changed = value, true
         end
@@ -69,7 +77,7 @@ end
 -- Events arrive one flag at a time except PLAYER_ENTERING_WORLD, which re-reads everything;
 -- either way one announcement carries the whole set, and none goes out when nothing moved.
 function Conditions:OnEvent(event)
-    if refresh(self, EVENTS[event]) then
+    if refresh(self, EVENTS[event], EVENT_VALUES[event]) then
         R.Broker:Emit("REFACTOR_CONDITIONS_CHANGED", self.flags)
     end
 end

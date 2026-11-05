@@ -24,6 +24,10 @@ local noops = {
     -- Loot feed rows: a text shadow, and the Translation the slide plays. The Edit Mode
     -- dialog's sliders are Blizzard's minimal slider, which steps on drag.
     "SetShadowColor", "SetObeyStepOnDrag",
+    -- A feature row's name and description stay on one line each and truncate.
+    "SetWordWrap",
+    -- Refactor's windows raise themselves above one another when they open or are clicked.
+    "SetToplevel", "Raise",
     -- The session summary: a multi-line header, a hand-rolled scroll frame, and the copy
     -- box that selects its own text so Ctrl C works.
     "SetSpacing", "SetVerticalScrollRange", "HighlightText",
@@ -108,6 +112,9 @@ function Widgets.install(env)
     -- Recorded rather than dropped: the specs assert on what a plate ends up showing.
     function Frame:SetText(text) self.text = text end
     function Frame:GetText() return self.text or "" end
+    -- A loot row's coins copy the font and colour of the line they follow.
+    function Frame:GetFontObject() return self.fontObject end
+    function Frame:GetTextColor() return 1, 1, 1, 1 end
     function Frame:GetStringWidth() return #(self.text or "") * 8 end
     -- The What's new page lays paragraphs out by their wrapped height, estimated here from
     -- the same eight pixels a character GetStringWidth reports, fourteen a line.

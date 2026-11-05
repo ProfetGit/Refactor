@@ -38,8 +38,10 @@ local PRICE_ENTRIES = {
 }
 -- A slider is a row of its own height, not a 30 px button, so a block of them steps by the
 -- theme's slider height plus a gap.
-local SLIDER_WIDTH, SLIDER_GAP = 380, 6
-local SLIDER_STEP = LibStub("LibRefactorTheme-1.0").sliderRowHeight + SLIDER_GAP
+local SLIDER_WIDTH, SLIDER_GAP, DROPDOWN_GAP = 380, 6, 6
+-- A label over its field, the field a number or a short string is typed into, the Save
+-- button beside it, and the button that forgets remembered gossip choices.
+local LABEL_HEIGHT, NUMBER_WIDTH, STRING_WIDTH, SAVE_WIDTH, FORGET_WIDTH = 18, 116, 200, 104, 260
 
 -- Blizzard's minimal slider for anything that is a magnitude: a position on a track says
 -- how much of the range a value is, which four named steps behind a button never did.
@@ -108,14 +110,25 @@ local function learnedCount()
     return count
 end
 
+-- Placed at the block's cursor unless a y is given, so a builder lists its controls in
+-- order and the block keeps the spacing.
+local function put(block, widget, y, height, gap)
+    if y then
+        widget:SetPoint("TOPLEFT", 0, y)
+    else
+        block:Place(widget, height, gap)
+    end
+end
+UI.PutInBlock = put
+
 -- Applies on click, re-reads through LoadDisplay, and puts its own label into what a search
 -- over the block can match, so a setting is reachable without knowing which feature owns it.
 function UI:OptionCheckbox(block, key, labelKey, y)
-    local box = Theme:Checkbox(block, 300, L[labelKey], function(widget)
+    local box = Theme:Checkbox(block, SLIDER_WIDTH, L[labelKey], function(widget)
         Settings:SetOption(key, widget:GetChecked() == true)
         self:LoadDisplay()
     end)
-    box:SetPoint("TOPLEFT", 0, y)
+    put(block, box, y, Theme.checkboxSize)
     box.optionKey = key
     block:Index(L[labelKey])
     self.displayToggles[#self.displayToggles + 1] = box
@@ -133,7 +146,7 @@ function UI:OptionSlider(block, spec, y)
                 self:LoadDisplay()
             end
         end)
-    slider:SetPoint("TOPLEFT", 0, y)
+    put(block, slider, y, Theme.sliderRowHeight, SLIDER_GAP)
     slider:SetLabel(L[spec.labelKey], spec.formatter)
     slider.spec = spec
     slider.onUndo = function()
@@ -162,7 +175,7 @@ function UI:OptionDropdown(block, key, entries, labelKey, y)
             Settings:SetOption(key, value)
             self:LoadDisplay()
         end)
-    dropdown:SetPoint("TOPLEFT", 0, y)
+    put(block, dropdown, y, Theme.dropdownRowHeight, DROPDOWN_GAP)
     dropdown:SetLabel(L[labelKey])
     dropdown.optionKey, dropdown.entryList = key, list
     block:Index(L[labelKey])
@@ -181,42 +194,57 @@ end
 
 function UI:BuildToastSettings(parent)
     local toasts = self.Widgets:SettingsBlock(parent, L.UI_TOAST_MOVE_HELP)
-    local top = toasts.top
-    self.toastQualityDropdown = self:OptionDropdown(toasts, "toastMinQuality", QUALITY_ENTRIES,
-        "UI_TOAST_QUALITY", top)
-    local sliders = top - 36
-    self.toastOpacitySlider = self:OptionSlider(toasts, TOAST_OPACITY, sliders)
-    self.toastLifetimeSlider = self:OptionSlider(toasts, TOAST_LIFETIME, sliders - SLIDER_STEP)
-    self.toastRowsSlider = self:OptionSlider(toasts, TOAST_ROWS, sliders - SLIDER_STEP * 2)
-    self.toastScaleSlider = self:OptionSlider(toasts, TOAST_SCALE, sliders - SLIDER_STEP * 3)
-    local boxes = sliders - SLIDER_STEP * 4 - 8
-    self:OptionCheckbox(toasts, "toastShowPrice", "UI_TOAST_PRICE", boxes)
-    self:OptionCheckbox(toasts, "toastShowSource", "UI_TOAST_SOURCE", boxes - 32)
-    self:OptionCheckbox(toasts, "toastAggregate", "UI_TOAST_AGGREGATE", boxes - 64)
-    self:OptionCheckbox(toasts, "toastGold", "UI_TOAST_GOLD", boxes - 96)
-    self:OptionCheckbox(toasts, "toastCurrency", "UI_TOAST_CURRENCY", boxes - 128)
-    toasts:SetBodyHeight(top - (boxes - 128) + 26)
+    self.toastQualityDropdown = self:OptionDropdown(toasts, "toastMinQuality", QUALITY_ENTRIES, "UI_TOAST_QUALITY")
+    self:OptionCheckbox(toasts, "toastShowPrice", "UI_TOAST_PRICE")
+    self:OptionCheckbox(toasts, "toastShowSource", "UI_TOAST_SOURCE")
+    self:OptionCheckbox(toasts, "toastAggregate", "UI_TOAST_AGGREGATE")
+    self:OptionCheckbox(toasts, "toastGold", "UI_TOAST_GOLD")
+    self:OptionCheckbox(toasts, "toastCurrency", "UI_TOAST_CURRENCY")
+    toasts:Group(L.UI_TOAST_LOOK)
+    self.toastOpacitySlider = self:OptionSlider(toasts, TOAST_OPACITY)
+    self.toastLifetimeSlider = self:OptionSlider(toasts, TOAST_LIFETIME)
+    self.toastRowsSlider = self:OptionSlider(toasts, TOAST_ROWS)
+    self.toastScaleSlider = self:OptionSlider(toasts, TOAST_SCALE)
+    toasts:Finish()
     self:RegisterModuleSettings("toasts.loot", toasts)
 end
 
+-- A number typed into a field and saved with the button beside it; the status line after
+-- the button says whether it took.
+function UI:NumberField(block, labelText, width)
+    local label = Theme:Text(block, labelText, "body", "TEXT_BODY")
+    block:Place(label, LABEL_HEIGHT)
+    block:Index(labelText)
+    local input = self.Widgets:Input(block, width or NUMBER_WIDTH)
+    block:Place(input, self.Widgets.INPUT_HEIGHT)
+    local save = Theme:Button(block, SAVE_WIDTH, L.UI_SAVE_SHORT)
+    save:SetPoint("LEFT", input, "RIGHT", 8, 0)
+    -- Enter saves, the way it does in every Blizzard input: the button is there to be seen,
+    -- not to be the only way.
+    input:SetScript("OnEnterPressed", function()
+        local onSave = save:GetScript("OnClick")
+        if onSave then onSave(save) end
+    end)
+    local status = Theme:Text(block, "", "small", "TEXT_TITLE")
+    status:SetPoint("LEFT", save, "RIGHT", 12, 0)
+    status:SetPoint("RIGHT")
+    status:SetWordWrap(false)
+    return input, save, status
+end
+
 function UI:BuildFarmSettings(parent)
-    local farm = self.Widgets:SettingsBlock(parent, L.UI_FARM_HELP)
-    local top = farm.top
-    self:OptionCheckbox(farm, "farmShowHud", "UI_FARM_SHOW", top)
-    self:OptionCheckbox(farm, "farmLocked", "UI_FARM_LOCKED", top - 32)
-    self:OptionCheckbox(farm, "farmShowMeter", "UI_FARM_METER", top - 64)
-    self:OptionCheckbox(farm, "farmExpand", "UI_FARM_EXPAND", top - 96)
-    self:OptionCheckbox(farm, "farmShowRates", "UI_FARM_RATES", top - 128)
-    self.farmOpacitySlider = self:OptionSlider(farm, FARM_OPACITY, top - 164)
-    self.farmIdleSlider = self:OptionSlider(farm, FARM_IDLE, top - 164 - SLIDER_STEP)
-    local goal = top - 164 - SLIDER_STEP * 2 - 4
-    local goalLabel = Theme:Text(farm, L.UI_FARM_GOAL_HELP, "small", "TEXT_MUTED")
-    goalLabel:SetPoint("TOPLEFT", 0, goal)
-    goalLabel:SetPoint("RIGHT")
-    farm:Index(L.UI_FARM_GOAL_HELP)
-    self.farmGoal = self.Widgets:Input(farm, 120, 26)
-    self.farmGoal:SetPoint("TOPLEFT", 0, goal - 16)
-    local saveGoal = Theme:Button(farm, 104, L.UI_SAVE_SHORT, function()
+    local farm = self.Widgets:SettingsBlock(parent)
+    self:OptionCheckbox(farm, "farmShowHud", "UI_FARM_SHOW")
+    self:OptionCheckbox(farm, "farmLocked", "UI_FARM_LOCKED")
+    self:OptionCheckbox(farm, "farmShowMeter", "UI_FARM_METER")
+    self:OptionCheckbox(farm, "farmExpand", "UI_FARM_EXPAND")
+    self:OptionCheckbox(farm, "farmShowRates", "UI_FARM_RATES")
+    farm:Skip(SLIDER_GAP)
+    self.farmOpacitySlider = self:OptionSlider(farm, FARM_OPACITY)
+    self.farmIdleSlider = self:OptionSlider(farm, FARM_IDLE)
+    local saveGoal
+    self.farmGoal, saveGoal, self.farmStatus = self:NumberField(farm, L.UI_FARM_GOAL)
+    saveGoal:SetScript("OnClick", function()
         local gold = tonumber(self.farmGoal:GetText())
         if gold and Settings:SetOption("farmGoalGold", math.floor(gold)) then
             self.farmStatus:SetText(L.UI_SAVED)
@@ -225,28 +253,22 @@ function UI:BuildFarmSettings(parent)
         end
         self.farmGoal:ClearFocus()
     end)
-    saveGoal:SetPoint("LEFT", self.farmGoal, "RIGHT", 8, 0)
-    self.farmStatus = Theme:Text(farm, "", "small", "TEXT_TITLE")
-    self.farmStatus:SetPoint("LEFT", saveGoal, "RIGHT", 12, 0)
-    self.farmStatus:SetPoint("RIGHT")
-    farm:SetBodyHeight(top - goal + 42)
+    farm:Note(L.UI_FARM_GOAL_HELP)
+    farm:Finish()
     self:RegisterModuleSettings("loot.farmSession", farm)
 end
 
 -- Price sources feed the toasts, the farm HUD, the vendor list and the tooltips alike, so
 -- they belong to no single feature and sit in General with the other cross-cutting options.
-function UI:BuildPriceControls(block, top)
+function UI:BuildPriceControls(block)
     block:Index(L.UI_PRICE_OPTIONS)
-    self:OptionCheckbox(block, "priceTSM", "UI_PRICE_TSM", top)
-    self:OptionCheckbox(block, "priceAuctionator", "UI_PRICE_AUCTIONATOR", top - 32)
-    self.priceSourceDropdown = self:OptionDropdown(block, "priceSource", PRICE_ENTRIES,
-        "UI_FARM_SOURCE", top - 64)
-    local tsmLabel = Theme:Text(block, L.UI_PRICE_TSM_STRING, "small", "TEXT_MUTED")
-    tsmLabel:SetPoint("TOPLEFT", 0, top - 102)
-    block:Index(L.UI_PRICE_TSM_STRING)
-    self.tsmString = self.Widgets:Input(block, 200, 26)
-    self.tsmString:SetPoint("TOPLEFT", 0, top - 118)
-    local saveTSM = Theme:Button(block, 104, L.UI_SAVE_SHORT, function()
+    self:OptionCheckbox(block, "priceTSM", "UI_PRICE_TSM")
+    self:OptionCheckbox(block, "priceAuctionator", "UI_PRICE_AUCTIONATOR")
+    block:Skip(DROPDOWN_GAP)
+    self.priceSourceDropdown = self:OptionDropdown(block, "priceSource", PRICE_ENTRIES, "UI_FARM_SOURCE")
+    local saveTSM
+    self.tsmString, saveTSM, self.displayStatus = self:NumberField(block, L.UI_PRICE_TSM_STRING, STRING_WIDTH)
+    saveTSM:SetScript("OnClick", function()
         if Settings:SetOption("tsmPriceString", self.tsmString:GetText()) then
             self.displayStatus:SetText(L.UI_SAVED)
         else
@@ -254,68 +276,62 @@ function UI:BuildPriceControls(block, top)
         end
         self.tsmString:ClearFocus()
     end)
-    saveTSM:SetPoint("LEFT", self.tsmString, "RIGHT", 8, 0)
-    self.displayStatus = Theme:Text(block, "", "small", "TEXT_TITLE")
-    self.displayStatus:SetPoint("LEFT", saveTSM, "RIGHT", 12, 0)
-    self.displayStatus:SetPoint("RIGHT")
-    self.priceNote = Theme:Text(block, "", "small", "TEXT_MUTED")
-    self.priceNote:SetPoint("TOPLEFT", 0, top - 152)
-    self.priceNote:SetPoint("RIGHT")
-    self.priceNote:SetHeight(40)
-    self.priceNote:SetJustifyV("TOP")
-    return 192
+    block:Skip(DROPDOWN_GAP)
+    -- Every combination of found and missing, so the kept room fits whichever is true.
+    local found, missing = L.UI_PRICE_FOUND, L.UI_PRICE_MISSING
+    self.priceNote = block:Note(nil, string.format(L.UI_PRICE_NOTE, found, found),
+        string.format(L.UI_PRICE_NOTE, missing, missing), string.format(L.UI_PRICE_NOTE, found, missing),
+        string.format(L.UI_PRICE_NOTE, missing, found))
 end
 
 function UI:BuildVendorListSettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_VENDOR_HELP)
-    local top = block.top
-    self.vendorColumnsSlider = self:OptionSlider(block, VENDOR_COLUMNS, top)
-    self.vendorRowsSlider = self:OptionSlider(block, VENDOR_ROWS, top - SLIDER_STEP)
-    block:SetBodyHeight(SLIDER_STEP * 2)
+    self.vendorColumnsSlider = self:OptionSlider(block, VENDOR_COLUMNS)
+    self.vendorRowsSlider = self:OptionSlider(block, VENDOR_ROWS)
+    block:Finish()
     self:RegisterModuleSettings("vendor.extendedUI", block)
 end
 
 function UI:BuildQuestSettings(parent)
     local quests = self.Widgets:SettingsBlock(parent)
-    self:OptionCheckbox(quests, "questAcceptLists", "UI_QUEST_LISTS", quests.top)
-    self:OptionCheckbox(quests, "questAcceptItemsOnly", "UI_QUEST_ITEMS_ONLY", quests.top - 32)
-    quests:SetBodyHeight(58)
+    self:OptionCheckbox(quests, "questAcceptLists", "UI_QUEST_LISTS")
+    self:OptionCheckbox(quests, "questAcceptItemsOnly", "UI_QUEST_ITEMS_ONLY")
+    quests:Finish()
     self:RegisterModuleSettings("quest.autoAccept", quests)
 end
 
 function UI:BuildResurrectSettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_RESURRECT_HELP)
-    local top = block.top
-    self:OptionCheckbox(block, "resurrectPvp", "UI_RESURRECT_PVP", top)
-    self:OptionCheckbox(block, "resurrectInstance", "UI_RESURRECT_INSTANCE", top - 32)
-    self:OptionCheckbox(block, "resurrectWorld", "UI_RESURRECT_WORLD", top - 64)
-    block:SetBodyHeight(90)
+    self:OptionCheckbox(block, "resurrectPvp", "UI_RESURRECT_PVP")
+    self:OptionCheckbox(block, "resurrectInstance", "UI_RESURRECT_INSTANCE")
+    self:OptionCheckbox(block, "resurrectWorld", "UI_RESURRECT_WORLD")
+    block:Finish()
     self:RegisterModuleSettings("social.acceptResurrect", block)
 end
 
 function UI:BuildQuickInviteSettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_QUICKINVITE_HELP)
     self.inviteModifierDropdown = self:OptionDropdown(block, "inviteModifier", MODIFIER_ENTRIES,
-        "UI_QUICKINVITE_MODIFIER", block.top)
-    block:SetBodyHeight(36)
+        "UI_QUICKINVITE_MODIFIER")
+    block:Finish()
     self:RegisterModuleSettings("social.quickInvite", block)
 end
 
 function UI:BuildGossipSettings(parent)
     local gossip = self.Widgets:SettingsBlock(parent, L.UI_GOSSIP_HELP)
-    local top = gossip.top
-    self:OptionCheckbox(gossip, "gossipOpenQuests", "UI_GOSSIP_QUESTS", top)
-    self:OptionCheckbox(gossip, "gossipOpenServices", "UI_GOSSIP_SERVICES", top - 32)
-    self:OptionCheckbox(gossip, "gossipSkipDialogue", "UI_GOSSIP_DIALOGUE", top - 64)
-    self:OptionCheckbox(gossip, "gossipInInstances", "UI_GOSSIP_INSTANCES", top - 96)
+    self:OptionCheckbox(gossip, "gossipOpenQuests", "UI_GOSSIP_QUESTS")
+    self:OptionCheckbox(gossip, "gossipOpenServices", "UI_GOSSIP_SERVICES")
+    self:OptionCheckbox(gossip, "gossipSkipDialogue", "UI_GOSSIP_DIALOGUE")
+    self:OptionCheckbox(gossip, "gossipInInstances", "UI_GOSSIP_INSTANCES")
+    gossip:Group(L.UI_GOSSIP_REMEMBERED)
     self.gossipLearnDropdown = self:OptionDropdown(gossip, "gossipLearnModifier", MODIFIER_ENTRIES,
-        "UI_GOSSIP_LEARN_MODIFIER", top - 130)
-    self.gossipForgetButton = Theme:Button(gossip, 300, "", function()
+        "UI_GOSSIP_LEARN_MODIFIER")
+    self.gossipForgetButton = Theme:Button(gossip, FORGET_WIDTH, "", function()
         Settings:SetOption("gossipLearned", {})
         self:LoadDisplay()
     end)
-    self.gossipForgetButton:SetPoint("TOPLEFT", 0, top - 166)
-    gossip:SetBodyHeight(192)
+    gossip:Place(self.gossipForgetButton, Theme.buttonHeight)
+    gossip:Finish()
     self:RegisterModuleSettings("quest.autoGossip", gossip)
 end
 
@@ -334,7 +350,10 @@ function UI:LoadDisplay()
         self.farmGoal:SetText(tostring(Settings:GetOption("farmGoalGold") or 0))
     end
     if not self.tsmString:HasFocus() then self.tsmString:SetText(Settings:GetOption("tsmPriceString") or "") end
-    self.gossipForgetButton.label:SetText(string.format(L.UI_GOSSIP_FORGET, learnedCount()))
+    local learned = learnedCount()
+    self.gossipForgetButton.label:SetText(string.format(L.UI_GOSSIP_FORGET, learned))
+    -- Nothing to forget is a button that would do nothing, so it says so by being greyed.
+    self.gossipForgetButton:SetEnabled(learned > 0)
     local integrations = R.Integrations or {}
     self.priceNote:SetText(string.format(L.UI_PRICE_NOTE,
         integrations.tsmAvailable and L.UI_PRICE_FOUND or L.UI_PRICE_MISSING,

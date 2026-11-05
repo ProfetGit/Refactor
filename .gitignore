@@ -3,6 +3,5 @@
 *.zip
 *.luac
 Data/*-probe.lua
-# Local capture of a Forever session, never committed and never shipped.
-Restore.lua
 __pycache__/
+.preview/

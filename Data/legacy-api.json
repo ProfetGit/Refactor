@@ -566,6 +566,10 @@
     "needle": "local questID = GetQuestID();",
     "path": "Interface/AddOns/Blizzard_BoostTutorial/Blizzard_TutorialLogic.lua"
   },
+  "GetQuestMoneyToGet": {
+    "needle": "GetQuestMoneyToGet()",
+    "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+  },
   "GetQuestReward": {
     "needle": "GetQuestReward(QuestInfoFrame.itemChoice)",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
@@ -647,6 +651,10 @@
   "MainStatusTrackingBarContainer": {
     "needle": "name=\"MainStatusTrackingBarContainer\"",
     "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/StatusTrackingBar.xml"
+  },
+  "MenuUtil.CreateContextMenu": {
+    "needle": "function MenuUtil.CreateContextMenu(",
+    "path": "Interface/AddOns/Blizzard_Menu/MenuUtil.lua"
   },
   "MerchantBuyBackItem": {
     "needle": "name=\"MerchantBuyBackItem\"",

@@ -1,7 +1,7 @@
 LUA ?= lua5.1
 RUN = sh Tools/dev-env.sh
 
-.PHONY: check lint test api-check api-index package dev-setup changelog
+.PHONY: check lint test api-check api-index package dev-setup changelog probe-index
 # Checkout the API index is generated from: git clone --branch live https://github.com/Gethe/wow-ui-source
 SOURCE ?= $(HOME)/wow-ui-source
 check: lint test api-check
@@ -24,6 +24,12 @@ changelog:
 
 api-index:
 	python3 Tools/source-index.py "$(SOURCE)"
+
+# Saved variables file from a client that ran Tools/Probe, copied here; *-probe.lua is ignored.
+PROBE ?= Data/forever-probe.lua
+FLAVOR ?= forever
+probe-index:
+	$(RUN) $(LUA) Tools/probe-to-json.lua "$(PROBE)" $(FLAVOR)
 
 dev-setup:
 	luarocks --lua-version=5.1 --tree=.tools install busted

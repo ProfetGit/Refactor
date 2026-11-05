@@ -41,12 +41,12 @@ function bootstrap:OnLogin()
         R.Integrations:RegisterPriceProviders()
     end
     R.Registry:ReconcileAll()
-    -- Restore.lua is dead weight the moment the client does its own job again. See the
-    -- removal list under Temporary workarounds in docs/ROADMAP.md.
-    if R.loadProbe.clientGave and R.restoreAccount ~= nil then
-        R:Print(R.L.CHAT_RESTORE_RETIRED)
-    end
     R:RegisterSlash(handleSlash)
+    -- One line, once per account: there is no first-run screen, so a new install has to say
+    -- where it lives or it looks like nothing happened.
+    if R.Settings.fresh then
+        R:Print(R.L.CMD_WELCOME)
+    end
 end
 
 R.Broker:Subscribe("PLAYER_LOGIN", bootstrap.OnLogin, bootstrap)

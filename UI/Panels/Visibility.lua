@@ -2,14 +2,14 @@ local _, R = ...
 local UI, L = R.UI, R.L
 local Theme, Rules = R.Theme, R.Visibility
 
-local CONTROL_WIDTH, DROPDOWN_STEP, NOTE_HEIGHT = 380, 36, 30
+local CONTROL_WIDTH, DROPDOWN_GAP = 380, 6
 local MODULE_ID = "interface.visibility"
+local unpack = unpack
 
 -- The settings block behind the UI visibility row: the preset, and where the rest lives.
 -- Per-element tuning happens in Edit Mode, beside Blizzard's own dialog for that element.
 function UI:BuildVisibilitySettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_VIS_HELP)
-    local top = block.top
     for _, preset in ipairs(Rules.presets) do
         block:Index(L[preset.nameKey])
     end
@@ -24,14 +24,12 @@ function UI:BuildVisibilitySettings(parent)
             Rules:ApplyPreset(value)
             self:LoadVisibility()
         end)
-    self.visPresetDropdown:SetPoint("TOPLEFT", 0, top)
+    block:Place(self.visPresetDropdown, Theme.dropdownRowHeight, DROPDOWN_GAP)
     self.visPresetDropdown:SetLabel(L.UI_VIS_PRESET)
-    self.visPresetDetail = Theme:Text(block, "", "small", "TEXT_MUTED")
-    self.visPresetDetail:SetPoint("TOPLEFT", 0, top - DROPDOWN_STEP)
-    self.visPresetDetail:SetPoint("RIGHT")
-    self.visPresetDetail:SetHeight(NOTE_HEIGHT)
-    self.visPresetDetail:SetJustifyV("TOP")
-    block:SetBodyHeight(-(top - DROPDOWN_STEP - NOTE_HEIGHT) + 8)
+    local details = { L.VIS_PRESET_CUSTOM_DETAIL }
+    for _, preset in ipairs(Rules.presets) do details[#details + 1] = L[preset.detailKey] end
+    self.visPresetDetail = block:Note(nil, unpack(details))
+    block:Finish()
     self:RegisterModuleSettings(MODULE_ID, block)
 end
 

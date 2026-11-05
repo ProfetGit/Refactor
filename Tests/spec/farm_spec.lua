@@ -7,6 +7,18 @@ local function itemLink(id, name)
     return string.format("|cffffffff|Hitem:%d:0:0:0:0:0:0:0:60:0:0:0:0|h[%s]|h|r", id, name or "Thing")
 end
 
+-- The coins a strip shows, largest first, written as the old |T escapes read.
+local COIN_NAMES = { "Gold", "Silver", "Copper" }
+local function coins(strip)
+    local shown = {}
+    for index, piece in ipairs(strip.pieces) do
+        if piece.amount:IsShown() and piece.icon:IsShown() then
+            shown[#shown + 1] = piece.amount:GetText() .. "|T" .. COIN_NAMES[index] .. "|t"
+        end
+    end
+    return table.concat(shown, " ")
+end
+
 local function base()
     local env = Runtime.new()
     Widgets.install(env)
@@ -42,10 +54,19 @@ local function base()
     }
     -- The context menu is Blizzard's; the spec records what the addon puts into it.
     env.menuEntries = {}
-    env.UIDropDownMenu_CreateInfo = function() return {} end
-    env.UIDropDownMenu_AddButton = function(info) env.menuEntries[#env.menuEntries + 1] = info end
-    env.UIDropDownMenu_Initialize = function(_, initialize) initialize() end
-    env.ToggleDropDownMenu = function() env.menuToggled = (env.menuToggled or 0) + 1 end
+    -- Blizzard_Menu's context menu, recording each entry in the order the generator adds it.
+    env.MenuUtil = { CreateContextMenu = function(owner, generator)
+        env.menuToggled = (env.menuToggled or 0) + 1
+        env.menuEntries = {}
+        local root = {}
+        local function add(entry) env.menuEntries[#env.menuEntries + 1] = entry return entry end
+        function root:CreateTitle(text) return add({ text = text, isTitle = true }) end
+        function root:CreateButton(text, func) return add({ text = text, func = func }) end
+        function root:CreateCheckbox(text, isSelected, setSelected)
+            return add({ text = text, checked = isSelected(), func = setSelected })
+        end
+        generator(owner, root)
+    end }
     return env
 end
 
@@ -412,7 +433,7 @@ describe("farm session", function()
         module.host:ToggleMenu()
         env.menuEntries[5].func()
         assert.is_false(module.host:IsShown())
-        assert.matches("Show it again under Options", table.concat(env.messages, "\n"))
+        assert.matches("Show it again in Refactor", table.concat(env.messages, "\n"), 1, true)
     end)
 
     it("fills every expanded line and the five most valuable stacks", function()
@@ -433,15 +454,23 @@ describe("farm session", function()
         -- not the sixty the spec advanced through.
         assert.equal("Farming 3m 0s", host.expand.stats[1].text:GetText())
         assert.matches("items/hr", host.expand.stats[2].text:GetText())
-        assert.matches("^Gold ", host.expand.stats[3].text:GetText())
-        assert.matches("^Items ", host.expand.stats[4].text:GetText())
+        -- Money is the panel's own coin textures after the words, never |T escapes in the
+        -- text, which would trail the panel as it slides open.
+        assert.equal("Gold ", host.expand.stats[3].text:GetText())
+        assert.equal("0|TCopper|t", coins(host.expand.stats[3].coins))
+        assert.equal("Items ", host.expand.stats[4].text:GetText())
+        assert.equal("2|TSilver|t 10|TCopper|t", coins(host.expand.stats[4].coins))
         -- Rates are opt in, so that row is not on screen unless it was asked for.
         assert.is_false(host.expand.stats[2].icon:IsShown())
         assert.is_false(host.expand.stats[2].text:IsShown())
-        assert.matches("Best drop: Item 6", host.expand.best:GetText())
+        assert.equal("", coins(host.expand.stats[2].coins))
+        assert.equal("Best drop: Item 6", host.expand.best:GetText())
+        assert.equal("60|TCopper|t", coins(host.expand.bestCoins))
         -- Five rows for six items, the least valuable one left off, most valuable first.
         assert.equal("Item 6", host.expand.rows[1].name:GetText())
+        assert.equal("60|TCopper|t", coins(host.expand.rows[1].coins))
         assert.equal("Item 2", host.expand.rows[5].name:GetText())
+        assert.equal("20|TCopper|t", coins(host.expand.rows[5].coins))
         assert.is_false(host.expand.rows[5].shown == false)
     end)
 

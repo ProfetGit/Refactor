@@ -13,6 +13,7 @@ function Frame:Hide() self.shown = false end
 function Frame:Show() self.shown = true end
 function Frame:IsShown() return self.shown end
 function Frame:IsProtected() return false end
+function Frame:GetObjectType() return self.kind end
 
 function Runtime.new()
     local env = { frames = {}, timers = {}, now = 0, messages = {}, R = {} }

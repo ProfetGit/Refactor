@@ -56,10 +56,12 @@ describe("conditions", function()
     it("announces exactly one change per event that moved a flag", function()
         local env, Conditions = base()
         Conditions:Start({})
-        env.world.combat = true
+        -- The client fires PLAYER_REGEN_DISABLED before lockdown begins, so InCombatLockdown is
+        -- still false inside it; the flag must come from the event.
         env:Fire("PLAYER_REGEN_DISABLED")
         assert.equal(1, #env.seen)
         assert.is_true(env.seen[1].combat)
+        env.world.combat = true
         -- The same event again with nothing changed says nothing.
         env:Fire("PLAYER_REGEN_DISABLED")
         assert.equal(1, #env.seen)

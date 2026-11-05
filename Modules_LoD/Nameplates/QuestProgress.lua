@@ -1,19 +1,27 @@
 --- @module nameplates.questProgress
 --- Purpose: show how close each nameplate mob is to finishing your quest objective.
---- Requires: C_NamePlate.GetNamePlateForUnit, UnitGUID
+--- Requires: C_NamePlate.GetNamePlateForUnit, UnitGUID, UnitName, issecretvalue, and the data half's
+---     C_QuestLog.UnitIsRelatedToActiveQuest, C_QuestLog.GetQuestObjectives, C_QuestLog.IsOnQuest,
+---     IsInGroup, C_TooltipInfo.GetUnit, Enum.TooltipDataLineType.QuestTitle,
+---     Enum.TooltipDataLineType.QuestObjective, Enum.TooltipDataLineType.QuestPlayer
 --- Events: NAME_PLATE_UNIT_ADDED, NAME_PLATE_UNIT_REMOVED,
----     QUEST_LOG_UPDATE (throttled), UNIT_QUEST_LOG_CHANGED (throttled)
+---     QUEST_LOG_UPDATE (throttled), UNIT_QUEST_LOG_CHANGED (throttled), REFACTOR_SETTINGS_CHANGED
 --- Hot: yes, see QuestProgress_Data.lua
 local _, R = ...
 local Theme, Data, Settings = R.Theme, R.QuestData, R.Settings
 
 local QuestProgress = R:RegisterModule({
     id = "nameplates.questProgress",
-    category = "Nameplates",
+    category = "Quest",
     nameKey = "NAMEPLATE_QUEST_NAME",
     descriptionKey = "NAMEPLATE_QUEST_DESC",
     detailKey = "NAMEPLATE_QUEST_DETAIL",
-    requires = { "C_NamePlate.GetNamePlateForUnit", "UnitGUID" },
+    -- The data half's symbols too: without any one of them nothing could ever show, and the
+    -- row should say which one is missing rather than enable and stay blank.
+    requires = { "C_NamePlate.GetNamePlateForUnit", "UnitGUID", "UnitName", "issecretvalue",
+        "C_QuestLog.UnitIsRelatedToActiveQuest", "C_QuestLog.GetQuestObjectives", "C_QuestLog.IsOnQuest",
+        "IsInGroup", "C_TooltipInfo.GetUnit", "Enum.TooltipDataLineType.QuestTitle",
+        "Enum.TooltipDataLineType.QuestObjective", "Enum.TooltipDataLineType.QuestPlayer" },
     conflicts = { "Questie.nameplateObjectives", "Plater.questProgress" },
     risk = "visible",
     defaultEnabled = true,
@@ -68,13 +76,17 @@ function QuestProgress:Place(indicator, plate)
     end
 end
 
-function QuestProgress:Release(unit)
+function QuestProgress:DropIndicator(unit)
     local indicator = self.shown[unit]
     if indicator then
         self.shown[unit] = nil
         indicator:ResetIndicator()
         self.indicators:Release(indicator)
     end
+end
+
+function QuestProgress:Release(unit)
+    self:DropIndicator(unit)
     local dim = self.dimmed[unit]
     if dim then
         self.dimmed[unit] = nil
@@ -85,6 +97,7 @@ function QuestProgress:Release(unit)
     end
     self.progress[unit] = nil
     self.retried[unit] = nil
+    self.open[unit] = nil
 end
 
 function QuestProgress:Dim(unit, plate, complete)
@@ -115,11 +128,25 @@ function QuestProgress:Dim(unit, plate, complete)
 end
 
 function QuestProgress:Apply(unit, plate, entry)
-    local indicator = self.shown[unit]
     if not entry.ok then
         self:Release(unit)
         return
     end
+    local previous = self.progress[unit]
+    self.progress[unit] = entry.fulfilled
+    self:Dim(unit, plate, entry.complete)
+    local indicator = self.shown[unit]
+    -- The checkmark is for the kill that finished the objective, seen on this plate. A mob
+    -- already finished when its plate appeared gets the dim alone: replayed on every quest
+    -- log update, the check would flash across every finished mob after any loot. One still
+    -- fading from the kill that finished it is left to end.
+    if entry.complete and not self.open[unit] then
+        if indicator and not indicator:IsFading() then
+            self:DropIndicator(unit)
+        end
+        return
+    end
+    self.open[unit] = not entry.complete
     if not indicator then
         indicator = self:Acquire(self.indicators)
         if not indicator then
@@ -133,24 +160,20 @@ function QuestProgress:Apply(unit, plate, entry)
     end
     self:Place(indicator, plate)
     local reduce = Settings:GetOption("nameplateReduceAnimation") == true
-    indicator:SetRingShown(Settings:GetOption("nameplateShowRing") ~= false)
     indicator:SetIconKind(entry.kind)
     indicator:SetIconShown(Settings:GetOption("nameplateShowIcon") ~= false and not entry.complete)
     indicator:SetProgress(entry.fulfilled, entry.required, entry.lastOne)
     indicator:SetComplete(entry.complete)
-    if entry.plus > 0 then
+    if entry.plus > 0 and Settings:GetOption("nameplateShowMore") == true then
         indicator:SetCountText(tostring(entry.fulfilled),
             string.format(R.L.NAMEPLATE_TOTAL_PLUS, entry.required, entry.plus))
     else
         indicator:SetCountText(tostring(entry.fulfilled), string.format(R.L.NAMEPLATE_TOTAL, entry.required))
     end
     indicator:Show()
-    local previous = self.progress[unit]
     if previous and previous ~= entry.fulfilled then
         indicator:Pop(reduce)
     end
-    self.progress[unit] = entry.fulfilled
-    self:Dim(unit, plate, entry.complete)
     if entry.complete then
         indicator:FadeOut(reduce)
     end
@@ -200,13 +223,26 @@ function QuestProgress:Enqueue(unit)
     end
 end
 
+-- One plate that cannot be read (restricted tooltip data, a secret value) must not take
+-- the rest with it: an error escaping the timer would fail the whole module, and every
+-- plate would go blank until the player toggled it. It costs that plate only, and the
+-- first such error is kept for /refactor errors.
+--
+-- Only what was queued before this pass is drained: a plate that asks for its retry while
+-- being resolved waits for the next frame, which is the point of the retry.
 function QuestProgress:Drain()
-    local queue, done = self.queue, 0
-    while #queue > 0 and done < PLATE_BUDGET do
+    local queue = self.queue
+    for _ = 1, math.min(#queue, PLATE_BUDGET) do
         local unit = table.remove(queue, 1)
-        done = done + 1
-        if self.guids[unit] then
-            self:Resolve(unit)
+        if self.guids[unit] ~= nil then
+            local ok, err = pcall(self.Resolve, self, unit)
+            if not ok then
+                if not self.reported then
+                    self.reported = true
+                    R:RecordError(self, err, "resolve")
+                end
+                pcall(self.Release, self, unit)
+            end
         end
     end
     if #queue > 0 then
@@ -220,10 +256,17 @@ function QuestProgress:OnPlateAdded(_, unit)
     if type(unit) ~= "string" then
         return
     end
-    local plate = C_NamePlate.GetNamePlateForUnit(unit)
-    self.guids[unit] = plate and R.Capabilities:Resolve("UnitGUID") and UnitGUID(unit) or nil
-    self.progress[unit] = nil
-    self.retried[unit] = nil
+    if not C_NamePlate.GetNamePlateForUnit(unit) then
+        return
+    end
+    -- No GUID, or a secret one while unit identity is restricted, still gets the plate
+    -- resolved, only without the NPC cache. false marks the unit as tracked.
+    local guid = UnitGUID(unit)
+    if guid == nil or issecretvalue(guid) then
+        guid = false
+    end
+    self.guids[unit] = guid
+    self.progress[unit], self.retried[unit], self.open[unit] = nil, nil, nil
     self:Enqueue(unit)
 end
 
@@ -240,9 +283,21 @@ end
 function QuestProgress:OnQuestChanged()
     Data:Invalidate()
     self.entries:ReleaseAll()
+    self:Redraw()
+end
+
+function QuestProgress:Redraw()
     for unit in pairs(self.guids) do
         self.retried[unit] = true
         self:Enqueue(unit)
+    end
+end
+
+-- Side, icon, dim, +N and animation apply to the plates already up, from the cache. A
+-- change with no key is a profile switch, which can carry any of them.
+function QuestProgress:OnSettingsChanged(_, key)
+    if key == nil or (type(key) == "string" and string.sub(key, 1, 9) == "nameplate") then
+        self:Redraw()
     end
 end
 
@@ -256,9 +311,14 @@ function QuestProgress:OnEnable()
         R.Broker:Emit("REFACTOR_MODULE_CHANGED", self.id)
         return
     end
+    -- Forever's second value is the surname, and its group tooltips head the player's
+    -- section with both, joined by a space: "Profet Ashbringer" (seen 5 Nov 2026). Retail
+    -- gives the player no second value.
+    local name, surname = UnitName("player")
+    Data:SetPlayerNames(name, type(surname) == "string" and surname ~= "" and name .. " " .. surname or nil)
     self.shown, self.dimmed, self.guids = {}, {}, {}
-    self.progress, self.retried, self.queue = {}, {}, {}
-    self.scratch, self.draining = {}, false
+    self.progress, self.retried, self.queue, self.open = {}, {}, {}, {}
+    self.scratch, self.draining, self.reported = {}, false, nil
     self.entries = R.Pools:CreateTablePool()
     self.indicators = R.Pools:Create(function() return Theme:QuestIndicator(nil) end)
     self.dims = R.Pools:Create(function() return Theme:PlateDim(nil) end)
@@ -272,6 +332,7 @@ function QuestProgress:OnEnable()
     R.Broker:Subscribe("NAME_PLATE_UNIT_REMOVED", self.OnPlateRemoved, self)
     R.Broker:Subscribe("QUEST_LOG_UPDATE", self.OnQuestChanged, self, 0.2)
     R.Broker:Subscribe("UNIT_QUEST_LOG_CHANGED", self.OnQuestChanged, self, 0.2)
+    R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.OnSettingsChanged, self)
 end
 
 function QuestProgress:OnDisable()
@@ -287,6 +348,7 @@ function QuestProgress:OnDisable()
         self.entries:ReleaseAll()
     end
     Data:Invalidate()
-    self.guids, self.progress, self.retried = nil, nil, nil
-    self.queue, self.draining, self.scratch = nil, false, nil
+    Data:SetPlayerNames(nil, nil)
+    self.guids, self.progress, self.retried, self.open = nil, nil, nil, nil
+    self.queue, self.draining, self.scratch, self.reported = nil, false, nil, nil
 end

@@ -166,7 +166,7 @@ At load, Refactor checks for known addons and adjusts:
 | Leatrix Plus | Overlapping modules flagged in a conflict panel with a one-click "disable mine" |
 | TradeSkillMaster, Auctionator | Registered as price providers (5.5) |
 | Bagnon, ArkInventory | Bag tooltip modules adapt anchoring, no bag frame assumptions |
-| Gear Refactor | Quest reward selection stands down when `GearRefactor.API.IsHandlingQuestRewards()` is true, and the settings row shows "Handled by Gear Refactor". Loot toast shows the Gear Refactor upgrade badge and Equip button. All calls through the versioned API, wrapped in `pcall`. |
+| Gear Refactor | Quest reward selection stands down when `GearRefactor.API.IsHandlingQuestRewards()` is true, and the settings row shows "Handled by Gear Refactor". Loot toast shows the Gear Refactor upgrade badge, and an upgrade prompt at the top centre offers Equip or Not now. All calls through the versioned API, wrapped in `pcall`. |
 
 The conflict panel is a first-class UI surface, not a hidden warning. It lists every detected overlap with a plain-language description and a resolution button.
 

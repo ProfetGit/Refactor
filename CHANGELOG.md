@@ -1,14 +1,115 @@
 # Changelog
 
-## Unreleased
+## 0.1.0
+
+The first release, made for WoW Forever. Type /refactor to open it. Everything is one list
+you can search, and a new character starts with the settings your others already use.
+
+### Quest
+
+- Accept quests as they open and hand them in when there is nothing to choose. An NPC with
+  several quests is worked through one at a time.
+- Auto gossip picks the obvious option at an NPC, and learns the ones you teach it with a
+  Shift click.
+- Quest progress on nameplates: how many more of a mob you need, right on its nameplate.
+
+### Loot
+
+- Fast loot, and a loot feed that shows each drop with its icon, count and price.
+- A farm session HUD with gold per hour, your best drop, and a summary you can copy.
+
+### Vendor
+
+- Sell junk and repair on arrival, with one line of what it came to when you leave. Drag an
+  item onto the never-sell slot to keep it off the list for good.
+- A bigger merchant window, costs that grey out only what you are short of, and a filter
+  for mounts, pets, toys, appearances and recipes you have or are missing.
+
+### Interface
+
+- Zoom the camera further out, and ActionCam profiles that follow you indoors, onto a mount,
+  into combat and into dungeons. Customize any profile and share it as a string.
+- Zone level ranges on the world map, and the parts of each map you have not explored yet.
+- UI visibility fades bars, frames, chat and the minimap until you need them, tuned element
+  by element in Edit Mode.
+- New abilities go straight onto a free action bar slot, and a screenshot is taken when you
+  level up.
+
+### Chat and social
+
+- Web addresses in chat become links you can copy, and every chat window gets a Copy button.
+- Decline duels, accept resurrections and invites from friends, and invite a player with a
+  modifier click.
+- A notice when someone in your guild or group runs a newer Refactor.
+
+### Tooltips
+
+- Tooltip borders in the item's quality or the player's class colour, no health bar under
+  unit tooltips, and tooltips at the cursor or a fixed point.
+
+### Everywhere
+
+- Account defaults, profiles and per-character settings, with one switch at the top of the
+  list that says which of them your clicks change.
+- Refactor steps aside when another addon already does the same job, and says so under
+  Conflicts.
+- Diagnostics shows what every feature is doing and why, and /refactor errors lists anything
+  that went wrong.
+
+## Development notes
+
+Launch fixes (5 Nov 2026), checked headless, not yet in game:
+
+- An upgrade opens a prompt at the top centre of the screen instead of putting an Equip
+  button on the loot row: the item, how much better it is and what it replaces, then Equip
+  or Not now. Several upgrades are asked about one at a time. Equip is greyed out in combat,
+  and the prompt closes on its own if the item is equipped another way.
+- Nameplate quest progress works in a group. Forever's tooltip heads your own progress with
+  your name and surname, which was never recognised as yours, so the plate stayed blank on
+  every quest a party member shared. Your lines are now known by your quest log's own text
+  first and by your full name second, and a quest only a party member has never shows.
+- A nameplate that cannot be read costs that plate only. Before, one error switched quest
+  progress off on every plate until the feature was toggled; the first such error now shows
+  in /refactor errors. A plate with no readable GUID is still resolved, just not cached.
+- A mob you already finished is dimmed without its checkmark flashing again on every loot.
+  The checkmark plays once, for the kill that finished it.
+- Nameplate settings apply to the plates already on screen. The Progress ring checkbox is
+  gone: the ring itself was removed earlier and the box did nothing.
+
+Polish pass (25 Sep 2026), checked headless and in the layout preview, not yet in game:
+
+- Feature rows carry their one-line description under the name (PRD 8.2); the hover tooltip
+  holds the long detail and opens beside the window instead of over the sidebar. Section
+  headings count what is on. The sidebar foot shows the icon and version and opens What's new.
+- The Editing switch heads the list. With a profile assigned it offers that profile as a layer,
+  since the account layer no longer reaches the character; assigning a profile points the
+  switch at it. Undo says what it goes back to.
+- Settings blocks are laid out top down by the block itself and every note is measured, so no
+  help text is cut off at a fixed height. Block contents line up with the row's name.
+- Never sell is an item list: drop an item on the slot or type an ID or link; icons with
+  quality borders, right click to remove.
+- ActionCam: Customize copies a built-in profile under the player's name in one click.
+- Profiles page: what this character uses on top, saved profiles with their counts, save this
+  setup, share. Delete asks twice. Conflicts lists every neighbour it checks for, and a feature
+  that is on beside a neighbour doing the same job says so on its row.
+- Diagnostics has a summary line, state dots and the full reason on hover. The minimap
+  button's right click opens Diagnostics, and a broker launcher registers when LDB is loaded.
+- `/refactor <words>` opens the window searching for them; search reads the detail text too
+  and counts its results. A first install prints one line saying where Refactor lives.
+- The farm HUD menu runs on Blizzard_Menu instead of UIDropDownMenu, whose shared state
+  addons are known to taint. The session summary and copy box wear Refactor's own window.
+- The loot feed and nameplate quest progress list under Loot and Quest. Loot toasts are the
+  Loot feed; a vendor price no longer carries "(vendor)". The vendor summary uses the
+  client's coins and says only what happened.
+- What's new shows this player-facing changelog; these notes stay out of the game.
+- Section headings start with a copper diamond (new art, Media/Diamond.tga, loads on a full
+  restart). Enter saves a typed field. The loot feed's Edit Mode dialog links to the rest of
+  its settings. The Edit Mode visibility note and the session summary header are measured,
+  so neither cuts its last line.
+- `Tools/Preview` renders the real UI headless to HTML and PNG for layout review.
 
 M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
 
-- Forever saved variables: the beta client (1.60.1.69913) writes SavedVariables and never
-  reads them back, so settings died on every reload. Refactor loads the last session from
-  `Restore.lua` in its own folder when the client hands back nothing, and says at login when
-  the client starts working again and the workaround can go. Temporary, with the removal
-  list under Temporary workarounds in `docs/ROADMAP.md`.
 - Presets and the first-run screen are gone. Each feature has its own default instead:
   information and click savers start on (sell junk, auto repair, merchant window, chat links,
   rarity border, nameplate quest progress and a few more), anything that acts for you or
@@ -33,9 +134,15 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
   Refactor has an anchor for its badge later. Custom row art in Media, tinted in code.
   Fades and slides only, animated by the client, sixteen pooled frames.
 - Loot feed prices use the client's coin icons instead of the letters g, s and c, and drop
-  denominations that are zero: a grey reads "8c" with a copper coin, not "0g 0s 8c".
+  denominations that are zero: a grey reads "8c" with a copper coin, not "0g 0s 8c". The
+  coins are drawn as part of the row, so they stay with it while the feed slides or is
+  dragged instead of trailing behind. The farm HUD's details panel draws its coins the same
+  way, and the best drop's value now sits flush right like the top items below it.
 - Right click a loot feed row to dismiss it; the rows below slide up. On a group it takes
   the whole group. Left click stays reserved for Gear Refactor.
+- With Gear Refactor installed, loot feed rows carry its upgrade badge. A group's row shows
+  the best upgrade inside it, so a collapsed loot never hides one. Gear Refactor's own popup
+  stays off while the feed is on, as before.
 - Loot feed rows hold while hovered, show the item's own tooltip, and start their life
   again when the cursor leaves. Selecting the feed in Edit Mode opens a Blizzard-style
   dialog with size, row count and lifetime on minimal sliders, each with its own undo
@@ -46,7 +153,9 @@ M4 (18 Sep 2026), built against Retail 12.1.0, none of it verified in game yet:
 - Vendor: bag junk value readout under the merchant window; extended vendor list beside
   it with search, usable filter, click to buy one, Shift click for a stack, and buyback.
 - Quest automation: auto accept (skips PvP, repeatable and game-auto-accepted quests,
-  optional items-only) and auto turn in when there is no reward choice.
+  optional items-only) and auto turn in when there is nothing to choose. A lone reward is
+  taken the way Blizzard's Complete button takes it, and a quest that costs gold is left for
+  you to confirm.
 - Auto gossip: Shift click an option at an NPC and it is picked there from then on; an
   NPC's only quest or a finished hand-in is opened; the one shop, trainer, flight, bank,
   auction or transmog option is opened when the rest is small talk; a lone unflagged line

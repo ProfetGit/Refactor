@@ -2,12 +2,15 @@
 --- the file people read on GitHub are one text. `make changelog` writes it; the spec in
 --- Tests/spec/changelog_spec.lua fails while the generated file is behind.
 ---
---- Markdown understood: `## ` version headings, `- ` bullets with indented continuation lines,
---- plain paragraphs, and a blank line as a group break. Backticks are dropped. Nothing else is
---- interpreted, so a nested list or a link comes through as written.
+--- Markdown understood: `## ` version headings, `### ` group headings inside a version, `- `
+--- bullets with indented continuation lines, plain paragraphs, and a blank line as a group break.
+--- Backticks are dropped. Nothing else is interpreted, so a nested list or a link comes through
+--- as written. A version headed "Development notes" is kept in the file for whoever reads it on
+--- GitHub and left out of the game: the page in the window is for players.
 local Changelog = {}
 
 local SOURCE, OUTPUT = "CHANGELOG.md", "Locales/Changelog.enUS.lua"
+local NOT_SHIPPED = "^Development notes"
 -- Generated string literals wrap at this width so the file stays inside luacheck's 120
 -- columns with the indent and the entry's flags on the last line.
 local WRAP = 68
@@ -36,19 +39,29 @@ function Changelog.parse(markdown)
     end
     local function open(text, bullet)
         close()
-        entry = { text = text, bullet = bullet or nil, gap = (gap and #version.entries > 0) or nil }
+        -- A heading already sets its group apart, so the line under it carries no break of its own.
+        local last = version.entries[#version.entries]
+        entry = { text = text, bullet = bullet or nil, gap = (gap and last and not last.heading) or nil }
         version.entries[#version.entries + 1] = entry
         gap = false
     end
-    local number = 0
+    local number, skipping = 0, false
     for line in (markdown:gsub("\r", "") .. "\n"):gmatch("(.-)\n") do
         number = number + 1
         local heading = line:match("^##%s+(.-)%s*$")
+        local group = line:match("^###%s+(.-)%s*$")
         if heading then
             close()
+            skipping = clean(heading):match(NOT_SHIPPED) ~= nil
             version = { title = clean(heading), entries = {} }
-            versions[#versions + 1] = version
+            if not skipping then versions[#versions + 1] = version end
             gap = false
+        elseif skipping then
+            entry = nil
+        elseif group and version then
+            open(group, false)
+            entry.heading = true
+            close()
         elseif line:match("^#%s") then
             close()
         elseif line:match("^%s*$") then
@@ -98,6 +111,7 @@ end
 
 local function flags(entry)
     return (entry.bullet and ", bullet = true" or "") .. (entry.gap and ", gap = true" or "")
+        .. (entry.heading and ", heading = true" or "")
 end
 
 function Changelog.render(versions)

@@ -58,7 +58,7 @@ describe("slash dispatch", function()
         local env = base()
         local lines = env.R.Commands:Dispatch("wat")
         assert.equal(env.R.L.CMD_HELP_HEADER, lines[1])
-        assert.equal(12, #lines)
+        assert.equal(13, #lines)
     end)
 
     it("reports whether the client restored the saved variables", function()
@@ -114,9 +114,11 @@ describe("login bootstrap", function()
     it("prints dispatch output through the chat frame", function()
         local env = base()
         login(env)
+        -- A first install prints its one welcome line at login; the command's line follows it.
+        local before = #env.messages
         env.SlashCmdList.REFACTOR("errors")
-        assert.equal(1, #env.messages)
-        assert.matches("No errors recorded", env.messages[1])
+        assert.equal(before + 1, #env.messages)
+        assert.matches("No errors recorded", env.messages[#env.messages])
     end)
 
     it("re-reconciles modules when a setting changes", function()

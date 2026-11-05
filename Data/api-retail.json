@@ -18404,6 +18404,11 @@
       "line": 1962,
       "path": "Interface/AddOns/Blizzard_BoostTutorial/Blizzard_TutorialLogic.lua"
     },
+    "GetQuestMoneyToGet": {
+      "kind": "source-reference",
+      "line": 152,
+      "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
+    },
     "GetQuestReward": {
       "kind": "source-reference",
       "line": 159,
@@ -19160,6 +19165,11 @@
     "MakeModifiers": {
       "line": 244,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/InputDocumentation.lua"
+    },
+    "MenuUtil.CreateContextMenu": {
+      "kind": "source-reference",
+      "line": 151,
+      "path": "Interface/AddOns/Blizzard_Menu/MenuUtil.lua"
     },
     "MerchantBuyBackItem": {
       "kind": "source-reference",

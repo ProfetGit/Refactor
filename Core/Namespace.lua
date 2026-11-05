@@ -151,14 +151,11 @@ function R:InitSavedVariables(guid)
     probe.atLogin = shapeOf(_G.RefactorDB)
     probe.atLoginChar = shapeOf(_G.RefactorCharDB)
     probe.clientGave = type(_G.RefactorDB) == "table"
-    -- Forever hands back nothing (see Restore.lua). Its copy of the last session is used
-    -- only then, so a client that restores properly never reaches this.
     if type(_G.RefactorDB) ~= "table" then
-        _G.RefactorDB = type(self.restoreAccount) == "table" and self.restoreAccount or {}
-        probe.restored = self.restoreAccount ~= nil
+        _G.RefactorDB = {}
     end
     if type(_G.RefactorCharDB) ~= "table" then
-        _G.RefactorCharDB = type(self.restoreCharacter) == "table" and self.restoreCharacter or {}
+        _G.RefactorCharDB = {}
     end
     local account, character = _G.RefactorDB, _G.RefactorCharDB
     account.loadProbe = probe

@@ -5,8 +5,7 @@ local function tocFiles()
     local files = {}
     for line in assert(io.open("Refactor.toc", "r")):lines() do
         local entry = line:gsub("\\", "/"):gsub("%s+$", "")
-        -- Restore.lua is a local capture of one client's saved variables, not addon code.
-        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" and entry ~= "Restore.lua" then
+        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" then
             files[#files + 1] = entry
         end
     end
@@ -17,8 +16,15 @@ local function loaded(addons)
     local env = Runtime.new()
     Widgets.install(env)
     env.C_AddOns = { IsAddOnLoaded = function(name) return addons[name] == true end }
-    env.C_QuestLog = { UnitIsRelatedToActiveQuest = function() return false end }
+    env.C_QuestLog = {
+        UnitIsRelatedToActiveQuest = function() return false end,
+        GetQuestObjectives = function() return nil end,
+        IsOnQuest = function() return false end,
+    }
     env.C_TooltipInfo = { GetUnit = function() return nil end }
+    env.IsInGroup = function() return false end
+    env.issecretvalue = function() return false end
+    env.UnitName = function() return "Me" end
     env.C_NamePlate = { GetNamePlateForUnit = function() return nil end }
     env.Enum = { TooltipDataLineType = { QuestTitle = 17, QuestObjective = 8, QuestPlayer = 18 } }
     local R
@@ -106,6 +112,26 @@ describe("conflict panel", function()
         assert.is_false(R.Settings:Get(row.moduleID))
     end)
 
+    it("says so on the feature's own row and in its detail while both are on", function()
+        local _, R = loaded({ Leatrix_Plus = true })
+        enableAll(R)
+        local UI = R.UI
+        UI:Toggle()
+        local row
+        for _, candidate in ipairs(UI.rows) do
+            if candidate.module.id == "loot.fastLoot" then row = candidate end
+        end
+        -- Fast loot is unavailable in this environment, and that warning wins the slot.
+        R.moduleByID["loot.fastLoot"].state = "enabled"
+        UI:Refresh()
+        assert.equal(string.format(R.L.UI_OVERLAP_SHORT, R.L.NEIGHBOUR_LEATRIX), row.meta:GetText())
+        local _, body = UI:DetailText(row.module)
+        assert.is_truthy(body:find(string.format(R.L.UI_OVERLAP, R.L.NEIGHBOUR_LEATRIX), 1, true))
+        -- Switched off, there is nothing to warn about.
+        UI:SetModuleEnabled(row.module, false)
+        assert.equal("", row.meta:GetText())
+    end)
+
     it("lists Plumber against the merchant costs module", function()
         local _, R = loaded({ Plumber = true })
         R.UI:LoadConflicts()
@@ -140,16 +166,16 @@ describe("settings blocks", function()
         local _, R = loaded({})
         R.UI:RefreshNameplateOptions()
         local box = R.UI.nameplateButtons[1]
-        assert.equal("nameplateShowRing", box.optionKey)
+        assert.equal("nameplateShowIcon", box.optionKey)
         assert.is_true(box:GetChecked())
 
         box:SetChecked(false)
         box:GetScript("OnClick")(box)
-        assert.is_false(R.Settings:GetOption("nameplateShowRing"))
+        assert.is_false(R.Settings:GetOption("nameplateShowIcon"))
 
         box:SetChecked(true)
         box:GetScript("OnClick")(box)
-        assert.is_true(R.Settings:GetOption("nameplateShowRing"))
+        assert.is_true(R.Settings:GetOption("nameplateShowIcon"))
     end)
 
     it("reports art the client did not recognise", function()

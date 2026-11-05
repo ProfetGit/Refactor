@@ -190,6 +190,7 @@ end)
 local function toastEnv()
     local env = base(true)
     env:Load("UI/LootFeed.lua")
+    env:Load("UI/UpgradePrompt.lua")
     env.GetMoney = function() return env.money or 0 end
     env.money = 1000
     env.C_Item = {
@@ -200,15 +201,6 @@ local function toastEnv()
     }
     env.C_CurrencyInfo = {
         GetCurrencyInfo = function(id) return { name = "Marks", iconFileID = 5, quality = 2, currencyID = id } end,
-        -- Shaped like the client's: coin icons, and no denomination that is zero.
-        GetCoinTextureString = function(amount)
-            local gold, silver = math.floor(amount / 10000), math.floor(amount / 100) % 100
-            local parts = {}
-            if gold > 0 then parts[#parts + 1] = gold .. "|TGold|t" end
-            if silver > 0 or gold > 0 then parts[#parts + 1] = silver .. "|TSilver|t" end
-            parts[#parts + 1] = (amount % 100) .. "|TCopper|t"
-            return table.concat(parts, " ")
-        end,
     }
     env.GameTooltip = {
         SetOwner = function(tip, owner, anchor) tip.owner, tip.anchor = owner, anchor end,
@@ -236,6 +228,46 @@ local function itemLink(id)
     return "|cff0070dd|Hitem:" .. id .. ":0|h[Item " .. id .. "]|h|r"
 end
 
+-- A row line as the player reads it: its text, the coin textures the row shows after it, then
+-- the suffix. Coins are written as they used to be escaped, so the expectations read the same.
+local COIN_NAMES = { "Gold", "Silver", "Copper" }
+local function rendered(row, key)
+    local text = row[key]:GetText()
+    if row.moneyLine ~= key then
+        return text
+    end
+    local coins = {}
+    for index, coin in ipairs(row.coins.pieces) do
+        if coin.amount:IsShown() and coin.icon:IsShown() then
+            coins[#coins + 1] = coin.amount:GetText() .. "|T" .. COIN_NAMES[index] .. "|t"
+        end
+    end
+    local suffix = row.coins.suffix
+    return text .. table.concat(coins, " ") .. (suffix:IsShown() and suffix:GetText() or "")
+end
+
+-- Gear Refactor's public API as the feed meets it: a badge per link, an equip that is
+-- refused in combat and recorded otherwise. Nothing else of Gear Refactor exists here.
+local function withGear(env)
+    env:Load("Integrations/GearRefactor.lua")
+    env.badges, env.replaced, env.equipped, env.gearCombat = {}, {}, {}, false
+    env.GearRefactor = { API = {
+        GetUpgradeBadge = function(link) return env.badges[link] end,
+        EvaluateItem = function(link) return { state = "upgrade", replaces = env.replaced[link] } end,
+        IsEquipAvailable = function() return not env.gearCombat end,
+        EquipItem = function(link)
+            if env.gearCombat then return false, "REASON_IN_COMBAT" end
+            env.equipped[#env.equipped + 1] = link
+            return true
+        end,
+    } }
+    return env
+end
+
+local function badge(state, text)
+    return { state = state, text = text, r = 0.2, g = 0.9, b = 0.3 }
+end
+
 describe("M4 loot feed", function()
     it("parses links locale-free and shows only the player's own loot", function()
         local env = toastEnv()
@@ -246,7 +278,11 @@ describe("M4 loot feed", function()
         assert.equal(1, #module.host.items)
         local row = module.host.items[1].row
         assert.equal("Blue Thing x3", row.name:GetText())
-        assert.equal("90|TCopper|t (vendor)", row.detail:GetText())
+        -- A vendor price carries no tag; only an auction addon's price names its source.
+        assert.equal("90|TCopper|t", rendered(row, "detail"))
+        assert.equal("TSM", select(3, module:Detail(90, "tsm")):match("%((.-)%)"))
+        -- No texture rides inside the text, where it would trail the row as it slides.
+        assert.is_nil(row.detail:GetText():find("|T", 1, true))
         assert.equal(2100, row.icon.texture)
         -- The newest row is the bottom one, so it wears no separator.
         assert.is_false(row.underline:IsShown())
@@ -267,10 +303,10 @@ describe("M4 loot feed", function()
         env.R.Settings:SetOption("toastShowSource", false)
         env:Loot("loot " .. LINK)
         assert.equal(1, #module.host.items)
-        assert.equal("30|TCopper|t", module.host.items[1].row.detail:GetText())
+        assert.equal("30|TCopper|t", rendered(module.host.items[1].row, "detail"))
         env.R.Settings:SetOption("toastShowPrice", false)
         env:Loot("loot " .. itemLink(2001))
-        assert.equal("", module.host.items[2].row.detail:GetText())
+        assert.equal("", rendered(module.host.items[2].row, "detail"))
         noResidue(env, module)
     end)
 
@@ -285,7 +321,7 @@ describe("M4 loot feed", function()
         env:Fire("PLAYER_MONEY")
         assert.equal(1, #module.host.items)
         local gold = module.host.items[1].row
-        assert.equal("+1|TSilver|t 50|TCopper|t", gold.detail:GetText())
+        assert.equal("+1|TSilver|t 50|TCopper|t", rendered(gold, "detail"))
         -- Gold shows the coin icon, unframed like a currency row.
         assert.is_true(gold.icon:IsShown())
         assert.is_false(gold.iconFrame:IsShown())
@@ -305,6 +341,141 @@ describe("M4 loot feed", function()
         noResidue(env, module)
     end)
 
+    it("badges an upgrade on its row and offers it in the prompt, with no button on the row", function()
+        local env = withGear(toastEnv())
+        local module = enable(env, "Modules_LoD/Toasts/Loot.lua", "toasts.loot")
+        env.badges[LINK] = badge("upgrade", "+4%")
+        env.replaced[LINK] = "|cff1eff00|Hitem:1999:0|h[Old Thing]|h|r"
+        env:Loot("You receive loot: " .. LINK .. ".")
+        local row = module.host.items[1].row
+        assert.is_true(row.badge:IsShown())
+        assert.equal("+4%", row.badge:GetText())
+        assert.is_nil(row.action)
+        local prompt = module.prompt
+        assert.is_true(prompt:IsShown())
+        assert.equal("Better gear looted", prompt.title:GetText())
+        assert.equal("Blue Thing", prompt.name:GetText())
+        assert.equal("+4%", prompt.badge:GetText())
+        assert.equal("replaces Old Thing", prompt.replaces:GetText())
+        assert.is_true(prompt.equip:IsEnabled())
+        -- Hovering the item shows its tooltip under the prompt, clear of the buttons.
+        prompt.item:GetScript("OnEnter")(prompt.item)
+        assert.equal(LINK, env.GameTooltip.hyperlink)
+        assert.equal(prompt, env.GameTooltip.owner)
+        prompt.equip:GetScript("OnClick")(prompt.equip)
+        assert.same({ LINK }, env.equipped)
+        assert.is_false(prompt:IsShown())
+        -- Equipped is final: a later verdict refresh never asks again.
+        env:Fire("PLAYER_EQUIPMENT_CHANGED", 6, false)
+        env:Advance(0.01)
+        assert.is_false(prompt:IsShown())
+        noResidue(env, module)
+    end)
+
+    it("never prompts for a downgrade or a plain item", function()
+        local env = withGear(toastEnv())
+        local module = enable(env, "Modules_LoD/Toasts/Loot.lua", "toasts.loot")
+        env.badges[itemLink(3001)] = badge("downgrade", "-6%")
+        env:Loot("loot " .. itemLink(3000))
+        env:Loot("loot " .. itemLink(3001))
+        local plain, worse = module.host.items[1].row, module.host.items[2].row
+        assert.is_false(plain.badge:IsShown())
+        assert.equal("-6%", worse.badge:GetText())
+        assert.is_false(module.prompt:IsShown())
+        assert.equal(0, #module.prompt.queue)
+        noResidue(env, module)
+    end)
+
+    it("queues every upgrade in a group and asks about them one at a time", function()
+        local env = withGear(toastEnv())
+        local module = enable(env, "Modules_LoD/Toasts/Loot.lua", "toasts.loot")
+        env.badges[itemLink(3001)] = badge("upgrade", "+3%")
+        env.badges[itemLink(3002)] = badge("upgrade", "+11%")
+        env.badges[itemLink(3003)] = badge("downgrade", "-20%")
+        env:Fire("LOOT_OPENED", true, false)
+        for id = 3000, 3003 do env:Loot("loot " .. itemLink(id)) end
+        env:Advance(0.4)
+        local item = module.host.items[1]
+        -- Collapsed, the upgrade would otherwise be invisible inside the group.
+        assert.equal("+11%", item.row.badge:GetText())
+        local prompt = module.prompt
+        assert.equal("Better gear looted (1 more)", prompt.title:GetText())
+        assert.equal("Item 3001", prompt.name:GetText())
+        assert.equal("", prompt.replaces:GetText())
+        prompt.skip:GetScript("OnClick")(prompt.skip)
+        assert.same({}, env.equipped)
+        assert.equal("Better gear looted", prompt.title:GetText())
+        assert.equal("Item 3002", prompt.name:GetText())
+        -- Not now is final for that drop, even when the verdicts are asked again.
+        env:Fire("GET_ITEM_INFO_RECEIVED", 3001, true)
+        env:Advance(0.01)
+        assert.equal(1, #prompt.queue)
+        prompt.equip:GetScript("OnClick")(prompt.equip)
+        assert.same({ itemLink(3002) }, env.equipped)
+        assert.is_false(prompt:IsShown())
+        noResidue(env, module)
+    end)
+
+    it("greys Equip in combat, picks up a late verdict, and drops what stops being an upgrade", function()
+        local env = withGear(toastEnv())
+        local module = enable(env, "Modules_LoD/Toasts/Loot.lua", "toasts.loot")
+        env:Loot("You receive loot: " .. LINK .. ".")
+        local row, prompt = module.host.items[1].row, module.prompt
+        assert.is_false(row.badge:IsShown())
+        assert.is_false(prompt:IsShown())
+        -- The item finished loading, and Gear Refactor now has an answer.
+        env.badges[LINK] = badge("upgrade", "+4%")
+        env:Fire("GET_ITEM_INFO_RECEIVED", 2000, true)
+        assert.is_false(row.badge:IsShown(), "asked a frame later, after Gear Refactor has caught up")
+        env:Advance(0.01)
+        assert.equal("+4%", row.badge:GetText())
+        assert.is_true(prompt:IsShown())
+        env:Fire("PLAYER_REGEN_DISABLED")
+        assert.is_false(prompt.equip:IsEnabled())
+        prompt.equip:GetScript("OnClick")(prompt.equip)
+        assert.same({}, env.equipped)
+        assert.is_true(prompt:IsShown())
+        env:Fire("PLAYER_REGEN_ENABLED")
+        assert.is_true(prompt.equip:IsEnabled())
+        -- Equipped from the bags instead: Gear Refactor no longer calls it an upgrade.
+        env.badges[LINK] = badge("sidegrade", "0%")
+        env:Fire("PLAYER_EQUIPMENT_CHANGED", 6, false)
+        env:Advance(0.01)
+        assert.is_false(prompt:IsShown())
+        noResidue(env, module)
+    end)
+
+    it("keeps asking after the row fades, and closes on disable", function()
+        local env = withGear(toastEnv())
+        local module = enable(env, "Modules_LoD/Toasts/Loot.lua", "toasts.loot")
+        env.badges[LINK] = badge("upgrade", "+4%")
+        env:Loot("You receive loot: " .. LINK .. ".")
+        module.host:Clear()
+        assert.is_true(module.prompt:IsShown())
+        assert.is_not_nil(env.R.Broker.events.PLAYER_REGEN_DISABLED, "the prompt still needs combat state")
+        env.R.Registry:Disable(module)
+        assert.is_false(module.prompt:IsShown())
+        assert.equal(0, #module.prompt.queue)
+        noResidue(env, module)
+    end)
+
+    it("holds its gear events only while item rows are up, and none without Gear Refactor", function()
+        local env = toastEnv()
+        local module = enable(env, "Modules_LoD/Toasts/Loot.lua", "toasts.loot")
+        env:Loot("You receive loot: " .. LINK .. ".")
+        assert.is_nil(env.R.Broker.events.GET_ITEM_INFO_RECEIVED)
+        assert.is_false(module.prompt:IsShown())
+        env.R.Registry:Disable(module)
+        env = withGear(toastEnv())
+        module = enable(env, "Modules_LoD/Toasts/Loot.lua", "toasts.loot")
+        env:Loot("You receive loot: " .. LINK .. ".")
+        assert.is_not_nil(env.R.Broker.events.GET_ITEM_INFO_RECEIVED)
+        module.host:Clear()
+        assert.is_nil(env.R.Broker.events.GET_ITEM_INFO_RECEIVED)
+        assert.is_nil(env.R.Broker.events.PLAYER_REGEN_DISABLED)
+        noResidue(env, module)
+    end)
+
     it("collapses a multi-slot loot into one row that expands and pauses its own timer", function()
         local env = toastEnv()
         local module = enable(env, "Modules_LoD/Toasts/Loot.lua", "toasts.loot")
@@ -315,7 +486,7 @@ describe("M4 loot feed", function()
         env:Advance(0.4)
         assert.equal(1, #module.host.items)
         local item = module.host.items[1]
-        assert.equal("4 items, 1|TSilver|t 20|TCopper|t", item.row.name:GetText())
+        assert.equal("4 items, 1|TSilver|t 20|TCopper|t", rendered(item.row, "name"))
         assert.is_true(item.row.chevron:IsShown())
         item.row.chevron:GetScript("OnClick")(item.row.chevron)
         assert.is_true(item.expanded)
@@ -517,7 +688,14 @@ describe("M4 loot feed", function()
         assert.matches("Pushed five test rows", env.messages[2])
         assert.equal(5, #module.host.items)
         assert.equal("Copper Ore x20", module.host.items[2].row.name:GetText())
-        assert.equal("4 items, 2|TGold|t 16|TSilver|t 0|TCopper|t", module.host.items[5].row.name:GetText())
+        -- The uncommon row stands in for an upgrade: badged, and asked about in the prompt.
+        assert.equal("+4%", module.host.items[3].row.badge:GetText())
+        assert.equal("Scouting Belt", module.prompt.name:GetText())
+        assert.equal("replaces Worn Leather Belt", module.prompt.replaces:GetText())
+        module.prompt.equip:GetScript("OnClick")(module.prompt.equip)
+        assert.is_false(module.prompt:IsShown())
+        -- A zero denomination is left out, as Blizzard's GetMoneyString does.
+        assert.equal("4 items, 2|TGold|t 16|TSilver|t", rendered(module.host.items[5].row, "name"))
         env.messages = {}
         env.R.Theme.missingFiles.lootRow = true
         env.R.Broker:Emit("REFACTOR_LOOT_TEST")
@@ -660,11 +838,14 @@ describe("M4 quest automation", function()
 
     it("turns in only when completable and without a reward choice", function()
         local env = base()
-        local completed, rewarded = 0, 0
+        local completed, rewarded, picked = 0, 0, nil
         env.IsQuestCompletable = function() return env.completable == true end
         env.CompleteQuest = function() completed = completed + 1 end
         env.GetNumQuestChoices = function() return env.choices or 0 end
-        env.GetQuestReward = function() rewarded = rewarded + 1 end
+        env.GetQuestMoneyToGet = function() return env.cost or 0 end
+        env.GetQuestReward = function(choice)
+            rewarded, picked = rewarded + 1, choice
+        end
         local module = enable(env, "Modules/Quest/AutoTurnIn.lua", "quest.autoTurnIn")
         env:Fire("QUEST_PROGRESS")
         assert.equal(0, completed)
@@ -673,12 +854,35 @@ describe("M4 quest automation", function()
         assert.equal(1, completed)
         env:Fire("QUEST_COMPLETE")
         assert.equal(1, rewarded)
+        assert.equal(0, picked)
         env.choices = 2
         env:Fire("QUEST_COMPLETE")
         assert.equal(1, rewarded)
         env.choices, env.combat = 0, true
         env:Fire("QUEST_COMPLETE")
         assert.equal(1, rewarded)
+        noResidue(env, module)
+    end)
+
+    -- The reported case: one reward, shown already chosen, and the quest still sat open.
+    it("takes a lone reward the way Blizzard's Complete button does", function()
+        local env = base()
+        local picked = {}
+        env.IsQuestCompletable = function() return true end
+        env.CompleteQuest = function() end
+        env.GetNumQuestChoices = function() return env.choices end
+        env.GetQuestMoneyToGet = function() return env.cost end
+        env.GetQuestReward = function(choice) picked[#picked + 1] = choice end
+        local module = enable(env, "Modules/Quest/AutoTurnIn.lua", "quest.autoTurnIn")
+        env.choices, env.cost = 1, 0
+        env:Fire("QUEST_COMPLETE")
+        assert.same({ 1 }, picked)
+        -- Paying for a hand-in is Blizzard's confirmation dialog, never an automatic spend.
+        env.choices, env.cost = 0, 5000
+        env:Fire("QUEST_COMPLETE")
+        env.choices = 1
+        env:Fire("QUEST_COMPLETE")
+        assert.same({ 1 }, picked)
         noResidue(env, module)
     end)
     local function gossipEnv()
@@ -1519,7 +1723,6 @@ describe("M4 interface, mail, vendor", function()
         local env = base(true)
         env:Load("UI/Search.lua")
         env:Load("UI/Widgets/Widgets.lua")
-        env:Load("UI/VendorPanel.lua")
         env.MerchantFrame = env.CreateFrame("Frame", "MerchantFrame")
         env.MerchantFrame:Show()
         env.NUM_TOTAL_EQUIPPED_BAG_SLOTS = 1

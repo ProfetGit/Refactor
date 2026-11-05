@@ -23,8 +23,8 @@ local function sanitizeValues(values)
 end
 
 local BOOLEAN_OPTIONS = {
-    nameplateShowIcon = true, nameplateShowRing = true,
-    nameplateReduceAnimation = true, nameplateDimCompleted = true,
+    nameplateShowIcon = true,
+    nameplateReduceAnimation = true, nameplateDimCompleted = true, nameplateShowMore = true,
     minimapButton = true,
     toastShowPrice = true, toastGold = true, toastCurrency = true,
     toastShowSource = true, toastAggregate = true,
@@ -37,8 +37,10 @@ local BOOLEAN_OPTIONS = {
     uiVisibilityBlobs = true,
     tooltipClassBorder = true,
 }
--- Which layer the window's feature checkboxes write to.
-local SCOPES = { account = true, character = true }
+-- Which layer the window's feature checkboxes write to. "profile" is the profile assigned
+-- to this character: with one assigned, the account layer no longer reaches the character,
+-- so editing it would change nothing the player can see.
+local SCOPES = { account = true, character = true, profile = true }
 local DEFAULT_SCOPE = "account"
 local ANCHOR_POINTS = {
     TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true,
@@ -46,8 +48,11 @@ local ANCHOR_POINTS = {
 }
 local OPTION_DEFAULTS = {
     neverSellIDs = {}, repairCapGold = 100, killSwitch = "CTRL",
-    nameplateSide = "RIGHT", nameplateShowIcon = true, nameplateShowRing = true,
+    nameplateSide = "RIGHT", nameplateShowIcon = true,
     nameplateReduceAnimation = false, nameplateDimCompleted = true,
+    -- Off: a second number beside the count reads as a party member's progress, not as
+    -- more of the player's own objectives on the same mob.
+    nameplateShowMore = false,
     minimapButton = true,
     -- On: someone who turned the tooltip border on and hovers a player expects the colour
     -- the rest of the UI uses for that class.
@@ -197,6 +202,8 @@ end
 function Settings:Init(account, character, guid)
     assert(type(account) == "table" and type(character) == "table", "settings tables required")
     self.account, self.character, self.char, self.guid = account, character, character, guid
+    -- An account table the client handed back empty is a first install on this account.
+    self.fresh = account.version == nil
     account.version = 1
     account.modules = sanitizeValues(account.modules)
     character.overrides = sanitizeValues(character.overrides)
@@ -247,15 +254,40 @@ function Settings:RegisterDefaults(id, value)
     self.defaults[id] = value
 end
 
+-- A stored "profile" scope outlives the assignment it was chosen for, so it reads as the
+-- account layer once the profile is gone or unassigned.
 function Settings:GetScope()
-    return self.character and self.character.scope or DEFAULT_SCOPE
+    local scope = self.character and self.character.scope or DEFAULT_SCOPE
+    if scope == "profile" and not self:AssignedProfile() then return DEFAULT_SCOPE end
+    return scope
 end
 
 function Settings:SetScope(scope)
     if not self.character or not SCOPES[scope] then
         return false
     end
+    if scope == "profile" and not self:AssignedProfile() then
+        return false
+    end
     self.character.scope = scope
+    return true
+end
+
+-- The name of the profile this character follows, or nil.
+function Settings:AssignedProfile()
+    local account = self.account
+    local name = account and self.guid and account.assignments[self.guid]
+    return name and account.profiles[name] and name or nil
+end
+
+-- One feature's switch inside a profile; nil takes it out, so the profile inherits it again.
+function Settings:SetProfileValue(name, id, value)
+    local profile = self.account and self.account.profiles[name]
+    if not profile or not R.Codec:ValidID(id) or (value ~= nil and type(value) ~= "boolean") then
+        return false
+    end
+    profile[id] = value
+    self:Changed(id)
     return true
 end
 

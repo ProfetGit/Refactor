@@ -4,12 +4,16 @@ local Widgets = {}
 R.UI.Widgets = Widgets
 
 local INPUT_HEIGHT, INFO_SIZE, CHECK_SIZE = 26, 18, 26
-Widgets.ROW_HEIGHT = 34
+Widgets.INPUT_HEIGHT = INPUT_HEIGHT
+-- Two lines of text, name and description, on the 4 px grid.
+Widgets.ROW_HEIGHT = 44
 local CHEVRON_SIZE = 14
+-- The name's top sits this far above the checkbox's, so the two lines together centre on it.
+local TEXT_GAP, NAME_Y, DESC_GAP = 10, 2, 3
 -- A settings block is inset from its row's left edge and separated from the next row by a
 -- rule, so an open block reads as belonging to the row above it rather than to the list.
-local BLOCK_TOP_GAP, BLOCK_BOTTOM_GAP, BLOCK_HELP_HEIGHT = 10, 16, 30
-Widgets.BLOCK_INDENT = 34
+local BLOCK_TOP_GAP, BLOCK_BOTTOM_GAP = 10, 16
+Widgets.BLOCK_INDENT = 42
 
 -- Exponential catch-up rather than a fixed tween: a new wheel tick moves the target at
 -- once and the view is always chasing it, so input never waits for an animation to end.
@@ -101,26 +105,95 @@ local function indexBlock(block, ...)
     end
 end
 
+-- The height a paragraph needs at a given width: the tallest of the texts it may show, so a
+-- note whose words change with a setting never outgrows the room kept for it. A box of fixed
+-- height cut the third line off every long note, silently, in whatever language it was in.
+function Widgets:TextHeight(label, width, ...)
+    label:SetWidth(width)
+    local current, tallest = label:GetText(), 0
+    for index = 1, select("#", ...) do
+        local text = select(index, ...)
+        if type(text) == "string" and text ~= "" then
+            label:SetText(text)
+            tallest = math.max(tallest, label:GetStringHeight() or 0)
+        end
+    end
+    label:SetText(current or "")
+    return math.ceil(tallest)
+end
+
+-- Vertical rhythm inside a settings block, on the 4 px grid: what follows a control, a note,
+-- and the space before a titled group.
+Widgets.CONTROL_GAP, Widgets.NOTE_GAP, Widgets.GROUP_GAP, Widgets.GROUP_LABEL = 4, 10, 14, 22
+
+local BlockMethods = {}
+
+-- Everything below is placed from block.cursor down, so a builder says what comes next
+-- and never adds up offsets by hand. The cursor starts where the help text ends.
+function BlockMethods:Place(widget, height, gap, x)
+    widget:ClearAllPoints()
+    widget:SetPoint("TOPLEFT", x or 0, self.cursor)
+    self.cursor = self.cursor - height - (gap or Widgets.CONTROL_GAP)
+    return widget
+end
+
+function BlockMethods:Skip(height) self.cursor = self.cursor - height end
+
+-- A muted paragraph at the block's width, measured rather than boxed. variants are the
+-- other texts it may be given later, so the room kept fits the longest of them.
+function BlockMethods:Note(text, ...)
+    local note = Theme:Text(self, text or "", "small", "TEXT_MUTED")
+    note:SetJustifyV("TOP")
+    note:SetWordWrap(true)
+    local height = Widgets:TextHeight(note, self.width, text, ...)
+    note:SetHeight(math.max(1, height))
+    self:Place(note, height, Widgets.NOTE_GAP)
+    if text then self:Index(text) end
+    return note
+end
+
+-- A titled group of settings inside one block. A group that is not the first gets space above.
+function BlockMethods:Group(text)
+    if self.cursor < self.top then self:Skip(Widgets.GROUP_GAP) end
+    local label = Theme:Text(self, text, "body", "TEXT_TITLE")
+    self:Place(label, Widgets.GROUP_LABEL - Widgets.CONTROL_GAP)
+    label:SetPoint("RIGHT")
+    self:Index(text)
+    return label
+end
+
+-- Closes the block at the cursor.
+function BlockMethods:Finish()
+    self:SetBodyHeight(self.top - self.cursor - Widgets.CONTROL_GAP)
+end
+
 -- A headerless block of settings for one feature, opened from that feature's row. It
 -- carries the same surface as Section (top, SetBodyHeight, height) so a builder can be
 -- moved between the two without rewriting where it puts its widgets. The feature's name
 -- is already on the row above, so repeating it in a banner would only take space.
-function Widgets:SettingsBlock(parent, help)
+-- Gives any frame the block's top-down placement: a tool page stacks its parts the same way
+-- a feature's settings do, with the same spacing.
+function Widgets:Stack(frame, width, top)
+    -- The window is a fixed size, so a block's width is known before it is laid out, and
+    -- every paragraph in it can be measured once, here, instead of on every refresh.
+    frame.width = width
+    frame.top = top or 0
+    frame.cursor = frame.top
+    frame.searchText = ""
+    frame.Index = indexBlock
+    for name, method in pairs(BlockMethods) do frame[name] = method end
+    return frame
+end
+
+function Widgets:SettingsBlock(parent, help, width)
     local block = CreateFrame("Frame", nil, parent)
     -- Opening and closing animates the block's height, so its contents have to be cut off
     -- at whatever is revealed rather than spilling over the rows below it.
     block:SetClipsChildren(true)
-    block.top = -BLOCK_TOP_GAP
-    block.searchText = ""
-    block.Index = indexBlock
+    self:Stack(block, width or R.UI.blockWidth, -BLOCK_TOP_GAP)
     if help then
-        block.help = Theme:Text(block, help, "small", "TEXT_MUTED")
-        block.help:SetPoint("TOPLEFT", 0, block.top)
-        block.help:SetPoint("RIGHT")
-        block.help:SetHeight(BLOCK_HELP_HEIGHT)
-        block.help:SetJustifyV("TOP")
-        block.top = block.top - BLOCK_HELP_HEIGHT - 4
-        block:Index(help)
+        block.help = block:Note(help)
+        block.top = block.cursor
     end
     block.line = Theme:Divider(block)
     function block:SetBodyHeight(height)
@@ -218,11 +291,11 @@ function Widgets:Scroll(parent, barTop)
     return scroll
 end
 
--- One feature on one line: toggle, name, the slot that reports a warning state, and undo.
--- The checkbox turns the feature on and off; the rest of the row opens the feature's own
--- settings, because a row that both toggled and expanded had no way to say which a click
--- meant. Hovering the row is what shows the detail, so there is neither a description line
--- nor an info icon to hunt for.
+-- One feature: toggle, then its name over a one-line description (PRD 8.2: no setting is a
+-- bare label, and a list of names alone had to be hovered row by row to be read), then the
+-- slot that reports a warning state, the chevron and undo. The checkbox turns the feature on
+-- and off; the rest of the row opens the feature's own settings, because a row that both
+-- toggled and expanded had no way to say which a click meant. Hovering shows the long detail.
 function Widgets:ModuleRow(parent, module)
     local row = CreateFrame("Button", nil, parent)
     row:SetHeight(Widgets.ROW_HEIGHT)
@@ -247,7 +320,12 @@ function Widgets:ModuleRow(parent, module)
     row.toggle:SetScript("OnLeave", leaveRow)
     row.undo = Theme:UndoButton(row, INFO_SIZE + 2, function() R.UI:ResetModule(module) end)
     row.undo:SetPoint("RIGHT", -10, 0)
-    row.undo:SetScript("OnEnter", enterRow)
+    -- Undo says what it goes back to, which depends on the layer being edited; the row's
+    -- detail is one move away.
+    row.undo:SetScript("OnEnter", function()
+        row.hover:To(1)
+        R.UI:ShowUndoTip(module, row.undo)
+    end)
     row.undo:SetScript("OnLeave", leaveRow)
     -- The scrollbar's own arrow, as the loot feed already uses it for the same job. It
     -- keeps its slot whether or not this feature has settings, so the meta column lines up
@@ -261,12 +339,22 @@ function Widgets:ModuleRow(parent, module)
     row.chevron:SetScript("OnEnter", enterRow)
     row.chevron:SetScript("OnLeave", leaveRow)
     row.chevron:SetScript("OnClick", function() R.UI:ToggleExpanded(module.id) end)
+    -- Sized to its own text, so a row without a warning gives the description the room.
     row.meta = Theme:Text(row, "", "small", "TEXT_MUTED")
     row.meta:SetPoint("RIGHT", row.chevron, "LEFT", -10, 0)
-    row.meta:SetWidth(180)
     row.meta:SetJustifyH("RIGHT")
+    row.meta:SetWordWrap(false)
     row.name = Theme:Text(row, "", "body", "TEXT_BODY")
-    row.name:SetPoint("LEFT", row.toggle, "RIGHT", 8, 0)
+    row.name:SetPoint("TOPLEFT", row.toggle, "TOPRIGHT", TEXT_GAP, NAME_Y)
+    row.name:SetWordWrap(false)
+    row.desc = Theme:Text(row, "", "small", "TEXT_MUTED")
+    row.desc:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -DESC_GAP)
+    row.desc:SetWordWrap(false)
+    function row:FitText()
+        local limit = self.meta:GetText() ~= "" and self.meta or self.chevron
+        self.name:SetPoint("RIGHT", limit, "LEFT", -TEXT_GAP, 0)
+        self.desc:SetPoint("RIGHT", limit, "LEFT", -TEXT_GAP, 0)
+    end
     row:SetScript("OnEnter", enterRow)
     row:SetScript("OnLeave", leaveRow)
     row:SetScript("OnClick", function() R.UI:ToggleExpanded(module.id) end)

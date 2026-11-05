@@ -7,7 +7,19 @@ local function read(path)
 end
 local index = assert(json.decode(read("Data/api-retail.json")))
 assert(index.flavor == "retail" and index.interface == 120100, "wrong source index target")
-local failures, checked = {}, 0
+-- What the Forever client itself exposes, from Tools/Probe. A symbol it lacks makes that module
+-- unavailable there, which the capability check already handles, so it is reported rather
+-- than failed; a symbol found on neither client is the invented kind and fails.
+local forever
+do
+    local file = io.open("Data/api-forever.json", "r")
+    if file then
+        forever = assert(json.decode(file:read("*a")))
+        file:close()
+        assert(forever.provenance == "client-probe" and forever.flavor == "forever", "wrong Forever index")
+    end
+end
+local failures, checked, absent, overwritten = {}, 0, {}, {}
 local function fail(path, message) failures[#failures + 1] = path .. ": " .. message end
 local function verify(path, text, requires)
     local report = luacheck.check_strings({ text }, { std = "lua51", globals = { "_G" } })[1]
@@ -32,7 +44,15 @@ end
 local function declare(path, requires, symbol)
     requires[symbol] = true
     checked = checked + 1
-    if not index.symbols[symbol] then fail(path, "no source evidence for " .. symbol) end
+    local onForever = forever and forever.symbols[symbol] ~= nil
+    if not index.symbols[symbol] and not onForever then fail(path, "no source or client evidence for " .. symbol) end
+    local writer = forever and not onForever and forever.addonGlobals[symbol]
+    if writer then
+        overwritten[symbol] = writer
+    elseif forever and not onForever then
+        absent[path] = absent[path] or {}
+        absent[path][symbol] = true
+    end
 end
 
 -- Core files that reach the client API declare it in the same header comment modules use.
@@ -77,10 +97,32 @@ for _, path in ipairs({
     "Core/Safety.lua", "Core/Commands.lua", "Core/Bootstrap.lua", "Core/Bench.lua", "Core/Conditions.lua",
     "Integrations/Neighbours.lua", "Integrations/Questie.lua", "Integrations/Plater.lua",
     "Integrations/TSM.lua", "Integrations/Auctionator.lua", "Integrations/Prices.lua",
-    "Integrations/FrameOwners.lua",
+    "Integrations/FrameOwners.lua", "Integrations/GearRefactor.lua",
 }) do checkHeader(path) end
 local toc = read("Refactor.toc")
 assert(tonumber(toc:match("## Interface:%s*(%d+)")) == index.interface, "TOC/index interface mismatch")
+if forever then
+    local listed = toc:match("## Interface:([^\n]*)")
+    assert((", " .. listed .. ","):find("[%s,]" .. forever.interface .. ","), "TOC does not list the Forever interface")
+end
 if #failures > 0 then error(table.concat(failures, "\n"), 0) end
 print(string.format("API check: %d dependencies match Retail %s (%s).", checked, index.version, index.build))
-print("NOTE: source evidence only. Behaviour still needs the client.")
+if forever then
+    local paths = {}
+    for path in pairs(absent) do paths[#paths + 1] = path end
+    table.sort(paths)
+    print(string.format("Forever %s (%s), probed %s: %d file(s) use symbols the client lacks.",
+        forever.version, forever.build, forever.probedAt, #paths))
+    for _, path in ipairs(paths) do
+        local symbols = {}
+        for symbol in pairs(absent[path]) do symbols[#symbols + 1] = symbol end
+        table.sort(symbols)
+        print("  " .. path .. ": " .. table.concat(symbols, ", "))
+    end
+    -- Present when probed, but written by an addon, so the dump cannot say the client defines it.
+    local names = {}
+    for symbol, addon in pairs(overwritten) do names[#names + 1] = symbol .. " (" .. addon .. ")" end
+    table.sort(names)
+    if #names > 0 then print("  Written by an addon when probed, unproven: " .. table.concat(names, ", ")) end
+end
+print("NOTE: existence only. Behaviour still needs the client.")

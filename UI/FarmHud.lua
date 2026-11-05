@@ -26,9 +26,9 @@ local RADIANS_PER_DEGREE = math.pi / 180
 -- and eases down. No overshoot anywhere. This is a ledger, not a toy, and a number that
 -- bounces before it settles invites you to distrust it.
 --
--- No alpha leg either. The money lines carry the client's own coin textures as inline |T|t
--- escapes, and those do not fade with the frame the way a plain glyph does, so a fading
--- panel shows its coins arriving separately from the numbers they belong to.
+-- No alpha leg either. The coins were once inline |T|t escapes, which neither faded nor slid
+-- with the panel; they are the panel's own textures now (Theme:Coins), and the slide was
+-- tuned without a fade, so it stays that way.
 local PANEL_GAP, PANEL_DROP, PANEL_RISE = -2, 11, 7
 local PANEL_SLIDE, PANEL_CLOSE = 0.13, 0.09
 -- Long enough that a mis-click cannot wipe a session, short enough not to feel punitive.
@@ -47,6 +47,7 @@ local TEXTURE_KEYS = {
     "hudBackdrop", "hudMeterTrack", "hudMeterFill", "hudGrip",
     "hudClock", "hudTrend", "hudCoins", "hudBag",
     "hudReset", "hudPause", "hudSettings", "hudCollapse",
+    "coinGold", "coinSilver", "coinCopper",
 }
 R.UI.farmHudTextureKeys = TEXTURE_KEYS
 R.UI.farmHudTopRows = TOP_ROWS
@@ -253,12 +254,14 @@ function R.UI:CreateFarmHud(owner)
         Theme:Color(row.icon, "TEXT_MUTED")
         Theme:VerifyFile(row.icon, key)
         row.text = Theme:Shadow(Theme:Text(expand, "", "small", "TEXT_BODY"))
+        row.coins = Theme:Coins(expand)
         row.visible = true
         expand.stats[index] = row
     end
 
     expand.bestRule = separator()
     expand.best = Theme:Shadow(Theme:Text(expand, "", "small", "TEXT_TITLE"))
+    expand.bestCoins = Theme:Coins(expand)
     expand.topRule = separator()
 
     expand.rows = {}
@@ -268,12 +271,8 @@ function R.UI:CreateFarmHud(owner)
         row.icon = row:CreateTexture(nil, "ARTWORK")
         row.icon:SetSize(TOP_ICON, TOP_ICON)
         row.icon:SetPoint("LEFT")
-        row.value = Theme:Shadow(Theme:Text(row, "", "small", "TEXT_MUTED"))
-        row.value:SetPoint("RIGHT")
-        row.value:SetJustifyH("RIGHT")
+        row.coins = Theme:Coins(row)
         row.name = Theme:Shadow(Theme:Text(row, "", "small", "TEXT_BODY"))
-        row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
-        row.name:SetPoint("RIGHT", row.value, "LEFT", -6, 0)
         row.name:SetJustifyH("LEFT")
         row:Hide()
         expand.rows[index] = row
@@ -297,11 +296,6 @@ function R.UI:CreateFarmHud(owner)
     closeRise:SetDuration(PANEL_CLOSE)
     closeRise:SetSmoothing("IN")
     host.panelCloseGroup, host.panelCloseRise = closeGroup, closeRise
-
-    -- Blizzard's own context menu, and unnamed on purpose: "MENU" display mode and cursor
-    -- anchoring both reach the frame's parentKey children, never its global name, so the
-    -- addon still writes exactly one global (rule 3).
-    host.menu = CreateFrame("Frame", nil, UIParent, "UIDropDownMenuTemplate")
 
     function host:Opacity()
         local opacity = R.Settings:GetOption("farmOpacity")
@@ -367,12 +361,20 @@ function R.UI:CreateFarmHud(owner)
     function host:LayoutPanel()
         local panel, offset = self.expand, -PAD
         for _, row in ipairs(panel.stats) do
+            row.coins:Hide()
             if row.visible then
                 row.icon:ClearAllPoints()
                 row.icon:SetPoint("TOPLEFT", PAD, offset - 1)
                 row.text:ClearAllPoints()
                 row.text:SetPoint("TOPLEFT", PAD + ICON_SIZE + 6, offset)
-                row.text:SetPoint("RIGHT", -PAD, 0)
+                -- A money line sizes to its words so the coins can follow them.
+                if not row.money then
+                    row.text:SetPoint("RIGHT", -PAD, 0)
+                elseif row.text:GetText() ~= "" then
+                    row.coins:Place(row.text, row.money, row.moneySuffix, "LEFT", row.text, "RIGHT", 0, 0)
+                else
+                    row.coins:Place(row.text, row.money, row.moneySuffix, "LEFT", row.icon, "RIGHT", 6, 0)
+                end
                 offset = offset - STAT_ROW_HEIGHT
             end
         end
@@ -386,7 +388,16 @@ function R.UI:CreateFarmHud(owner)
         rule(panel.bestRule)
         panel.best:ClearAllPoints()
         panel.best:SetPoint("TOPLEFT", PAD, offset)
-        panel.best:SetPoint("RIGHT", -PAD, 0)
+        -- The value sits flush right, level with the stat icons, and a long name truncates
+        -- before it rather than pushing the coins off the panel.
+        local leftmost = panel.bestMoney and panel.bestCoins:PlaceRight(panel.best, panel.bestMoney,
+            "TOPRIGHT", panel, "TOPRIGHT", -PAD, offset - 1)
+        if leftmost then
+            panel.best:SetPoint("RIGHT", leftmost, "LEFT", -6, 0)
+        else
+            panel.bestCoins:Hide()
+            panel.best:SetPoint("RIGHT", -PAD, 0)
+        end
         offset = offset - STAT_ROW_HEIGHT
         rule(panel.topRule)
         for _, row in ipairs(panel.rows) do
@@ -420,8 +431,11 @@ function R.UI:CreateFarmHud(owner)
             row.icon:SetShown(row.visible)
             row.text:SetShown(row.visible)
             row.text:SetText(stats.lines and stats.lines[index] or "")
+            row.money = stats.money and stats.money[index]
+            row.moneySuffix = stats.suffixes and stats.suffixes[index]
         end
         self.expand.best:SetText(stats.best or "")
+        self.expand.bestMoney = stats.bestMoney
         local top = stats.top or {}
         for index, row in ipairs(self.expand.rows) do
             local entry = top[index]
@@ -429,8 +443,12 @@ function R.UI:CreateFarmHud(owner)
             if entry then
                 row.icon:SetTexture(entry.icon)
                 row.name:SetText(entry.name or "")
-                row.value:SetText(entry.value or "")
                 row.name:SetTextColor(entry.r or 1, entry.g or 1, entry.b or 1)
+                local leftmost = entry.money and row.coins:PlaceRight(nil, entry.money, "RIGHT", row, "RIGHT", 0, 0)
+                if not leftmost then row.coins:Hide() end
+                row.name:ClearAllPoints()
+                row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+                row.name:SetPoint("RIGHT", leftmost or row, leftmost and "LEFT" or "RIGHT", -6, 0)
             end
         end
         self:LayoutPanel()
@@ -547,31 +565,20 @@ function R.UI:CreateFarmHud(owner)
         self:SetPoint(saved.point, UIParent, saved.relativePoint, saved.x, saved.y)
     end
 
-    -- Rebuilt on every open so a checked item is never stale, which is what UIDropDownMenu
-    -- expects an initializer to do.
-    function host:InitializeMenu()
-        local title = UIDropDownMenu_CreateInfo()
-        title.text, title.isTitle, title.notCheckable = L.FARM_MENU_TITLE, true, true
-        UIDropDownMenu_AddButton(title)
-        local function entry(text, handler, checked)
-            local button = UIDropDownMenu_CreateInfo()
-            button.text, button.func = text, handler
-            button.notCheckable = checked == nil
-            button.checked = checked
-            button.keepShownOnClick = false
-            UIDropDownMenu_AddButton(button)
-        end
-        entry(L.FARM_MENU_RESET, function() if host.onReset then host.onReset() end end)
-        entry(L.FARM_MENU_GOAL, function() if host.onSetGoal then host.onSetGoal() end end)
-        entry(L.FARM_MENU_LOCK, function() R.Settings:SetOption("farmLocked", not host:Locked()) end,
-            host:Locked())
-        entry(L.FARM_MENU_HIDE, function() if host.onHide then host.onHide() end end)
-        entry(L.FARM_MENU_SUMMARY, function() if host.onOpenSummary then host.onOpenSummary() end end)
-    end
-
+    -- Blizzard's context menu (Blizzard_Menu), the one its own chat tabs open. The old
+    -- UIDropDownMenu shares its level state with the unit popup menus, so an addon driving it
+    -- could leave that shared state tainted for them; this menu is built for addon code. The
+    -- generator runs on every open, so the lock tick is never stale.
     function host:ToggleMenu()
-        UIDropDownMenu_Initialize(self.menu, function() self:InitializeMenu() end, "MENU")
-        ToggleDropDownMenu(1, nil, self.menu, "cursor", 0, 0)
+        MenuUtil.CreateContextMenu(self, function(_, root)
+            root:CreateTitle(L.FARM_MENU_TITLE)
+            root:CreateButton(L.FARM_MENU_RESET, function() if host.onReset then host.onReset() end end)
+            root:CreateButton(L.FARM_MENU_GOAL, function() if host.onSetGoal then host.onSetGoal() end end)
+            root:CreateCheckbox(L.FARM_MENU_LOCK, function() return host:Locked() end,
+                function() R.Settings:SetOption("farmLocked", not host:Locked()) end)
+            root:CreateButton(L.FARM_MENU_HIDE, function() if host.onHide then host.onHide() end end)
+            root:CreateButton(L.FARM_MENU_SUMMARY, function() if host.onOpenSummary then host.onOpenSummary() end end)
+        end)
     end
 
     host:SetScript("OnEnter", function(widget)

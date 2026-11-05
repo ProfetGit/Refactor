@@ -51,38 +51,16 @@ support is added when that client can be probed. Consequences:
 
 Each one names the condition that retires it. Do not carry any of these past that condition.
 
-### Forever saved variables (added 20 Sep 2026)
+None open.
 
-WoW Forever beta **1.60.1.69913** writes SavedVariables to disk correctly and never reads
-them back, so every addon on that client starts blank and settings die on `/reload`. It is a
-client bug, not ours: reproduced with two throwaway addons sharing no code with Refactor, and
-with a saved file planted by hand while the client was closed. Reported widely on the Blizzard
-forums and in other addon repos.
+Retired: **Forever saved variables** (20 to 25 Sep 2026). Beta 1.60.1.69913 wrote
+SavedVariables and never read them back, so Refactor loaded the last session from a generated
+`Restore.lua`. On 25 Sep 2026 `/refactor saved` showed the client restoring them itself, and the
+workaround was removed. `/refactor saved` and `R.loadProbe` stay.
 
-Refactor works around it by loading the last session from its own folder:
-
-| Piece | What it does |
-|---|---|
-| `Restore.lua` | Generated. Sets `R.restoreAccount` / `R.restoreCharacter` on the private table. First entry in the TOC. |
-| `Core/Namespace.lua`, `InitSavedVariables` | Uses them **only** when the client handed back nothing. |
-| `Tools/forever-restore.py` | Rewrites `Restore.lua` from the file the client last wrote. `--watch` captures each session. |
-| `~/ClaudeProject/forever-watch.sh` | Polls for the client's write, captures it, and syncs. Not in this repo. |
-
-The Forever addon folder must be a **real directory**, kept in sync by
+The Forever addon folder must still be a **real directory**, kept in sync by
 `~/ClaudeProject/sync-forever.sh`. Its addon rescan does not see a symlinked addon folder:
 symlink it and Refactor disappears from the AddOn List entirely (seen 20 Sep 2026).
-
-
-**Retire it when** `/refactor saved` reports that the client restored the saved variables.
-The addon says so by itself at login while the workaround is still installed, so this does
-not depend on anyone remembering to check.
-
-**To remove:** delete `Restore.lua` and `Tools/forever-restore.py`, drop the `Restore.lua`
-line from `Refactor.toc` and run `make toc`, revert the restore branch in
-`InitSavedVariables`, drop `CMD_SAVED_VERDICT_RESTORE_FILE` and `CHAT_RESTORE_RETIRED` from
-`Locales/Commands.enUS.lua`, drop the `Restore.lua` line from `.gitignore`, the skip in the
-three spec TOC loaders and in `Tools/package.py`, and stop the watcher. `/refactor saved` and `R.loadProbe` stay:
-they cost nothing and they are how this was found.
 
 ---
 
@@ -115,7 +93,8 @@ Exit criteria:
 - [x] A test module with a missing `requires` symbol ends in state `unavailable` and names the symbol
 - [x] A test module that errors in `OnEnable` ends in `failed` and a second module still enables
 - [x] Enable, disable, enable leaves no residue for the test module
-- [ ] Probe runs on a client and produces a JSON index (Probe addon written, never run in game)
+- [x] Probe runs on a client and produces a JSON index (Forever 1.60.1.70009, 25 Sep 2026:
+      `Data/api-forever.json`, read by `make api-check` beside the Retail source index)
 
 ### M1. Beta day one (17 Sep)
 
@@ -334,9 +313,23 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
 - Loot feed on a kill, bumped count on a second drop of the same item, gold row on loot,
   no gold row when selling or taking mail, a burst past the row cap drops the oldest
 - Right click dismisses a feed row, and a group row takes its children with it
+- With Gear Refactor loaded: loot an upgrade and its row shows Gear Refactor's percent in its
+  colour, with no button on the row. The upgrade prompt opens at the top centre with the item,
+  the percent and what it replaces; hovering the item shows its tooltip under the prompt. Equip
+  puts it into the slot Gear Refactor compared, any bind confirmation still appears and opens
+  below the prompt, not over it. Not now closes it and the same drop is not asked again. A
+  downgrade shows its percent and no prompt; cloth and other non-gear show neither. A
+  multi-slot loot with two upgrades shows the best percent on the group row and asks about
+  each in turn, the title counting the ones waiting. Pull a mob: Equip greys out and a click
+  does nothing until combat ends. Equip the item from the bags instead and the prompt closes.
+  `/refactor loottest` shows the prompt without an upgrade to loot. Without Gear Refactor no
+  row has a badge and no prompt opens. Changed on 5 Nov 2026 at the owner's request: the
+  Equip button on the row was replaced by the prompt
 - Loot feed textures load after a full client restart, checked with `/refactor loottest`
   over both a dark and a snow-bright zone; a multi-slot loot collapses into one row that
-  expands and pauses its timer
+  expands and pauses its timer; the coins on a price, gold and group row stay locked to the
+  row while the rows slide up and while the feed is dragged in Edit Mode, sit on the text's
+  line, and match its colour; `/refactor loottest` names no coin file as missing
 - Merchant window at three by six: eighteen slots a page with Blizzard's art, paging and the
   wheel step by eighteen, page text reads the new page count, buyback tab lays its twelve out
   in the same columns, the buyback slot and next-page button sit in the bottom-right corner,
@@ -366,7 +359,9 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   extended-cost cell look as Blizzard draws them on a filtered page; a caged pet, a toy,
   an ensemble and a recipe classify as expected; learning a mount at the vendor moves it
   out of Missing on the next redraw; reopening any merchant starts from Everything
-- Auto accept and auto turn in on an ordinary quest; a reward-choice quest stays open
+- Auto accept and auto turn in on an ordinary quest; a reward-choice quest stays open; a quest
+  with exactly one reward is handed in and that reward arrives in the bags; a quest that costs
+  gold to hand in stays open on Blizzard's confirmation
 - Auto accept at an NPC with several offers, on both the gossip list and the greeting panel
   the hand-in leaves behind: each offer opens and is accepted in turn, a repeatable or
   ignored one is skipped, and nothing is selected twice with auto gossip also enabled
@@ -425,7 +420,9 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   every HUD texture loads, the text shadows keep both lines readable, the hold to reset
   fills the meter and cancels on an early release, and the chevron opens and closes the
   details panel while turning over to face the way the next press goes. Check the shipped
-  caret's own orientation: if it points down rather than up, the two angles swap
+  caret's own orientation: if it points down rather than up, the two angles swap. The coins
+  on the Gold, Items, best drop and top item lines slide with the panel as it opens and
+  closes, never arriving after it, and a long best drop name truncates before its value
 - A real farm session: the clock starts on the first loot, pauses after the idle timeout,
   resumes on the next drop, and vendor sales never land in the looted gold figure
 - The session summary lists every item by value, and the Copy block pastes as plain text
@@ -478,12 +475,35 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   `/refactor errors` stays empty. On Forever, check first that `C_ChatInfo.SendAddonMessage`
   exists, or the feature reads unavailable and names it
 - Conflict panel with Leatrix Plus installed (carried from M3)
+- Polish pass (25 Sep 2026), seen only in the headless preview so far. The window fades in on
+  open; every feature row shows its name over a one-line description, neither cut off, and
+  the description takes the row's width when the row has no warning; section headings read
+  "n of m on". Hovering a row opens its detail to the right of the window at the row's height,
+  not over the sidebar; the undo arrow has its own tooltip naming what it goes back to. The
+  sidebar foot shows the icon, Refactor and the version, and a click opens What's new. The
+  Editing bar heads the list with its note in full; with a profile assigned it offers
+  "Profile: name", and assigning one on Profiles switches it there. Open every settings block:
+  no help text is cut at the bottom, and block contents start under the row's name. Never
+  sell: drag a grey from the bags onto the slot and it appears as an icon with its quality
+  border, the item returns to its bag slot, the tooltip names it, right click removes it;
+  an item ID typed into the field and Add does the same. ActionCam: Customize makes "My
+  Immersive" and unlocks the sliders; Delete sits where Customize was. Profiles: assign from
+  the dropdown, the saved rows show their counts, Delete turns into Confirm first. Farm HUD
+  right click opens Blizzard's context menu at the cursor with the lock ticked when locked;
+  the session summary and copy windows wear Refactor's border and the copy box opens above
+  the summary. Minimap button: right click opens Diagnostics; with Titan Panel or another
+  broker display loaded, a Refactor launcher appears there. `/refactor junk` opens the window
+  searching "junk" and the result count reads above the results. A fresh account prints the
+  welcome line once. Blizzard Settings, AddOns, Refactor: icon, version, Open button, the
+  features-running line
 
 Exit criteria:
 
 - [ ] Every module verified in-game at level 30 or below
 - [ ] Bench budgets met for load time, idle CPU, memory, garbage rate, zero idle `OnUpdate`
 - [ ] Nameplate module tested entering a pull with 10 or more mobs
+- [ ] Nameplate module tested in a party sharing a quest on Forever: each plate shows your own
+      count, not a party member's, and a quest only a party member has shows nothing
 - [x] `make check` passes
 
 ### M5. Beta freeze (15 to 21 Oct)

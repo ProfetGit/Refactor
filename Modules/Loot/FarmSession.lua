@@ -1,6 +1,6 @@
 --- @module loot.farmSession
 --- Purpose: track what the current farming session is earning and show it on a small HUD.
---- Requires: UnitGUID, GetMoney, GetTime,
+--- Requires: UnitGUID, GetMoney, GetTime, MenuUtil.CreateContextMenu,
 ---     C_Item.GetItemQualityByID, C_Item.GetItemIconByID, C_Item.GetItemQualityColor,
 ---     C_CurrencyInfo.GetCoinTextureString
 --- Events: CHAT_MSG_LOOT, LOOT_OPENED; PLAYER_MONEY, LOOT_CLOSED (contextual)
@@ -11,7 +11,7 @@ local L = R.L
 local Farm = R:RegisterModule({
     id = "loot.farmSession", category = "Loot", nameKey = "FARM_SESSION_NAME",
     descriptionKey = "FARM_SESSION_DESC", detailKey = "FARM_SESSION_DETAIL",
-    requires = { "UnitGUID", "GetMoney", "GetTime",
+    requires = { "UnitGUID", "GetMoney", "GetTime", "MenuUtil.CreateContextMenu",
         "C_Item.GetItemQualityByID", "C_Item.GetItemIconByID", "C_Item.GetItemQualityColor",
         "C_CurrencyInfo.GetCoinTextureString" },
     -- PRD 7.2 puts the session log and gold per hour outside every preset: a number that
@@ -44,6 +44,15 @@ local function coinText(amount)
     end
     return string.format(L.MONEY_TEXT, math.floor(amount / COPPER_PER_GOLD),
         math.floor(amount / 100) % 100, amount % 100)
+end
+
+-- The HUD draws its coins as textures of its own (Theme:Coins), so a line that carries an
+-- amount is formatted around a marker and split there, keeping the words in the locale file.
+local MONEY_SLOT = "\001"
+local function around(pattern, ...)
+    local text = string.format(pattern, ...)
+    local prefix, suffix = text:match("^(.-)\001(.*)$")
+    return prefix or text, suffix or ""
 end
 
 local function plainMoney(amount)
@@ -327,10 +336,12 @@ function Farm:Refresh()
     lines[1] = string.format(L.FARM_LINE_CLOCK, durationText(self:Elapsed()))
     lines[2] = string.format(L.FARM_LINE_RATES, math.floor(self:PerHour(session.itemCount)),
         math.floor(self:PerHour(session.mobs)))
-    lines[3] = string.format(L.FARM_LINE_GOLD, coinText(session.gold))
-    lines[4] = string.format(L.FARM_LINE_ITEMS, coinText(session.itemValue))
-    stats.best = session.bestName and string.format(L.FARM_LINE_BEST, session.bestName,
-        coinText(session.bestValue)) or L.FARM_LINE_NO_BEST
+    local money, suffixes = stats.money, stats.suffixes
+    lines[3], suffixes[3] = around(L.FARM_LINE_GOLD, MONEY_SLOT)
+    lines[4], suffixes[4] = around(L.FARM_LINE_ITEMS, MONEY_SLOT)
+    money[3], money[4] = session.gold, session.itemValue
+    stats.best = session.bestName and string.format(L.FARM_LINE_BEST, session.bestName) or L.FARM_LINE_NO_BEST
+    stats.bestMoney = session.bestName and session.bestValue or nil
     -- The row tables are kept and refilled, so a HUD that refreshes every second while you
     -- farm for an hour allocates five tables in total, not eighteen thousand.
     local sorted, top = self:Sorted(), stats.top
@@ -345,7 +356,7 @@ function Farm:Refresh()
             row.icon, row.r, row.g, row.b = entry.icon, entry.r, entry.g, entry.b
             row.name = entry.count > 1 and string.format(L.FARM_TOP_COUNT, entry.name, entry.count)
                 or entry.name
-            row.value = coinText(entry.value)
+            row.money = entry.value
             top[index] = row
         else
             top[index] = nil
@@ -521,7 +532,7 @@ end
 
 function Farm:OnEnable()
     self.playerGUID = UnitGUID("player")
-    self.stats = self.stats or { lines = {}, top = {} }
+    self.stats = self.stats or { lines = {}, money = {}, suffixes = {}, top = {} }
     self.topRows = self.topRows or {}
     -- Built once, not once a second: the tooltip body is two fixed sentences either way.
     self.tipRunning = L.FARM_TIP_RATE .. "\n\n" .. L.FARM_TIP_SUB

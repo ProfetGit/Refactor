@@ -2,9 +2,12 @@ local _, R = ...
 local UI, L, Settings = R.UI, R.L, R.Settings
 local Theme, Profiles = R.Theme, R.CameraProfiles
 
-local CONTROL_WIDTH, BOX_STEP, DROPDOWN_STEP, NOTE_HEIGHT = 380, 32, 36, 30
-local SLIDER_STEP = LibStub("LibRefactorTheme-1.0").sliderRowHeight + 6
+local CONTROL_WIDTH, SLIDER_GAP, DROPDOWN_GAP = 380, 6, 6
+-- The button beside the profile dropdown, the share string box, its two buttons and the
+-- line that reports what the last press did.
+local ACTION_WIDTH, STRING_WIDTH, STRING_HEIGHT, SAVE_WIDTH, STATUS_HEIGHT = 104, 380, 54, 104, 14
 local DEFAULT_SITUATION = "indoors"
+local unpack = unpack
 
 local SITUATION_ENTRIES = {}
 for index, situation in ipairs(Profiles.situations) do
@@ -96,7 +99,7 @@ end
 
 -- A slider over one field of the active profile. Not one of the account option sliders:
 -- what it writes is a number inside a profile, so there is no default for it to undo to.
-function UI:CameraSlider(block, spec, y)
+function UI:CameraSlider(block, spec)
     local range = fieldRange(fieldFor(spec, DEFAULT_SITUATION))
     local distance = range.kind == "distance"
     local low = distance and range.minimum - LEAVE_STOP_OFFSET or range.minimum
@@ -108,7 +111,7 @@ function UI:CameraSlider(block, spec, y)
                 self:LoadCamera()
             end
         end)
-    slider:SetPoint("TOPLEFT", 0, y)
+    block:Place(slider, Theme.sliderRowHeight, SLIDER_GAP)
     slider:SetLabel(L[spec.labelKey], spec.formatter
         or function(value) return distanceText(value, range.minimum) end)
     slider.spec, slider.range = spec, range
@@ -117,13 +120,13 @@ function UI:CameraSlider(block, spec, y)
     return slider
 end
 
-function UI:CameraCheckbox(block, spec, y)
-    local box = Theme:Checkbox(block, 300, L[spec.labelKey], function(widget)
+function UI:CameraCheckbox(block, spec)
+    local box = Theme:Checkbox(block, CONTROL_WIDTH, L[spec.labelKey], function(widget)
         if not Profiles:SetField(spec.key, widget:GetChecked() == true) then
             self:LoadCamera()
         end
     end)
-    box:SetPoint("TOPLEFT", 0, y)
+    block:Place(box, Theme.checkboxSize)
     box.fieldKey = spec.key
     block:Index(L[spec.labelKey])
     self.cameraBoxes[#self.cameraBoxes + 1] = box
@@ -135,11 +138,28 @@ local function statusText(ok, okText, err)
     return L["UI_CAMERA_ERR_" .. tostring(err)] or L.UI_CAMERA_ERR_invalid_profile
 end
 
+-- A built-in profile is edited by copying it: one click makes "My Immersive", selects it
+-- and unlocks the sliders. Typing a name before being allowed to move a slider was the
+-- step every player had to discover first.
+function UI:CustomizeCamera()
+    local active = Profiles:Active()
+    if not active or not active.builtIn then return end
+    local base = L[active.nameKey] or active.name or ""
+    local custom = Settings:GetOption("cameraProfiles") or {}
+    local name, index = string.format(L.UI_CAMERA_COPY_NAME, base), 2
+    while custom[name] do
+        name = string.format(L.UI_CAMERA_COPY_NAME_N, base, index)
+        index = index + 1
+    end
+    local ok, result = Profiles:SaveCopy(name, active.values)
+    self:LoadCamera()
+    self.cameraStatus:SetText(statusText(ok, ok and string.format(L.UI_CAMERA_SAVED, result), result))
+end
+
 -- The settings block behind the ActionCam row: a profile to pick, its numbers, and the
 -- copy, delete, export and import that make a profile the player's own.
 function UI:BuildCameraSettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_CAMERA_HELP)
-    local top = block.top
     self.cameraSliders, self.cameraBoxes, self.cameraSituation = {}, {}, DEFAULT_SITUATION
     for _, profile in ipairs(Profiles.builtIn) do
         block:Index(L[profile.nameKey])
@@ -152,37 +172,46 @@ function UI:BuildCameraSettings(parent)
             Profiles:Select(value)
             self:LoadCamera()
         end)
-    self.cameraProfileDropdown:SetPoint("TOPLEFT", 0, top)
+    block:Place(self.cameraProfileDropdown, Theme.dropdownRowHeight, DROPDOWN_GAP)
     self.cameraProfileDropdown:SetLabel(L.UI_CAMERA_PROFILE)
-    self.cameraDetail = Theme:Text(block, "", "small", "TEXT_MUTED")
-    self.cameraDetail:SetPoint("TOPLEFT", 0, top - DROPDOWN_STEP)
-    self.cameraDetail:SetPoint("RIGHT")
-    self.cameraDetail:SetHeight(NOTE_HEIGHT)
-    self.cameraDetail:SetJustifyV("TOP")
-
-    local y = top - DROPDOWN_STEP - NOTE_HEIGHT - 6
-    self:CameraSlider(block, BASE_DISTANCE, y)
-    self:CameraSlider(block, BASE_SHOULDER, y - SLIDER_STEP)
-    self:CameraSlider(block, BASE_SWAY, y - SLIDER_STEP * 2)
-    self:CameraSlider(block, BASE_PULL, y - SLIDER_STEP * 3)
-    y = y - SLIDER_STEP * 4
-    for index, spec in ipairs(BOXES) do
-        self:CameraCheckbox(block, spec, y - (index - 1) * BOX_STEP)
+    -- One slot beside the profile: Customize for a built-in, Delete for one of your own.
+    self.cameraCustomize = Theme:Button(block, ACTION_WIDTH, L.UI_CAMERA_CUSTOMIZE, function()
+        self:CustomizeCamera()
+    end)
+    self.cameraCustomize:SetPoint("LEFT", self.cameraProfileDropdown, "RIGHT", 8, 0)
+    self.cameraDelete = Theme:Button(block, ACTION_WIDTH, L.UI_CAMERA_DELETE, function()
+        local active = Profiles:Active()
+        if active and not active.builtIn and Profiles:Delete(active.name) then
+            self:LoadCamera()
+            self.cameraStatus:SetText(L.UI_CAMERA_DELETED)
+        end
+    end)
+    self.cameraDelete:SetPoint("LEFT", self.cameraProfileDropdown, "RIGHT", 8, 0)
+    local details = { L.CAMERA_PROFILE_CUSTOM_DETAIL }
+    for _, profile in ipairs(Profiles.builtIn) do
+        details[#details + 1] = L[profile.detailKey] .. " " .. L.UI_CAMERA_BUILT_IN
     end
-    y = y - #BOXES * BOX_STEP - 4
+    self.cameraDetail = block:Note(nil, unpack(details))
 
+    block:Group(L.UI_CAMERA_EVERYWHERE)
+    self:CameraSlider(block, BASE_DISTANCE)
+    self:CameraSlider(block, BASE_SHOULDER)
+    self:CameraSlider(block, BASE_SWAY)
+    self:CameraSlider(block, BASE_PULL)
+    for _, spec in ipairs(BOXES) do
+        self:CameraCheckbox(block, spec)
+    end
+
+    block:Group(L.UI_CAMERA_SITUATIONS)
     self.cameraSituationDropdown = Theme:Dropdown(block, CONTROL_WIDTH, {},
         function(value) return self.cameraSituation == value end,
         function(value)
             self.cameraSituation = value
             self:LoadCamera()
         end)
-    self.cameraSituationDropdown:SetPoint("TOPLEFT", 0, y)
+    block:Place(self.cameraSituationDropdown, Theme.dropdownRowHeight, DROPDOWN_GAP)
     self.cameraSituationDropdown:SetLabel(L.UI_CAMERA_SITUATION)
-    local situationHelp = Theme:Text(block, L.UI_CAMERA_SITUATION_HELP, "small", "TEXT_MUTED")
-    situationHelp:SetPoint("TOPLEFT", 0, y - DROPDOWN_STEP)
-    situationHelp:SetPoint("RIGHT")
-    block:Index(L.UI_CAMERA_SITUATION_HELP)
+    block:Note(L.UI_CAMERA_SITUATION_HELP)
     local situations = {}
     for index, entry in ipairs(SITUATION_ENTRIES) do
         situations[index] = { value = entry.value, text = L[entry.labelKey] }
@@ -190,48 +219,13 @@ function UI:BuildCameraSettings(parent)
     end
     self.cameraSituationDropdown:SetEntries(situations)
     self.cameraSituationEntries = situations
-    y = y - DROPDOWN_STEP - 18
-    self:CameraSlider(block, SITUATION_DISTANCE, y)
-    self:CameraSlider(block, SITUATION_SHOULDER, y - SLIDER_STEP)
-    y = y - SLIDER_STEP * 2 - 4
+    self:CameraSlider(block, SITUATION_DISTANCE)
+    self:CameraSlider(block, SITUATION_SHOULDER)
 
-    local copyLabel = Theme:Text(block, L.UI_CAMERA_COPY_HELP, "small", "TEXT_MUTED")
-    copyLabel:SetPoint("TOPLEFT", 0, y)
-    copyLabel:SetPoint("RIGHT")
-    block:Index(L.UI_CAMERA_COPY_HELP)
-    self.cameraName = self.Widgets:Input(block, 200, 26)
-    self.cameraName:SetPoint("TOPLEFT", 0, y - 16)
-    local saveCopy = Theme:Button(block, 104, L.UI_CAMERA_SAVE_COPY, function()
-        local name = self.cameraName:GetText()
-        if name == "" then
-            self.cameraStatus:SetText(L.UI_CAMERA_NAME_MISSING)
-            return
-        end
-        local active = Profiles:Active()
-        local ok, result = Profiles:SaveCopy(name, active and active.values or {})
-        self:LoadCamera()
-        self.cameraStatus:SetText(statusText(ok, ok and string.format(L.UI_CAMERA_SAVED, result), result))
-        if ok then self.cameraName:SetText("") end
-        self.cameraName:ClearFocus()
-    end)
-    saveCopy:SetPoint("LEFT", self.cameraName, "RIGHT", 8, 0)
-    self.cameraSaveCopy = saveCopy
-    self.cameraDelete = Theme:Button(block, 92, L.UI_CAMERA_DELETE, function()
-        local active = Profiles:Active()
-        if active and not active.builtIn and Profiles:Delete(active.name) then
-            self:LoadCamera()
-            self.cameraStatus:SetText(L.UI_CAMERA_DELETED)
-        end
-    end)
-    self.cameraDelete:SetPoint("LEFT", saveCopy, "RIGHT", 6, 0)
-    y = y - 16 - 26 - 12
-
-    local shareLabel = Theme:Text(block, L.UI_CAMERA_SHARE, "small", "TEXT_MUTED")
-    shareLabel:SetPoint("TOPLEFT", 0, y)
-    shareLabel:SetPoint("RIGHT")
-    self.cameraString = self.Widgets:Input(block, 200, 54, true)
-    self.cameraString:SetPoint("TOPLEFT", 0, y - 16)
-    local export = Theme:Button(block, 104, L.UI_CAMERA_EXPORT, function()
+    block:Group(L.UI_CAMERA_SHARE)
+    self.cameraString = self.Widgets:Input(block, STRING_WIDTH, STRING_HEIGHT, true)
+    block:Place(self.cameraString, STRING_HEIGHT, self.Widgets.NOTE_GAP)
+    local export = Theme:Button(block, SAVE_WIDTH, L.UI_CAMERA_EXPORT, function()
         local encoded, err = Profiles:Export(Settings:GetOption("cameraProfile"))
         self.cameraString:SetText(encoded or "")
         if encoded then self.cameraString:SetFocus() end
@@ -239,29 +233,27 @@ function UI:BuildCameraSettings(parent)
     end)
     export:SetPoint("TOPLEFT", self.cameraString, "TOPRIGHT", 8, 0)
     self.cameraExport = export
-    local import = Theme:Button(block, 104, L.UI_CAMERA_IMPORT, function()
+    local import = Theme:Button(block, SAVE_WIDTH, L.UI_CAMERA_IMPORT, function()
         local ok, result = Profiles:Import(self.cameraString:GetText())
         self:LoadCamera()
         self.cameraStatus:SetText(statusText(ok, ok and string.format(L.UI_CAMERA_IMPORTED, result), result))
         if ok then self.cameraString:SetText("") end
         self.cameraString:ClearFocus()
     end)
-    import:SetPoint("LEFT", export, "RIGHT", 6, 0)
+    import:SetPoint("TOPLEFT", export, "BOTTOMLEFT", 0, -6)
     self.cameraImport = import
-    y = y - 16 - 54 - 10
-
     self.cameraStatus = Theme:Text(block, "", "small", "TEXT_TITLE")
-    self.cameraStatus:SetPoint("TOPLEFT", 0, y)
+    block:Place(self.cameraStatus, STATUS_HEIGHT)
     self.cameraStatus:SetPoint("RIGHT")
-    block:SetBodyHeight(top - y + 20)
+    block:Finish()
     self:RegisterModuleSettings("interface.actionCam", block)
 end
 
 -- The maximum camera distance feature is one number, so its whole panel is one slider.
 function UI:BuildCameraDistanceSettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_CAMERA_DISTANCE_HELP)
-    self.cameraZoomSlider = self:OptionSlider(block, MAX_ZOOM, block.top)
-    block:SetBodyHeight(SLIDER_STEP)
+    self.cameraZoomSlider = self:OptionSlider(block, MAX_ZOOM)
+    block:Finish()
     self:RegisterModuleSettings("interface.cameraDistance", block)
 end
 
@@ -304,6 +296,7 @@ function UI:LoadCamera()
             self.cameraSituationDropdown:SetValueText(entry.text)
         end
     end
-    self.cameraDelete:SetEnabled(editable)
+    self.cameraCustomize:SetShown(not editable)
+    self.cameraDelete:SetShown(editable)
     self.cameraStatus:SetText("")
 end

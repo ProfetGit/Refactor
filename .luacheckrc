@@ -26,6 +26,8 @@ read_globals = {
     "C_AddOns", "C_CVar", "C_Container", "C_GossipInfo", "C_Item", "C_Mail", "C_NamePlate", "C_QuestLog",
     "C_Texture", "C_Timer", "C_TooltipInfo",
     "Enum", "GetBuildInfo", "GetTime", "UnitGUID", "debugstack",
+    -- Retail 12's secret values: a nameplate's GUID while unit identity is restricted
+    "issecretvalue",
     -- Input and combat state
     "InCombatLockdown", "IsAltKeyDown", "IsControlKeyDown", "IsInInstance", "IsModifiedClick", "IsShiftKeyDown",
     -- Loot
@@ -42,15 +44,14 @@ read_globals = {
     "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "C_CurrencyInfo", "C_MerchantFrame",
     "C_FriendList", "C_BattleNet", "GetMerchantNumItems", "GetMerchantItemLink", "GetMerchantItemMaxStack",
     "BuyMerchantItem", "GetNumBuybackItems", "GetBuybackItemInfo", "BuybackItem", "AcceptQuest",
-    "GetQuestReward", "CompleteQuest", "IsQuestCompletable", "GetNumQuestChoices", "QuestGetAutoAccept",
+    "GetQuestReward", "CompleteQuest", "IsQuestCompletable", "GetNumQuestChoices", "GetQuestMoneyToGet",
+    "QuestGetAutoAccept",
     "QuestFlagsPVP", "GetQuestID", "QuestIsFromAdventureMap", "GetNumAvailableQuests", "GetAvailableQuestInfo",
     "SelectAvailableQuest", "CancelDuel", "AcceptGroup", "AcceptResurrect", "StaticPopup_Hide", "ConsoleExec", "EventRegistry", "NineSliceUtil",
     "IsGuildMember", "ChatFrameUtil", "SetItemRef", "SendMailNameEditBox", "SendMailFrame", "Screenshot",
     "GetFramerate", "GetAddOnCPUUsage", "UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage", "GetTimePreciseSec",
-    -- Blizzard_SharedXML/Mainline/UIDropDownMenu.lua, loaded by Blizzard_SharedXML.toc at
-    -- the installed build. Used by the farm HUD's right click menu only.
-    "UIDropDownMenu_Initialize", "UIDropDownMenu_CreateInfo", "UIDropDownMenu_AddButton",
-    "ToggleDropDownMenu", "CloseDropDownMenus",
+    -- Blizzard_Menu's context menu, the farm HUD's right click menu.
+    "MenuUtil",
     -- Quick invite: the unit tests Blizzard's own invite entry uses, and the invite itself
     "C_PartyInfo", "UnitExists", "UnitIsUnit", "UnitIsPlayer", "UnitIsHumanPlayer", "UnitIsConnected",
     "UnitCanCooperate", "UnitInParty", "UnitInRaid", "UnitName",
@@ -69,3 +70,9 @@ read_globals = {
 
 files["Tests/"] = { std = "+busted" }
 files["Tools/"] = { max_line_length = 160 }
+-- The Probe is its own dev addon, so its saved variables and slash command are its globals.
+files["Tools/Probe/"] = {
+    max_line_length = 160,
+    globals = { "RefactorProbeDB", "SLASH_REFACTORPROBE1" },
+    read_globals = { "CreateFont", "ConsoleGetAllCommands", "GetLocale", "GetServerTime", "debugprofilestop", "print" },
+}

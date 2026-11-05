@@ -3,8 +3,7 @@ R.L = R.L or {}
 local L = R.L
 
 L.VISIBILITY_NAME = "UI visibility"
-L.VISIBILITY_DESC = "Fade chat, bars, frames, minimap and quest list out, back in on mouseover, or only in "
-    .. "the situations you pick."
+L.VISIBILITY_DESC = "Fade bars, frames, chat and the minimap out until you mouse over them or need them."
 L.VISIBILITY_DETAIL = "Works on transparency alone: nothing is hidden, moved or restyled, so keybinds keep "
     .. "working and an invisible action bar still takes a click where its buttons are. Pick a preset, then "
     .. "tune any element on its own. Everything comes back exactly as it was when you turn this off."
@@ -89,7 +88,6 @@ L.VIS_KIND_art = "art"
 L.UI_VIS_STATUS_OK = "Available."
 L.UI_VIS_STATUS_MISSING = "Not on this client: %s was not found."
 L.UI_VIS_STATUS_OWNED = "Handled by %s, which draws its own."
-L.UI_VIS_STATUS_OFF = "Applies once the feature is on."
 L.VIS_NOTE_TABS = "Docked tabs. An undocked window's tab follows Blizzard's own fade."
 L.VIS_NOTE_INPUT_ART = "The box's background and border only; what you type stays. Textures take no mouse, "
     .. "so mouseover here acts as hidden."

@@ -158,12 +158,18 @@ function Companion:Build()
     self.sameForAll:SetPoint("TOPLEFT", PAD, y)
     y = y - self.sameForAll.height - GAP
 
+    -- Measured against every group's note, so the longest one (the minimap's, four lines)
+    -- is not cut off by a box sized for three.
     self.note = Theme:Text(frame, "", "small", "TEXT_MUTED")
     self.note:SetPoint("TOPLEFT", PAD, y)
-    self.note:SetPoint("RIGHT", -PAD, 0)
-    self.note:SetHeight(NOTE_HEIGHT)
     self.note:SetJustifyV("TOP")
-    y = y - NOTE_HEIGHT
+    local notes = {}
+    for _, group in ipairs(Rules.groups) do
+        if group.noteKey then notes[#notes + 1] = L[group.noteKey] end
+    end
+    local noteHeight = math.max(NOTE_HEIGHT, UI.Widgets:TextHeight(self.note, WIDTH - PAD * 2, unpack(notes)))
+    self.note:SetHeight(noteHeight)
+    y = y - noteHeight
     frame:SetHeight(-y + PAD)
     self.siblings = {}
 end

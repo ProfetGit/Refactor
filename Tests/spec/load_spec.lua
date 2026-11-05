@@ -5,8 +5,7 @@ local function tocFiles()
     local files = {}
     for line in assert(io.open("Refactor.toc", "r")):lines() do
         local entry = line:gsub("\\", "/"):gsub("%s+$", "")
-        -- Restore.lua is a local capture of one client's saved variables, not addon code.
-        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" and entry ~= "Restore.lua" then
+        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" then
             files[#files + 1] = entry
         end
     end
@@ -30,6 +29,10 @@ describe("the real load sequence", function()
         assert.is_table(env.LibStub)
         assert.equal(31, #R.modules)
         env:Fire("PLAYER_LOGIN")
+        -- A first install says where the addon lives, once; the next login is quiet.
+        assert.matches(R.L.CMD_WELCOME, table.concat(env.messages, "\n"), 1, true)
+        R.Settings:Init(R.Settings.account, R.Settings.character, "Player-test")
+        assert.is_false(R.Settings.fresh)
         assert.is_function(env.SlashCmdList.REFACTOR)
         assert.is_table(R.UI.frame)
         assert.is_false(R.UI.frame:IsShown())
@@ -64,7 +67,11 @@ describe("the real load sequence", function()
         assert.is_true(UI.panels.Changelog:IsShown())
         generalButton:GetScript("OnClick")(generalButton)
         assert.is_true(UI.general:IsShown())
-        UI:SaveNeverSell()
+        assert.is_true(UI:AddNeverSell("6948, 2589"))
+        assert.is_true(R.Settings:GetOption("neverSellIDs")[6948])
+        UI:RemoveNeverSell(6948)
+        assert.is_nil(R.Settings:GetOption("neverSellIDs")[6948])
+        assert.is_false(UI:AddNeverSell("not an item"))
         UI:SaveRepairCap()
         for _, entry in ipairs(UI.modifierDropdown.button:OpenMenu()) do
             entry.choose()

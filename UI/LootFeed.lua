@@ -51,7 +51,10 @@ function R.UI:CreateLootFeed(owner)
         row.onHidden = function(widget) host:Expire(widget) end
         row.onDismiss = function(widget) host:Dismiss(widget) end
         return row
-    end, function(row) row:ResetRow() end)
+    end, function(row)
+        row.entry = nil
+        row:ResetRow()
+    end)
     for _ = 1, POOL_SIZE do host.pool:Acquire() end
     host.pool:ReleaseAll()
 
@@ -78,11 +81,35 @@ function R.UI:CreateLootFeed(owner)
 
     function host:Fill(row, entry, expandable, expanded)
         -- The link is what lets a hovered row show the item's own tooltip.
-        row.link = entry.link
+        row.link, row.entry = entry.link, entry
         row:SetRowOpacity(self:Opacity())
         row:SetIcon(entry.icon, entry.r, entry.g, entry.b, entry.framed)
         row:SetLines(entry.name, entry.detail, entry.r, entry.g, entry.b)
+        row:SetMoney(entry.moneyLine, entry.money, entry.moneySuffix)
         row:SetExpander(expandable, expanded, onChevron)
+        self:FillAccessory(row, entry)
+    end
+
+    -- Gear Refactor's badge, as the module last judged it for this entry. Equipping is
+    -- offered in the upgrade prompt, never on the row.
+    function host:FillAccessory(row, entry)
+        local badge = entry.badge
+        if badge then
+            row:SetBadge(badge.text, badge.r, badge.g, badge.b)
+        else
+            row:SetBadge(nil)
+        end
+    end
+
+    -- Every row on screen, children of an open group included, after the module has judged
+    -- its entries again: a score changed or an item finished loading.
+    function host:RefreshAccessories()
+        for _, item in ipairs(self.items) do
+            self:FillAccessory(item.row, item.entry)
+            for _, row in ipairs(item.children) do
+                if row.entry then self:FillAccessory(row, row.entry) end
+            end
+        end
     end
 
     function host:Layout(animate)
@@ -120,6 +147,7 @@ function R.UI:CreateLootFeed(owner)
         self:Collapse(item)
         item.row.item = nil
         self.pool:Release(item.row)
+        if #self.items == 0 and self.onEmpty then self.onEmpty() end
     end
 
     -- The row's own fade finished. Everything below it slides up into the gap.
@@ -258,7 +286,7 @@ function R.UI:CreateLootFeed(owner)
     local dialog = CreateFrame("Frame", nil, UIParent)
     dialog:SetFrameStrata("DIALOG")
     dialog:SetSize(DIALOG_WIDTH, DIALOG_TOP + 3 * (Theme.sliderRowHeight + DIALOG_ROW_GAP)
-        - DIALOG_ROW_GAP + DIALOG_PADDING)
+        + Theme.buttonHeight + DIALOG_PADDING)
     dialog:SetMovable(true)
     dialog:SetClampedToScreen(true)
     dialog:EnableMouse(true)
@@ -300,6 +328,13 @@ function R.UI:CreateLootFeed(owner)
     dialog.lifetime = setting(3, "toastLifetime", 1, 20, 1, "UI_TOAST_LIFETIME", secondsText,
         function(value) R.Settings:SetOption("toastLifetime", value) end,
         function() return host:Lifetime() end)
+
+    -- Everything the dialog has no room for (quality, price line, gold, opacity) is one
+    -- click away, in the feed's own block of the Refactor window.
+    dialog.more = Theme:Button(dialog, inner, R.L.UI_TOAST_MORE, function()
+        if R.UI.OpenModule then R.UI:OpenModule("toasts.loot") end
+    end)
+    dialog.more:SetPoint("BOTTOMLEFT", DIALOG_PADDING, DIALOG_PADDING)
 
     function dialog:Refresh()
         for _, slider in ipairs(self.settings) do

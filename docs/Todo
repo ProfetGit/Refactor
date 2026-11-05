@@ -1,5 +1,0 @@
-- Auto complete not working on all quests, one scenario i had was that it had 1 quest reward, i didnt need to select anything, but it still didnt auto complete even when it should have.
-- In wow forever the Refactor addon specific configurations are not saved, they reset when i restart/reload the game.
-- Remove the Forever saved variables workaround once Blizzard fixes the client. The addon
-  tells you at login when it is safe; the removal list is in docs/ROADMAP.md.
-- Visual bug, in loot toast the currency icon asset lags behind when the toast container moves.

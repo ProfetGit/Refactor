@@ -15,5 +15,5 @@ L.TOOLTIP_HEALTHBAR_DETAIL = "The bar is the only part of a tooltip that updates
 L.TOOLTIP_ANCHOR_NAME = "Tooltip anchor"
 L.TOOLTIP_ANCHOR_DESC = "Move the default tooltip to the cursor or a screen corner."
 L.TOOLTIP_ANCHOR_DETAIL = "Only tooltips that ask for the default anchor move: the world, unit frames and most "
-    .. "of Blizzard's own UI. Bag slots, action buttons and other addons keep their own placement. Pick the "
-    .. "mode under Display options."
+    .. "of Blizzard's own UI. Bag slots, action buttons and other addons keep their own placement. Open the "
+    .. "row to choose the cursor or a fixed point on the screen."

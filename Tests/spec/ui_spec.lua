@@ -5,8 +5,7 @@ local function tocFiles()
     local files = {}
     for line in assert(io.open("Refactor.toc", "r")):lines() do
         local entry = line:gsub("\\", "/"):gsub("%s+$", "")
-        -- Restore.lua is a local capture of one client's saved variables, not addon code.
-        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" and entry ~= "Restore.lua" then
+        if entry:match("%.lua$") and entry:sub(1, 1) ~= "#" then
             files[#files + 1] = entry
         end
     end
@@ -16,6 +15,9 @@ end
 local function loaded()
     local env = Runtime.new()
     Widgets.install(env)
+    -- The one symbol the vendor summary asks for, so at least one row is plainly available:
+    -- the scope specs need a row with nothing in its warning slot.
+    env.C_CurrencyInfo = { GetCoinTextureString = function(amount) return tostring(amount) end }
     local R
     for _, path in ipairs(tocFiles()) do
         if path:match("^Libs/LibStub/") then
@@ -163,20 +165,99 @@ describe("window chrome", function()
         assert.equal(R.L.UI_ACCOUNT, UI.scopeDropdown.button:GetDefaultText())
         -- Opening the menu runs the real generator, so the entries and the setter behind
         -- them are exercised rather than assumed.
+        -- With no profile assigned there are two layers, and the account one is selected.
         local entries = UI.scopeDropdown.button:OpenMenu()
         assert.equal(2, #entries)
-        assert.is_true(entries[2].selected)
+        assert.equal("account", entries[1].value)
+        assert.is_true(entries[1].selected)
         for _, entry in ipairs(entries) do
             if entry.value == "character" then entry.choose() end
         end
         assert.equal("character", UI.mode)
         assert.equal(R.L.UI_CHARACTER, UI.scopeDropdown.button:GetDefaultText())
+        -- The switch heads the list, so it is there whenever the list is unfiltered.
+        assert.is_true(UI.scopeBar:IsShown())
+        UI.search:SetText("loot")
+        UI.search:GetScript("OnTextChanged")(UI.search)
+        assert.is_false(UI.scopeBar:IsShown())
+        UI.search:SetText("")
+        UI.search:GetScript("OnTextChanged")(UI.search)
         UI:SelectCategory("Profiles")
         assert.equal(1, selectedCount())
         assert.is_true(UI.panelTitle:IsShown())
         assert.equal(R.L.UI_PROFILES, UI.panelTitle:GetText())
         UI:SelectCategory("Vendor")
         assert.is_false(UI.panelTitle:IsShown())
+    end)
+
+    it("keeps a dropped item off the sell list and gives it back to the bag", function()
+        local env, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        UI:OpenModule("vendor.autoSell")
+        local cleared = 0
+        env.GetCursorInfo = function() return "item", 6948, "item:6948" end
+        env.ClearCursor = function() cleared = cleared + 1 end
+        UI.neverSellSlot:GetScript("OnReceiveDrag")(UI.neverSellSlot)
+        assert.is_true(R.Settings:GetOption("neverSellIDs")[6948])
+        assert.equal(1, cleared)
+        -- The list is drawn as icons, one per item, and the block grows to hold them.
+        assert.is_true(UI.neverSellChips[1]:IsShown())
+        assert.equal(6948, UI.neverSellChips[1].itemID)
+        assert.is_false(UI.neverSellEmpty:IsShown())
+        -- Nothing on the cursor, or not an item: nothing happens.
+        env.GetCursorInfo = function() return "spell", 133 end
+        UI.neverSellSlot:GetScript("OnClick")(UI.neverSellSlot)
+        assert.equal(1, cleared)
+        -- A right click on the icon takes it off again.
+        UI.neverSellChips[1]:GetScript("OnClick")(UI.neverSellChips[1], "RightButton")
+        assert.is_nil(R.Settings:GetOption("neverSellIDs")[6948])
+        assert.is_true(UI.neverSellEmpty:IsShown())
+        -- An ID typed or pasted as a link goes on too, and nonsense says why it did not.
+        assert.is_true(UI:AddNeverSell("|cff9d9d9d|Hitem:2589::::::::1:::::|h[Linen Cloth]|h|r"))
+        assert.is_true(R.Settings:GetOption("neverSellIDs")[2589])
+        assert.is_false(UI:AddNeverSell("linen"))
+        assert.equal(R.L.UI_NEVER_SELL_INVALID, UI.sellStatus:GetText())
+    end)
+
+    it("treats a slash word it does not know as a search", function()
+        local env, R = loaded()
+        local UI = R.UI
+        assert.is_nil(env.SlashCmdList.REFACTOR("junk"))
+        assert.is_true(UI.frame:IsShown())
+        assert.equal("junk", UI.search:GetText())
+        assert.is_true(R.moduleByID["vendor.autoSell"] and true)
+        local shown = 0
+        for _, row in ipairs(UI.rows) do
+            if row:IsShown() then shown = shown + 1 end
+        end
+        assert.is_true(shown > 0 and shown < #UI.rows)
+        -- "help" is still help.
+        local lines = R.Commands:Dispatch("help")
+        assert.equal(R.L.CMD_HELP_HEADER, lines[1])
+    end)
+
+    it("opens Diagnostics on a right click of the launcher, and joins a broker when one is loaded", function()
+        local env, R = loaded()
+        local UI = R.UI
+        UI:LauncherClick("RightButton")
+        assert.is_true(UI.frame:IsShown())
+        assert.is_true(UI.panels.Diagnostics:IsShown())
+        UI:LauncherClick("LeftButton")
+        assert.is_false(UI.frame:IsShown())
+        local lines = {}
+        UI:LauncherTooltip({ AddLine = function(_, text) lines[#lines + 1] = text end })
+        assert.equal(R.L.UI_TITLE, lines[1])
+        assert.equal(R.L.UI_MINIMAP_HINT, lines[#lines])
+        -- No broker library, no object; with one, a launcher under the addon's own name.
+        assert.is_nil(UI.brokerObject)
+        local objects = {}
+        local broker = env.LibStub:NewLibrary("LibDataBroker-1.1", 1)
+        function broker:NewDataObject(name, data) objects[name] = data return data end
+        UI:RegisterBroker()
+        assert.equal("launcher", objects.Refactor.type)
+        objects.Refactor.OnClick(nil, "RightButton")
+        assert.is_true(UI.panels.Diagnostics:IsShown())
     end)
 
     it("reports only warning states in the meta slot, never Active or a category", function()
@@ -343,14 +424,17 @@ describe("window chrome", function()
         for _, slider in ipairs(UI.cameraSliders) do
             assert.is_false(slider.slider:IsEnabled(), "a built-in profile's slider is live")
         end
-        assert.is_false(UI.cameraDelete:IsEnabled())
-        -- A copy under a new name is selected and unlocked.
-        UI.cameraName:SetText("Mine")
-        UI.cameraSaveCopy:GetScript("OnClick")(UI.cameraSaveCopy)
-        assert.equal("custom:Mine", Settings:GetOption("cameraProfile"))
+        -- A built-in offers Customize in the slot beside it, never Delete.
+        assert.is_true(UI.cameraCustomize:IsShown())
+        assert.is_false(UI.cameraDelete:IsShown())
+        -- Customize copies the built-in under the player's own name, selects and unlocks it.
+        UI.cameraCustomize:GetScript("OnClick")(UI.cameraCustomize)
+        local mine = string.format(R.L.UI_CAMERA_COPY_NAME, R.L.CAMERA_PROFILE_IMMERSIVE)
+        assert.equal("custom:" .. mine, Settings:GetOption("cameraProfile"))
         assert.equal(#Profiles.builtIn + 1, #UI.cameraProfileDropdown.button:OpenMenu())
-        assert.equal("Mine", UI.cameraProfileDropdown.button:GetDefaultText())
-        assert.is_true(UI.cameraDelete:IsEnabled())
+        assert.equal(mine, UI.cameraProfileDropdown.button:GetDefaultText())
+        assert.is_true(UI.cameraDelete:IsShown())
+        assert.is_false(UI.cameraCustomize:IsShown())
         local shoulder, situationDistance
         for _, slider in ipairs(UI.cameraSliders) do
             assert.is_true(slider.slider:IsEnabled())
@@ -358,7 +442,7 @@ describe("window chrome", function()
             if slider.spec.suffix == "Distance" then situationDistance = slider end
         end
         shoulder.slider:GetScript("OnValueChanged")(shoulder.slider, 1.2)
-        assert.equal(1.2, Settings:GetOption("cameraProfiles").Mine.shoulder)
+        assert.equal(1.2, Settings:GetOption("cameraProfiles")[mine].shoulder)
         assert.equal("1.2 right", shoulder.valueText:GetText())
         -- The situation dropdown swaps which field the two sliders under it show.
         assert.equal("6 yards", situationDistance.valueText:GetText())
@@ -367,12 +451,12 @@ describe("window chrome", function()
         end
         assert.equal("16 yards", situationDistance.valueText:GetText())
         situationDistance.slider:GetScript("OnValueChanged")(situationDistance.slider, 20)
-        assert.equal(20, Settings:GetOption("cameraProfiles").Mine.mountedDistance)
+        assert.equal(20, Settings:GetOption("cameraProfiles")[mine].mountedDistance)
         -- The leftmost stop sits one under the smallest distance and stores "leave it".
         local low = situationDistance.slider:GetMinMaxValues()
         assert.equal(3, low)
         situationDistance.slider:GetScript("OnValueChanged")(situationDistance.slider, 3)
-        assert.equal(Profiles.LEAVE, Settings:GetOption("cameraProfiles").Mine.mountedDistance)
+        assert.equal(Profiles.LEAVE, Settings:GetOption("cameraProfiles")[mine].mountedDistance)
         assert.equal(R.L.UI_CAMERA_LEAVE, situationDistance.valueText:GetText())
         UI:LoadCamera()
         assert.equal(3, situationDistance.slider:GetValue())
@@ -736,5 +820,45 @@ describe("editing scope", function()
         UI.mode = "account"
         UI:Refresh()
         assert.equal(R.L.UI_SCOPE_PINNED, row.meta:GetText())
+    end)
+
+    it("edits the assigned profile, since the account layer no longer reaches the character", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        local module = plainRow(UI).module
+        local before = Settings:Get(module.id)
+        assert.is_true(Settings:CreateProfile("Alts", { [module.id] = before }))
+        -- No profile, no profile layer: the scope refuses it.
+        assert.is_false(Settings:SetScope("profile"))
+        assert.is_true(Settings:AssignProfile("Alts"))
+        UI:Refresh()
+        -- Account defaults say, in words, that they do not reach this character any more.
+        assert.equal(string.format(R.L.UI_ACCOUNT_HELP_PROFILE, "Alts"), UI.scopeHelp:GetText())
+        local entries = UI.scopeDropdown.button:OpenMenu()
+        assert.equal(3, #entries)
+        assert.equal("profile", entries[2].value)
+        entries[2].choose()
+        assert.equal("profile", UI.mode)
+        assert.equal("profile", Settings:GetScope())
+        -- A click writes into the profile, never the account, and clears an override.
+        Settings:SetOverride(module.id, before)
+        UI:SetModuleEnabled(module, not before)
+        assert.equal(not before, Settings:GetProfile("Alts")[module.id])
+        assert.is_nil(Settings.account.modules[module.id])
+        assert.is_nil(Settings:GetOverride(module.id))
+        assert.equal(not before, Settings:Get(module.id))
+        assert.equal(not before, UI:DisplayedValue(module))
+        -- Undo takes the feature out of the profile, so it follows the account again.
+        assert.is_true(UI:IsModified(module))
+        UI:ResetModule(module)
+        assert.is_nil(Settings:GetProfile("Alts")[module.id])
+        assert.equal(Settings.defaults[module.id] == true, Settings:Get(module.id))
+        -- Unassigned, the stored scope falls back to the account layer.
+        assert.is_true(Settings:AssignProfile(nil))
+        UI:Refresh()
+        assert.equal("account", UI.mode)
+        assert.equal("account", Settings:GetScope())
+        assert.equal(2, #UI.scopeDropdown.button:OpenMenu())
     end)
 end)

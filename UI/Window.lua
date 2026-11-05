@@ -10,9 +10,11 @@ local unpack = unpack
 -- The category entries are a table of contents, not a filter: every feature is in the list
 -- at all times and a category row jumps to its section. An "All features" entry on top of
 -- per-category filtering made the same list reachable two ways and hid the rest of it.
+--
+-- Nameplate quest progress lists under Quest and the loot feed under Loot (PRD 7.2): each
+-- had a category of its own holding one row, which made two headings for two features.
 local CATEGORY_ORDER = {
-    "Quest", "Loot", "Vendor", "Items", "Interface", "Chat", "Social",
-    "Nameplates", "Tooltips", "Toasts",
+    "Quest", "Loot", "Vendor", "Items", "Interface", "Chat", "Social", "Tooltips",
 }
 -- Settings that belong to one feature live on that feature's row. General holds only the
 -- ones that belong to none of them, so it is a list section like any other rather than a
@@ -97,21 +99,36 @@ local SPY_SLOP = LIST_LEAD + 4
 UI.layout = { x = CONTENT_X, top = -102, right = -36, bottom = 24 }
 local ROW_HEIGHT = UI.Widgets.ROW_HEIGHT
 local BLOCK_INDENT = UI.Widgets.BLOCK_INDENT
--- Space between two titled groups inside the General block, and the height of one title.
-local GROUP_GAP, GROUP_LABEL = 22, 22
+-- Fixed, not resizable (2e510cb), which is what lets a block measure its text at build time.
+local WINDOW_WIDTH, WINDOW_HEIGHT = 920, 660
+-- The list stops this far from the window's right edge, leaving the scroll bar its column;
+-- a block stops this far short of the list's right edge.
+local LIST_RIGHT, BLOCK_RIGHT = 48, 8
+local LIST_WIDTH = WINDOW_WIDTH - CONTENT_X - LIST_RIGHT
+UI.blockWidth = LIST_WIDTH - BLOCK_INDENT - BLOCK_RIGHT
+UI.panelWidth = WINDOW_WIDTH - CONTENT_X + UI.layout.right
 -- Above this a repair bill is not a typo, it is a different currency.
 local MAX_REPAIR_CAP = 10000000
 -- The same 150 ms every other move in the window takes (PRD 8.3).
 local EXPAND_TIME = 0.15
+-- Between the window's border and a row's detail tooltip, which opens outside the window.
+local TOOLTIP_GAP = 4
+-- A section's "3 of 5 on" stops where the rows' undo column does, not against the bar.
+local COUNT_INSET = 10
+-- Refactor's mark at the foot of the sidebar: icon, name, and the version under it.
+local BRAND_ICON, BRAND_BOTTOM = 30, 22
+-- The page in Blizzard's Settings window: its inset, icon, text width and button.
+local CANVAS_PAD, CANVAS_ICON, CANVAS_TEXT_WIDTH, CANVAS_BUTTON = 24, 48, 560, 180
 local MODIFIER_ENTRIES = {
     { value = "CTRL", labelKey = "UI_CTRL" },
     { value = "SHIFT", labelKey = "UI_SHIFT" },
     { value = "ALT", labelKey = "UI_ALT" },
 }
-local SCOPE_ENTRIES = {
-    { value = "character", labelKey = "UI_CHARACTER" },
-    { value = "account", labelKey = "UI_ACCOUNT" },
-}
+-- The editing bar at the head of the list: its inner padding, the gap between the switch and
+-- its explanation, and how strongly its ground shows.
+local SCOPE_PAD, SCOPE_NOTE_GAP, SCOPE_FILL_ALPHA = 10, 4, 0.55
+-- The line that counts a search's results, and the space it keeps above the first heading.
+local SEARCH_COUNT_HEIGHT = 22
 local SIDE_ENTRIES = {
     { value = "LEFT", labelKey = "UI_LEFT" },
     { value = "RIGHT", labelKey = "UI_RIGHT" },
@@ -131,6 +148,9 @@ function UI:SetModuleEnabled(module, enabled)
     if not Settings.account then return end
     if self.mode == "account" then
         Settings:SetAccount(module.id, enabled)
+        self:DropOverride(module)
+    elseif self.mode == "profile" then
+        Settings:SetProfileValue(Settings:AssignedProfile(), module.id, enabled)
         self:DropOverride(module)
     else
         Settings:SetOverride(module.id, enabled)
@@ -152,14 +172,22 @@ function UI:IsModified(module)
     if self.mode == "account" then
         local value = Settings.account and Settings.account.modules[module.id]
         return value ~= nil and value ~= Settings.defaults[module.id]
+    elseif self.mode == "profile" then
+        local profile = Settings.account.profiles[Settings:AssignedProfile()]
+        local value = profile and profile[module.id]
+        return value ~= nil and value ~= accountValue(module)
     end
     local override = Settings:GetOverride(module.id)
     return override ~= nil and override ~= Settings:GetInherited(module.id)
 end
 
+-- Undo in a profile takes the feature out of it, so the profile follows the account again.
 function UI:ResetModule(module)
     if self.mode == "account" then
         Settings:SetAccount(module.id, nil)
+        self:DropOverride(module)
+    elseif self.mode == "profile" then
+        Settings:SetProfileValue(Settings:AssignedProfile(), module.id, nil)
         self:DropOverride(module)
     else
         Settings:SetOverride(module.id, nil)
@@ -167,12 +195,15 @@ function UI:ResetModule(module)
     self:Refresh()
 end
 
--- The value the row's checkbox shows: the account default in account mode, the resolved
--- per-character value otherwise. Cycle and Refresh read it from here so a click always
--- flips the setting itself, never a checkbox tick that drifted out of sync with it.
+-- The value the row's checkbox shows: the account default in account mode, what the
+-- profile gives in profile mode, the resolved per-character value otherwise. Cycle and
+-- Refresh read it from here so a click always flips the setting itself, never a checkbox
+-- tick that drifted out of sync with it.
 function UI:DisplayedValue(module)
     if self.mode == "account" then
         return accountValue(module)
+    elseif self.mode == "profile" then
+        return Settings:GetInherited(module.id) == true
     end
     return Settings:Get(module.id) == true
 end
@@ -220,23 +251,53 @@ function UI:Toggle()
 end
 
 -- What the feature does, and nothing else. Overlaps with other addons have their own
--- panel, and the recovery advice was the same sentence on all twenty rows.
+-- panel, and the recovery advice was the same sentence on all twenty rows. The one-line
+-- description is already on the row, so the tooltip starts where it stops.
 function UI:DetailText(module)
     local title = self:ModuleText(module, "name")
     local reason = self:StatusReason(module)
-    local body = self:ModuleText(module, "description") .. "\n\n" .. self:ModuleText(module, "detail")
-        .. (reason and "\n\n" .. reason or "")
+    local overlap = self:OverlapsWith(module)
+    local body = self:ModuleText(module, "detail") .. (reason and "\n\n" .. reason or "")
+        .. (overlap and "\n\n" .. string.format(L.UI_OVERLAP, overlap) or "")
     return title, body
 end
 
 -- The detail is a tooltip on the row itself, so it needs no click and no dialog to dismiss.
+-- It opens outside the window beside the row: anchored on the row itself it covered either
+-- the sidebar or the rows below, which is exactly what the reader was scanning.
 function UI:ShowDetails(module, owner)
     if not GameTooltip then return end
     local title, body = self:DetailText(module)
     local r, g, b = unpack(Theme.colors.TEXT_BODY)
-    GameTooltip:SetOwner(owner or self.frame, "ANCHOR_LEFT")
+    owner = owner or self.frame
+    local rowTop, frameTop = owner:GetTop(), self.frame:GetTop()
+    if rowTop and frameTop then
+        GameTooltip:SetOwner(owner, "ANCHOR_NONE")
+        GameTooltip:ClearAllPoints()
+        GameTooltip:SetPoint("TOPLEFT", self.frame, "TOPRIGHT", TOOLTIP_GAP, rowTop - frameTop)
+    else
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    end
     GameTooltip:AddLine(title)
     GameTooltip:AddLine(body, r, g, b, true)
+    GameTooltip:Show()
+end
+
+-- What undo would put back, in the words of the layer on screen.
+function UI:ShowUndoTip(module, owner)
+    if not GameTooltip then return end
+    local target
+    if self.mode == "account" then
+        target = Settings.defaults[module.id] and L.UI_UNDO_DEFAULT_ON or L.UI_UNDO_DEFAULT_OFF
+    elseif self.mode == "profile" then
+        target = L.UI_UNDO_PROFILE
+    else
+        target = L.UI_UNDO_CHARACTER
+    end
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(L.UI_UNDO)
+    local r, g, b = unpack(Theme.colors.TEXT_BODY)
+    GameTooltip:AddLine(target, r, g, b, true)
     GameTooltip:Show()
 end
 
@@ -247,7 +308,11 @@ end
 function UI:StatusReason(module)
     if module.state == "unavailable" then
         local reason = module.unavailableReason or (module.unavailableReasonKey and L[module.unavailableReasonKey])
-        if not reason and module.missing then reason = table.concat(module.missing, ", ") end
+        -- A list of API names means nothing to a player on its own, so it is said in words
+        -- first; the names stay, since they are what a bug report needs.
+        if not reason and module.missing then
+            reason = string.format(L.UI_UNAVAILABLE_MISSING, table.concat(module.missing, ", "))
+        end
         return string.format(L.UI_UNAVAILABLE, reason or L.UI_STATUS_REASON)
     elseif module.state == "failed" then
         return string.format(L.UI_FAILED, module.failure or L.UI_STATUS_REASON)
@@ -400,9 +465,12 @@ function UI:SelectCategory(key)
     self:Refresh()
 end
 
+-- While a search is typed the list is results, not a section, so no category reads as the
+-- one you are in.
 function UI:HighlightSidebar()
+    local searching = self.search and (self.search:GetText() or "") ~= ""
     for _, button in ipairs(self.categoryButtons) do
-        Theme:ListButtonState(button, self.category == button.category, button.entry.tone)
+        Theme:ListButtonState(button, not searching and self.category == button.category, button.entry.tone)
     end
 end
 
@@ -412,7 +480,8 @@ end
 function UI:SpySection(value)
     if not self.sectionOffset then return end
     if self.panels and self.panels[self.category] then return end
-    local current
+    -- Above the first heading is the editing bar, which belongs to the first section's view.
+    local current = self.categories[1]
     for _, category in ipairs(self.categories) do
         local top = self.sectionOffset[category]
         if top and top <= value + SPY_SLOP then current = category end
@@ -430,6 +499,18 @@ function UI:OpenPanel(key)
     self.frame:Show()
     self:OnPixelsChanged()
     self:SelectCategory(key)
+end
+
+-- Open the window on a search, as "/refactor junk" asks. The search box is left without
+-- focus, so the next key press is the game's again.
+function UI:OpenSearch(text)
+    if not self.frame then return end
+    self.frame:Show()
+    self:OnPixelsChanged()
+    if self.panels and self.panels[self.category] then self.category = self.categories[1] end
+    self.search:SetText(text or "")
+    self.search:ClearFocus()
+    self:Refresh()
 end
 
 -- Open the window on one feature's own settings. A module offering a shortcut to its
@@ -502,10 +583,24 @@ function UI:Refresh()
         row.toggle:SetEnabled(Settings.account ~= nil and not row.module.unavailableReasonKey)
     end
     self:LoadControls()
+    self.overlaps = self:CollectOverlaps()
     -- One block per category, headed by its name: the list carries the same structure as
     -- the sidebar, and a search result says which category each row came from.
-    local count, offset, lastTop = 0, LIST_LEAD, LIST_LEAD
+    local count, offset, lastTop = 0, LIST_LEAD, nil
     self.placedCount = 0
+    -- A search shows results only, under one line that counts them; the editing bar comes
+    -- back with the whole list, or when the search is for it ("character", "profile").
+    local showBar = query == "" or self:MatchesText(self.scopeBarText, query)
+    self.scopeBar:SetShown(showBar)
+    self.searchCount:SetShown(query ~= "")
+    if query ~= "" then
+        self:Place(self.searchCount, 0, offset, -BLOCK_RIGHT)
+        offset = offset + SEARCH_COUNT_HEIGHT
+    end
+    if showBar then
+        self:Place(self.scopeBar, 0, offset, -BLOCK_RIGHT)
+        offset = offset + self.scopeBar.height + LIST_SECTION_GAP
+    end
     local offsets = self.sectionOffset
     for _, category in ipairs(self.categories) do offsets[category] = nil end
     for _, category in ipairs(self.categories) do
@@ -526,6 +621,11 @@ function UI:Refresh()
                     or self.collapsing == row.module.id)))
             if row.visible then shown = shown + 1 end
         end
+        local on = 0
+        for _, row in ipairs(rows) do
+            if self:DisplayedValue(row.module) then on = on + 1 end
+        end
+        header.count:SetText(#rows > 0 and string.format(L.UI_SECTION_COUNT, on, #rows) or "")
         -- Shown or hidden exactly once per pass, and never hidden and shown again in the
         -- same one: dragging a slider saves its setting on every step, and a Hide/Show of
         -- the block it sits in would drop the drag on the first of them.
@@ -546,7 +646,7 @@ function UI:Refresh()
         if block then
             block:SetShown(blockVisible)
             if blockVisible then
-                self:Place(block, 0, offset, -8)
+                self:Place(block, 0, offset, -BLOCK_RIGHT)
                 offset = offset + block.height
             end
         end
@@ -563,7 +663,7 @@ function UI:Refresh()
                     Theme:Color(row.chevron.art, "ACCENT_COPPER")
                 end
                 if row.openSettings then
-                    settings.planIndex = self:Place(settings, BLOCK_INDENT, offset, -8)
+                    settings.planIndex = self:Place(settings, BLOCK_INDENT, offset, -BLOCK_RIGHT)
                     offset = offset + settings.height
                 end
             end
@@ -571,31 +671,66 @@ function UI:Refresh()
         header:SetShown(shown > 0)
     end
     self.empty:SetShown(count == 0)
+    -- Typed text is shown back as typed: a lone pipe would start an escape sequence.
+    local shown = query:gsub("|", "||")
+    self.searchCount:SetText(count == 1 and string.format(L.UI_SEARCH_ONE, shown)
+        or string.format(L.UI_SEARCH_COUNT, count, shown))
+    if count == 0 then self.searchCount:Hide() end
     -- Without this the last sections share one scroll position: the list is barely taller
     -- than the view, so a jump to anything past the halfway point stops at the end of the
     -- track and the sidebar highlight would be naming a section that is not at the top.
-    local tail = count > 0
+    -- Search results are never jumped to, so they get no tail, and a short result list
+    -- shows no scroll bar at all.
+    local tail = count > 0 and query == ""
         and math.max(0, self.scroll:GetHeight() - LIST_LEAD - (offset - lastTop)) or 0
     self.planExtent = offset + tail
     self.scroll:UpdateExtent(self.planExtent)
     local target = self.pendingScroll
     self.pendingScroll = nil
-    if target and offsets[target] then
+    -- The first section is the head of the list, and the head starts with the editing bar.
+    if target == self.categories[1] then
+        self.scroll.slider:SetValue(0)
+    elseif target and offsets[target] then
         local _, maximum = self.scroll.slider:GetMinMaxValues()
         self.scroll.slider:SetValue(math.max(0, math.min(offsets[target] - LIST_LEAD, maximum)))
     end
 end
 
+-- Module to the names of the installed neighbours that do what it does. Read again on every
+-- Refresh rather than kept: an addon loaded on demand joins the list the next time the list
+-- is laid out, and nothing has to be told to forget it.
+function UI:CollectOverlaps()
+    local map = {}
+    for _, conflict in ipairs(R.Integrations and R.Integrations:Conflicts() or {}) do
+        local names = map[conflict.module] or {}
+        names[#names + 1] = L[conflict.labelKey] or conflict.addon
+        map[conflict.module] = names
+    end
+    for module, names in pairs(map) do map[module] = table.concat(names, ", ") end
+    return map
+end
+
+function UI:OverlapsWith(module)
+    return (self.overlaps or self:CollectOverlaps())[module]
+end
+
 function UI:RefreshRow(row)
     local module = row.module
     row.name:SetText(self:ModuleText(module, "name"))
+    row.desc:SetText(self:ModuleText(module, "description"))
     local reason = self:StatusReason(module)
     -- Editing account defaults, a feature this character has pinned would read as the
     -- account value while the game runs the override, so the row names it instead.
-    local pinned = self.mode == "account" and Settings:GetOverride(module.id) ~= nil
+    local pinned = self.mode ~= "character" and Settings:GetOverride(module.id) ~= nil
+    -- A feature that is on while another addon does the same job is said on its own row,
+    -- not only under Conflicts, which nobody opens until something happens twice.
+    local overlap = not reason and not pinned and Settings:Get(module.id) and self:OverlapsWith(module)
     row.meta:SetText(reason and (module.state == "failed" and L.UI_FAILED_SHORT or L.UI_UNAVAILABLE_SHORT)
-        or pinned and L.UI_SCOPE_PINNED or "")
-    Theme:Color(row.meta, reason and "TEXT_WARNING" or "TEXT_MUTED", true)
+        or pinned and L.UI_SCOPE_PINNED or overlap and string.format(L.UI_OVERLAP_SHORT, overlap) or "")
+    Theme:Color(row.meta, (reason or overlap) and "TEXT_WARNING" or "TEXT_MUTED", true)
+    -- A feature that cannot run reads dimmer, so the list says which ones are live at a glance.
+    Theme:Color(row.name, reason and "TEXT_MUTED" or "TEXT_BODY", true)
+    row:FitText()
     row.undo:SetShown(self:IsModified(module))
 end
 
@@ -620,26 +755,12 @@ end
 -- alone: overwriting it would undo what is being typed into it.
 function UI:LoadGeneral()
     if not self.modifierDropdown then return end
-    local ids = {}
-    for id in pairs(Settings:GetOption("neverSellIDs")) do ids[#ids + 1] = id end
-    table.sort(ids)
-    for index, id in ipairs(ids) do ids[index] = tostring(id) end
-    if not self.neverSell:HasFocus() then self.neverSell:SetText(table.concat(ids, ", ")) end
+    self:LoadNeverSell()
     if not self.repairCap:HasFocus() then
         self.repairCap:SetText(tostring(Settings:GetOption("repairCapGold")))
     end
     self:RefreshScope()
     self:RefreshMinimapButton()
-end
-
-function UI:SaveNeverSell()
-    local neverSell = self:ParseNeverSell(self.neverSell:GetText())
-    if not neverSell or not Settings:SetOption("neverSellIDs", neverSell) then
-        self.sellStatus:SetText(L.UI_NEVER_SELL_INVALID)
-        return
-    end
-    self.neverSell:ClearFocus()
-    self.sellStatus:SetText(L.UI_SAVED)
 end
 
 function UI:SaveRepairCap()
@@ -652,158 +773,131 @@ function UI:SaveRepairCap()
     self.repairStatus:SetText(L.UI_SAVED)
 end
 
--- A titled group inside the General block. These are settings, not features, so they get a
--- label rather than a row and a chevron of their own.
-function UI:GeneralGroup(block, labelKey, top)
-    local label = Theme:Text(block, L[labelKey], "body", "TEXT_TITLE")
-    label:SetPoint("TOPLEFT", 0, top)
-    label:SetPoint("RIGHT")
-    block:Index(L[labelKey])
-    return GROUP_LABEL
-end
-
--- The scope switch is a mode for the whole list rather than a setting of any one feature,
--- so it sits with the other options that belong to none of them.
-function UI:BuildScopeControls(block, top)
-    local used = self:GeneralGroup(block, "UI_SCOPE", top)
-    local list = {}
-    for index, entry in ipairs(SCOPE_ENTRIES) do
-        list[index] = { value = entry.value, text = L[entry.labelKey] }
-        block:Index(L[entry.labelKey])
-    end
+-- Which layer the checkboxes write to decides what every click in the list means, so it
+-- heads the list rather than sitting in General, where nobody looked for it before the
+-- first surprise. It scrolls away with the list, so it costs no room once you are reading.
+function UI:BuildScopeBar(parent)
+    local bar = CreateFrame("Frame", nil, parent)
+    bar.fill = Theme:Fill(bar, "ROW_BG")
+    bar.fill:SetAlpha(SCOPE_FILL_ALPHA)
     -- Not an option in the store: which layer the feature checkboxes write to is a state of
     -- the window, so this one reads and writes self.mode rather than Settings.
-    self.scopeDropdown = Theme:Dropdown(block, CONTROL_WIDTH, list,
+    self.scopeDropdown = Theme:Dropdown(bar, CONTROL_WIDTH, {},
         function(value) return self.mode == value end,
         function(value)
-            Settings:SetScope(value)
-            self.mode = value
+            if Settings:SetScope(value) then self.mode = value end
             self:Refresh()
         end)
-    self.scopeDropdown:SetPoint("TOPLEFT", 0, top - used)
+    self.scopeDropdown:SetPoint("TOPLEFT", SCOPE_PAD, -SCOPE_PAD)
     self.scopeDropdown:SetLabel(L.UI_SCOPE)
-    self.scopeEntries = list
-    self.scopeHelp = Theme:Text(block, "", "small", "TEXT_MUTED")
-    self.scopeHelp:SetPoint("TOPLEFT", 0, top - used - 34)
-    self.scopeHelp:SetPoint("RIGHT")
-    self.scopeHelp:SetHeight(28)
+    self.scopeHelp = Theme:Text(bar, "", "small", "TEXT_MUTED")
+    self.scopeHelp:SetPoint("TOPLEFT", self.scopeDropdown, "BOTTOMLEFT", 0, -SCOPE_NOTE_GAP)
     self.scopeHelp:SetJustifyV("TOP")
-    block:Index(L.UI_SCOPE_HELP, L.UI_ACCOUNT, L.UI_CHARACTER)
-    return used + 62
+    self.scopeBar = bar
+    self.scopeBarText = table.concat({ L.UI_SCOPE, L.UI_ACCOUNT, L.UI_CHARACTER, L.UI_PROFILES,
+        L.UI_ACCOUNT_HELP, L.UI_CHARACTER_HELP }, " "):lower()
 end
 
+-- The entries follow the assignment: the profile is only a layer while one is assigned.
 function UI:RefreshScope()
     if not self.scopeDropdown then return end
-    local account = self.mode == "account"
-    self.scopeDropdown:SetValueText(account and L.UI_ACCOUNT or L.UI_CHARACTER)
-    self.scopeHelp:SetText(account and L.UI_ACCOUNT_HELP or L.UI_CHARACTER_HELP)
+    local assigned = Settings:AssignedProfile()
+    if self.mode == "profile" and not assigned then self.mode = Settings:GetScope() end
+    local entries = { { value = "account", text = L.UI_ACCOUNT } }
+    if assigned then
+        entries[#entries + 1] = { value = "profile", text = string.format(L.UI_PROFILE_SCOPE, assigned) }
+    end
+    entries[#entries + 1] = { value = "character", text = L.UI_CHARACTER }
+    self.scopeDropdown:SetEntries(entries)
+    local help
+    if self.mode == "profile" then
+        help = string.format(L.UI_PROFILE_SCOPE_HELP, assigned)
+    elseif self.mode == "character" then
+        help = L.UI_CHARACTER_HELP
+    else
+        help = assigned and string.format(L.UI_ACCOUNT_HELP_PROFILE, assigned) or L.UI_ACCOUNT_HELP
+    end
+    for _, entry in ipairs(entries) do
+        if entry.value == self.mode then self.scopeDropdown:SetValueText(entry.text) end
+    end
+    local width = LIST_WIDTH - SCOPE_PAD * 2 - BLOCK_RIGHT
+    self.scopeHelp:SetText(help)
+    self.scopeHelp:SetWidth(width)
+    local height = math.ceil(self.scopeHelp:GetStringHeight() or 0)
+    self.scopeHelp:SetHeight(math.max(1, height))
+    self.scopeBar.height = SCOPE_PAD * 2 + Theme.dropdownRowHeight + SCOPE_NOTE_GAP + height
+    self.scopeBar:SetHeight(self.scopeBar.height)
 end
 
 -- The pause modifier guards every automatic action in the addon, so it belongs to no one
 -- module. It applies on click like the other cyclers rather than waiting for a Save.
-function UI:BuildPauseControls(block, top)
-    local used = self:GeneralGroup(block, "UI_KILL_SWITCH", top)
-    self.modifierDropdown = self:OptionDropdown(block, "killSwitch", MODIFIER_ENTRIES,
-        "UI_KILL_SWITCH", top - used)
-    local help = Theme:Text(block, L.UI_KILL_SWITCH_HELP, "small", "TEXT_MUTED")
-    help:SetPoint("TOPLEFT", 0, top - used - 34)
-    help:SetPoint("RIGHT")
-    help:SetHeight(28)
-    help:SetJustifyV("TOP")
-    block:Index(L.UI_KILL_SWITCH_HELP)
-    return used + 62
+function UI:BuildPauseControls(block)
+    self.modifierDropdown = self:OptionDropdown(block, "killSwitch", MODIFIER_ENTRIES, "UI_KILL_SWITCH")
+    block:Note(L.UI_KILL_SWITCH_HELP)
 end
 
 -- Refactor's own entry point, not a feature of the addon's, and never a nameplate setting:
 -- it sat under the nameplate heading, where nothing about it belonged.
-function UI:BuildMinimapControls(block, top)
-    local box = Theme:Checkbox(block, 300, L.UI_MINIMAP_BUTTON, function(widget)
+function UI:BuildMinimapControls(block)
+    local box = Theme:Checkbox(block, CONTROL_WIDTH, L.UI_MINIMAP_BUTTON, function(widget)
         Settings:SetOption("minimapButton", widget:GetChecked() == true)
         self:RefreshMinimapButton()
     end)
-    box:SetPoint("TOPLEFT", 0, top)
+    block:Place(box, Theme.checkboxSize)
     box.optionKey = "minimapButton"
     block:Index(L.UI_MINIMAP_BUTTON)
     self.displayToggles[#self.displayToggles + 1] = box
     self.minimapToggle = box
-    return 26
 end
 
+-- General sits flush with the list rather than under a row, so it takes the row's indent
+-- back as width.
 function UI:BuildGeneral(parent)
-    local block = self.Widgets:SettingsBlock(parent, L.UI_GENERAL_HELP)
-    local top = block.top
-    top = top - self:BuildScopeControls(block, top) - GROUP_GAP
-    top = top - self:BuildPauseControls(block, top) - GROUP_GAP
-    top = top - self:BuildMinimapControls(block, top) - GROUP_GAP
-    top = top - self:GeneralGroup(block, "UI_PRICE_OPTIONS", top)
-    top = top - self:BuildPriceControls(block, top)
-    block:SetBodyHeight(block.top - top)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_GENERAL_HELP, self.blockWidth + BLOCK_INDENT)
+    self:BuildPauseControls(block)
+    block:Skip(self.Widgets.GROUP_GAP)
+    self:BuildMinimapControls(block)
+    block:Group(L.UI_PRICE_OPTIONS)
+    self:BuildPriceControls(block)
+    block:Finish()
     self.general = block
     self.sectionBlocks[GENERAL_KEY] = block
 end
 
-function UI:BuildSellSettings(parent)
-    local block = self.Widgets:SettingsBlock(parent, L.UI_NEVER_SELL_HELP)
-    local top = block.top
-    local label = Theme:Text(block, L.UI_NEVER_SELL, "body", "TEXT_TITLE")
-    label:SetPoint("TOPLEFT", 0, top)
-    label:SetPoint("RIGHT")
-    block:Index(L.UI_NEVER_SELL)
-    self.neverSell = self.Widgets:Input(block, 400, 56, true)
-    self.neverSell:SetPoint("TOPLEFT", 0, top - 24)
-    self.neverSell:SetPoint("RIGHT")
-    local save = Theme:Button(block, 152, L.UI_SAVE_SHORT, function() self:SaveNeverSell() end)
-    save:SetPoint("TOPLEFT", 0, top - 88)
-    self.sellStatus = Theme:Text(block, "", "small", "TEXT_TITLE")
-    self.sellStatus:SetPoint("LEFT", save, "RIGHT", 12, 0)
-    self.sellStatus:SetPoint("RIGHT")
-    block:SetBodyHeight(114)
-    self:RegisterModuleSettings("vendor.autoSell", block)
-end
-
 function UI:BuildRepairSettings(parent)
-    local block = self.Widgets:SettingsBlock(parent, L.UI_REPAIR_CAP_HELP)
-    local top = block.top
-    local label = Theme:Text(block, L.UI_REPAIR_CAP, "body", "TEXT_TITLE")
-    label:SetPoint("TOPLEFT", 0, top)
-    label:SetPoint("RIGHT")
-    block:Index(L.UI_REPAIR_CAP)
-    self.repairCap = self.Widgets:Input(block, 116, 26)
-    self.repairCap:SetPoint("TOPLEFT", 0, top - 24)
-    local save = Theme:Button(block, 152, L.UI_SAVE_SHORT, function() self:SaveRepairCap() end)
-    save:SetPoint("LEFT", self.repairCap, "RIGHT", 8, 0)
-    self.repairStatus = Theme:Text(block, "", "small", "TEXT_TITLE")
-    self.repairStatus:SetPoint("LEFT", save, "RIGHT", 12, 0)
-    self.repairStatus:SetPoint("RIGHT")
-    block:SetBodyHeight(56)
+    local block = self.Widgets:SettingsBlock(parent)
+    local save
+    self.repairCap, save, self.repairStatus = self:NumberField(block, L.UI_REPAIR_CAP)
+    save:SetScript("OnClick", function() self:SaveRepairCap() end)
+    block:Note(L.UI_REPAIR_CAP_HELP)
+    block:Finish()
     self:RegisterModuleSettings("vendor.autoRepair", block)
 end
 
 local nameplateToggles = {
-    { key = "nameplateShowRing", label = "UI_NAMEPLATE_RING" },
     { key = "nameplateShowIcon", label = "UI_NAMEPLATE_ICON" },
     { key = "nameplateDimCompleted", label = "UI_NAMEPLATE_DIM" },
+    { key = "nameplateShowMore", label = "UI_NAMEPLATE_MORE" },
     { key = "nameplateReduceAnimation", label = "UI_NAMEPLATE_REDUCE" },
 }
 
 -- Booleans apply on click. Only the typed fields wait for Save.
 function UI:BuildNameplateSettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_NAMEPLATE_HELP)
-    local top = block.top
     self.nameplateButtons = {}
-    self.nameplateSideDropdown = self:OptionDropdown(block, "nameplateSide", SIDE_ENTRIES,
-        "UI_NAMEPLATE_SIDE", top)
+    self.nameplateSideDropdown = self:OptionDropdown(block, "nameplateSide", SIDE_ENTRIES, "UI_NAMEPLATE_SIDE")
+    block:Skip(self.Widgets.CONTROL_GAP)
     for index, toggle in ipairs(nameplateToggles) do
-        local box = Theme:Checkbox(block, 300, L[toggle.label], function(widget)
+        local box = Theme:Checkbox(block, CONTROL_WIDTH, L[toggle.label], function(widget)
             Settings:SetOption(toggle.key, widget:GetChecked() == true)
             self:RefreshNameplateOptions()
         end)
-        box:SetPoint("TOPLEFT", 0, top - 6 - index * 32)
+        block:Place(box, Theme.checkboxSize)
         box.optionKey = toggle.key
         block:Index(L[toggle.label])
         self.nameplateButtons[index] = box
     end
-    block:SetBodyHeight(6 + #nameplateToggles * 32 + 26)
+    block:Finish()
     self:RegisterModuleSettings("nameplates.questProgress", block)
 end
 
@@ -812,6 +906,29 @@ function UI:RefreshNameplateOptions()
     for _, box in ipairs(self.nameplateButtons) do
         box:SetChecked(Settings:GetOption(box.optionKey) == true)
     end
+end
+
+-- The window carries no title bar, so the foot of the sidebar says whose window it is and
+-- which build is running, and opens What's new: the one place a version number is useful.
+function UI:BuildBrand(frame)
+    local brand = CreateFrame("Button", nil, frame)
+    brand:SetSize(SIDEBAR_WIDTH, BRAND_ICON)
+    brand:SetPoint("BOTTOMLEFT", PAD, BRAND_BOTTOM)
+    -- Above the shade along the bottom edge, like the close button, so it is not dimmed.
+    brand:SetFrameLevel(frame:GetFrameLevel() + Theme.vignetteLevel + 1)
+    brand.icon = Theme:Texture(brand, "appIcon", "ARTWORK")
+    brand.icon:SetSize(BRAND_ICON, BRAND_ICON)
+    brand.icon:SetPoint("LEFT", 6, 0)
+    brand.name = Theme:Text(brand, L.UI_TITLE, "body", "TEXT_TITLE")
+    brand.name:SetPoint("TOPLEFT", brand.icon, "TOPRIGHT", 8, -1)
+    local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata
+    local version = getMetadata and getMetadata(R.name, "Version")
+    brand.version = Theme:Text(brand, version and string.format(L.UI_VERSION, version) or "", "small", "TEXT_MUTED")
+    brand.version:SetPoint("BOTTOMLEFT", brand.icon, "BOTTOMRIGHT", 8, 1)
+    brand:SetScript("OnClick", function() self:SelectCategory("Changelog") end)
+    brand:SetScript("OnEnter", function() Theme:Color(brand.name, "TEXT_HIGHLIGHT", true) end)
+    brand:SetScript("OnLeave", function() Theme:Color(brand.name, "TEXT_TITLE", true) end)
+    self.brand = brand
 end
 
 function UI:OnPixelsChanged()
@@ -826,7 +943,7 @@ function UI:Initialize()
     self.mode = Settings:GetScope()
     local frame = CreateFrame("Frame", nil, UIParent)
     self.frame = frame
-    frame:SetSize(920, 660)
+    frame:SetSize(WINDOW_WIDTH, WINDOW_HEIGHT)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:SetClampedToScreen(true)
@@ -840,6 +957,15 @@ function UI:Initialize()
         self:SnapPosition()
         self:SavePosition()
     end)
+    -- Fades in over the same 150 ms as everything else in the window (PRD 8.3). Closing is
+    -- instant: a window that lingers after the click reads as one that did not hear it.
+    frame.fadeIn = frame:CreateAnimationGroup()
+    local fade = frame.fadeIn:CreateAnimation("Alpha")
+    fade:SetFromAlpha(0)
+    fade:SetToAlpha(1)
+    fade:SetDuration(EXPAND_TIME)
+    fade:SetSmoothing("OUT")
+    frame:SetScript("OnShow", function(widget) widget.fadeIn:Play() end)
     frame:SetScript("OnHide", function()
         -- Closed mid-animation, the block keeps its handler and comes back part-drawn.
         self:CancelExpand()
@@ -884,6 +1010,7 @@ function UI:Initialize()
         self.categoryButtons[#self.categoryButtons + 1] = button
         y = y - SIDEBAR_ROW
     end
+    self:BuildBrand(frame)
 
     self.headerRule = Theme:Divider(frame)
     self.headerRule:SetPoint("TOPLEFT", CONTENT_X, TAB_BASELINE)
@@ -895,7 +1022,7 @@ function UI:Initialize()
     self.help:SetPoint("RIGHT", self.layout.right, 0)
     self.scroll = self.Widgets:Scroll(frame, LIST_BAR_TOP)
     self.scroll:SetPoint("TOPLEFT", CONTENT_X, LIST_TOP)
-    self.scroll:SetPoint("BOTTOMRIGHT", -48, LIST_BOTTOM)
+    self.scroll:SetPoint("BOTTOMRIGHT", -LIST_RIGHT, LIST_BOTTOM)
     -- Rows are created once, grouped by the category they will be listed under; Refresh
     -- only ever re-anchors them.
     self.scroll.onScroll = function(value) self:SpySection(value) end
@@ -910,6 +1037,13 @@ function UI:Initialize()
         self.sectionRows[category] = {}
         local header = Theme:SectionHeader(self.scroll.child, L["UI_" .. category] or category)
         header:SetPoint("RIGHT", self.scroll.child, "RIGHT")
+        -- How many of the section's features are on, so a section reads at a glance without
+        -- counting ticks down the column.
+        -- Bottom on the title's bottom, so the two sit on one line whatever their sizes.
+        header.count = Theme:Text(header, "", "small", "TEXT_MUTED")
+        header.count:SetPoint("BOTTOMRIGHT", header, "TOPRIGHT", -COUNT_INSET,
+            -(header.title:GetStringHeight() or 0))
+        header.count:SetJustifyH("RIGHT")
         header:Hide()
         self.sections[category] = header
     end
@@ -919,11 +1053,17 @@ function UI:Initialize()
         local group = self.sectionRows[self:Category(module)]
         group[#group + 1] = row
     end
+    self.searchCount = Theme:Text(self.scroll.child, "", "small", "TEXT_MUTED")
+    self.searchCount:SetHeight(SEARCH_COUNT_HEIGHT)
+    self.searchCount:SetJustifyV("TOP")
+    self.searchCount:SetWordWrap(false)
+    self.searchCount:Hide()
     self.empty = Theme:Text(self.scroll.child, L.UI_EMPTY, "body", "TEXT_MUTED")
     self.empty:SetPoint("TOPLEFT", 12, -24)
     self.empty:SetPoint("RIGHT", -12, 0)
     -- Every block is built once, here, and only ever re-anchored afterwards: a chevron
     -- click is an event handler, and no frame is created inside one.
+    self:BuildScopeBar(self.scroll.child)
     self:BuildGeneral(self.scroll.child)
     self:BuildSellSettings(self.scroll.child)
     self:BuildRepairSettings(self.scroll.child)
@@ -953,6 +1093,7 @@ function UI:Initialize()
     R.Broker:Subscribe("DISPLAY_SIZE_CHANGED", self.OnPixelsChanged, self)
     frame:Hide()
     self:CreateMinimapButton()
+    self:RegisterBroker()
     self:RegisterSettings()
     self:RegisterSideTab()
 end
@@ -976,17 +1117,37 @@ function UI:RegisterSettings()
     if not Settings then return end
     local api = _G.Settings
     if not api or not api.RegisterCanvasLayoutCategory or not api.RegisterAddOnCategory then return end
+    -- The page Blizzard's own Settings window shows for Refactor: whose it is, what it does,
+    -- the one button that matters, and how many features this character runs right now.
     local panel = CreateFrame("Frame")
+    local icon = Theme:Texture(panel, "appIcon", "ARTWORK")
+    icon:SetSize(CANVAS_ICON, CANVAS_ICON)
+    icon:SetPoint("TOPLEFT", CANVAS_PAD, -CANVAS_PAD)
     local title = Theme:Text(panel, L.UI_TITLE, "title", "TEXT_TITLE")
-    title:SetPoint("TOPLEFT", 24, -24)
+    title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 12, -6)
+    local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata
+    local version = getMetadata and getMetadata(R.name, "Version")
+    local versionText = Theme:Text(panel, version and string.format(L.UI_VERSION, version) or "", "small", "TEXT_MUTED")
+    versionText:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
     local description = Theme:Text(panel, L.UI_SETTINGS_DESCRIPTION, "body", "TEXT_BODY")
-    description:SetPoint("TOPLEFT", 24, -68)
-    description:SetWidth(560)
+    description:SetPoint("TOPLEFT", icon, "BOTTOMLEFT", 0, -18)
+    description:SetWidth(CANVAS_TEXT_WIDTH)
     description:SetJustifyV("TOP")
-    local button = Theme:Button(panel, 180, L.UI_OPEN, function()
+    local button = Theme:Button(panel, CANVAS_BUTTON, L.UI_OPEN, function()
         if not self.frame:IsShown() then self:Toggle() end
     end)
-    button:SetPoint("TOPLEFT", 24, -152)
+    button:SetPoint("TOPLEFT", description, "BOTTOMLEFT", 0, -18)
+    local hint = Theme:Text(panel, L.UI_SETTINGS_HINT, "small", "TEXT_MUTED")
+    hint:SetPoint("LEFT", button, "RIGHT", 12, 0)
+    local status = Theme:Text(panel, "", "small", "TEXT_BODY")
+    status:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -16)
+    panel:SetScript("OnShow", function()
+        local on = 0
+        for _, module in ipairs(R.modules) do
+            if module.state == "enabled" then on = on + 1 end
+        end
+        status:SetText(string.format(L.UI_LAUNCHER_ON, on, #R.modules))
+    end)
     self.settingsCategory = api.RegisterCanvasLayoutCategory(panel, L.UI_TITLE)
     api.RegisterAddOnCategory(self.settingsCategory)
     self.settingsPanel = panel

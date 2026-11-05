@@ -1,0 +1,9 @@
+## Interface: 120100, 16001
+## Title: Refactor Probe
+## Notes: Dev only, never packaged. Dumps what this client exposes to addons for Tools/probe-to-json.lua.
+## Author: emppu
+## Version: 1
+## SavedVariables: RefactorProbeDB
+## OptionalDeps: Refactor
+
+RefactorProbe.lua

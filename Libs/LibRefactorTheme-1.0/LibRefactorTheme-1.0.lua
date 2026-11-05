@@ -1,4 +1,4 @@
-local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 15)
+local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 17)
 if not Theme then return end
 
 local unpack = unpack
@@ -16,6 +16,9 @@ Theme.colors = {
     TEXT_HIGHLIGHT = { 1, 0.98, 0.94, 1 },
     TEXT_ACTIVE = { 0.90, 0.94, 0.80, 1 },
     TEXT_WARNING = { 1, 0.63, 0.35, 1 },
+    -- Something broke rather than something missing: a feature that failed, not one that
+    -- is unavailable.
+    TEXT_ERROR = { 1, 0.40, 0.34, 1 },
     HIGHLIGHT = { 0.91, 0.75, 0.48, 0.20 },
     RING_SHADOW = { 0, 0, 0, 0.45 },
     -- The shade a window carries around the inside of its border, darkest at the edge.
@@ -144,6 +147,14 @@ Theme.assets = {
     -- itself. IconMinimap.tga is a transparent mark, so it needs something to sit on.
     minimapIconBackdrop = { file = 136467 },
     minimapHighlight = { file = 136477 },
+    -- The mail attachment slot (MailFrame.xml): an empty slot to drop an item into, the white
+    -- icon frame Blizzard tints with the item's quality, and the question mark for an item the
+    -- client has not described yet.
+    itemSlot = { file = "Interface\\Buttons\\UI-EmptySlot-White" },
+    itemBorder = { file = "Interface\\Common\\WhiteIconFrame" },
+    unknownItem = { file = 134400 },
+    -- Refactor's own: a 32 px white diamond with a soft edge, tinted copper where it is used.
+    headerMark = { file = "Interface\\AddOns\\Refactor\\Media\\Diamond.tga", fallback = "ACCENT_COPPER" },
     appIcon = { file = Theme.icons.app },
     minimapIcon = { file = Theme.icons.minimap },
     smallIcon = { file = Theme.icons.small },
@@ -163,6 +174,12 @@ Theme.assets = {
         fallback = "BORDER_BRONZE" },
     lootUnderline = { file = "Interface\\AddOns\\Refactor\\Media\\LootUnderline.tga",
         fallback = "LOOT_UNDERLINE" },
+    -- Blizzard's classic coin icons, the files the client's money text draws. Not the
+    -- coin-*-20x20 atlases: the atlas index lists them, but GetAtlasInfo on Forever 1.60.1
+    -- knew none of the three and every coin drew as its fallback square (25 Sep 2026).
+    coinGold = { file = "Interface\\MoneyFrame\\UI-GoldIcon", fallback = "TEXT_TITLE" },
+    coinSilver = { file = "Interface\\MoneyFrame\\UI-SilverIcon", fallback = "TEXT_BODY" },
+    coinCopper = { file = "Interface\\MoneyFrame\\UI-CopperIcon", fallback = "ACCENT_COPPER" },
     -- Refactor's own farm HUD art, same rule as the loot feed: white plus alpha, tinted at
     -- the call site, never drawn untinted.
     hudBackdrop = { file = "Interface\\AddOns\\Refactor\\Media\\HudBackdrop.tga", fallback = "HUD_BG" },
@@ -365,6 +382,7 @@ function Theme:Text(parent, text, style, token)
 end
 
 local BUTTON_HEIGHT, FALLBACK_CAP = 22, 8
+Theme.buttonHeight = BUTTON_HEIGHT
 local BUTTON_PARTS = { "Left", "Center", "Right" }
 
 function Theme:AtlasInfo(key)
@@ -682,11 +700,21 @@ function Theme:AlignHairline(line, parent, y)
 end
 
 local HEADER_TITLE_HEIGHT, HEADER_HELP_HEIGHT, HEADER_LINE_Y = 26, 32, 20
+-- The copper diamond a heading starts with (PRD 8.3), centred on the title's first line. A
+-- rotated colour texture stays square, since rotation turns the texture, not the region, so
+-- the shape is art of its own. A client that has not read the file yet (new art loads only on
+-- a full restart) shows the heading without it rather than a square.
+local HEADER_MARK, HEADER_MARK_X, HEADER_MARK_Y, HEADER_TITLE_X = 9, 4, -7, 14
 
 function Theme:SectionHeader(parent, title, help)
     local header = CreateFrame("Frame", nil, parent)
+    header.mark = self:Texture(header, "headerMark", "ARTWORK")
+    self:Color(header.mark, "ACCENT_COPPER")
+    header.mark:SetSize(HEADER_MARK, HEADER_MARK)
+    header.mark:SetPoint("CENTER", header, "TOPLEFT", HEADER_MARK_X, HEADER_MARK_Y)
+    self:VerifyFile(header.mark, "headerMark")
     header.title = self:Text(header, title, "body", "TEXT_TITLE")
-    header.title:SetPoint("TOPLEFT")
+    header.title:SetPoint("TOPLEFT", HEADER_TITLE_X, 0)
     header.line = self:Divider(header)
     header.lineY = HEADER_LINE_Y
     self:AlignHairline(header.line, header, HEADER_LINE_Y)
@@ -913,8 +941,9 @@ function Theme:QuestIndicator(parent)
         self.total:SetText(total or "")
     end
 
-    function frame:SetRingShown(shown)
-        self.ringShown = shown == true
+    -- True while the finishing checkmark is still on its way out.
+    function frame:IsFading()
+        return self.fade:IsPlaying() == true
     end
 
     function frame:Pop(reduceAnimation)
@@ -962,6 +991,7 @@ function Theme:PlateDim(parent)
 end
 
 local CHECK_SIZE = 26
+Theme.checkboxSize = CHECK_SIZE
 
 -- A real CheckButton wearing the Settings panel's minimal checkbox. An on/off setting
 -- should look like every other on/off setting the player has ever seen.
@@ -1196,6 +1226,13 @@ local ROW_BG_SCALE, ROW_BG_BLEED = 1.4, 12
 local ROW_UNDERLINE_HEIGHT, ROW_CHEVRON = 6, 12
 local ROW_FADE, ROW_SLIDE = 0.15, 0.12
 local ROW_SHADOW_X, ROW_SHADOW_Y = 1, -1
+-- Gold, silver, copper, largest first, with the gaps GetCoinTextureString leaves.
+local COIN_KEYS, COIN_VALUES = { "coinGold", "coinSilver", "coinCopper" }, { 10000, 100, 1 }
+local COIN_ICON, COIN_ICON_GAP, COIN_GAP = 12, 2, 4
+local CoinStrip = {}
+CoinStrip.__index = CoinStrip
+-- Where each text line starts, relative to the row, once the icon inset is added.
+local LINE_ANCHORS = { name = { "TOPLEFT", -3 }, detail = { "BOTTOMLEFT", 5 } }
 Theme.lootRowHeight = ROW_HEIGHT
 
 -- A file the client refuses returns nothing from GetTexture. It cannot tell us about a
@@ -1222,14 +1259,109 @@ function Theme:Shadow(label)
     return shadowed(label)
 end
 
+-- Money as coin textures beside a line of text, never |T escapes inside it: a texture in a
+-- FontString does not reliably follow a Translation, so escaped coins trailed the loot
+-- feed's rows as they slid and the farm HUD's panel as it opened. Every region is made
+-- here, once, so placing an amount later creates nothing.
+function Theme:Coins(parent)
+    local strip = setmetatable({ pieces = {} }, CoinStrip)
+    for index, key in ipairs(COIN_KEYS) do
+        local icon = self:Texture(parent, key, "ARTWORK")
+        icon:SetSize(COIN_ICON, COIN_ICON)
+        verifyFile(icon, key)
+        strip.pieces[index] = { amount = shadowed(self:Text(parent, "", "small", "TEXT_MUTED")), icon = icon }
+    end
+    strip.suffix = shadowed(self:Text(parent, "", "small", "TEXT_MUTED"))
+    strip:Hide()
+    return strip
+end
+
+-- Denominations that are zero are left out, as Blizzard's GetMoneyString does, so a grey
+-- sells for 8 copper and not 0 gold 0 silver 8 copper.
+local function coinCount(amount, index)
+    local count = math.floor(amount / COIN_VALUES[index])
+    if index > 1 then count = count % 100 end
+    return count > 0 or (amount == 0 and index == #COIN_VALUES), count
+end
+
+-- The amounts wear the font and colour of `like`, the text they belong with, when given.
+local function dress(label, like, text)
+    if like then
+        label:SetFontObject(like:GetFontObject())
+        label:SetTextColor(like:GetTextColor())
+    end
+    label:SetText(text)
+    label:ClearAllPoints()
+    label:Show()
+end
+
+function CoinStrip:Hide()
+    for _, piece in ipairs(self.pieces) do
+        piece.amount:Hide()
+        piece.icon:Hide()
+    end
+    self.suffix:Hide()
+end
+
+-- Left to right from one anchor, then suffix. Returns the rightmost region.
+function CoinStrip:Place(like, amount, suffix, point, relativeTo, relativePoint, x, y)
+    self:Hide()
+    local previous
+    for index, piece in ipairs(self.pieces) do
+        local shown, count = coinCount(amount, index)
+        if shown then
+            dress(piece.amount, like, count)
+            if previous then
+                piece.amount:SetPoint("LEFT", previous, "RIGHT", COIN_GAP, 0)
+            else
+                piece.amount:SetPoint(point, relativeTo, relativePoint, x, y)
+            end
+            piece.icon:ClearAllPoints()
+            piece.icon:SetPoint("LEFT", piece.amount, "RIGHT", COIN_ICON_GAP, 0)
+            piece.icon:Show()
+            previous = piece.icon
+        end
+    end
+    if suffix and suffix ~= "" then
+        dress(self.suffix, like, suffix)
+        self.suffix:SetPoint("LEFT", previous, "RIGHT")
+        previous = self.suffix
+    end
+    return previous
+end
+
+-- Right to left from one anchor, for a value kept flush right. Returns the leftmost region,
+-- so the text before it can stop there and truncate instead of running under the coins.
+function CoinStrip:PlaceRight(like, amount, point, relativeTo, relativePoint, x, y)
+    self:Hide()
+    local previous
+    for index = #self.pieces, 1, -1 do
+        local piece = self.pieces[index]
+        local shown, count = coinCount(amount, index)
+        if shown then
+            piece.icon:ClearAllPoints()
+            if previous then
+                piece.icon:SetPoint("RIGHT", previous, "LEFT", -COIN_GAP, 0)
+            else
+                piece.icon:SetPoint(point, relativeTo, relativePoint, x, y)
+            end
+            piece.icon:Show()
+            dress(piece.amount, like, count)
+            piece.amount:SetPoint("RIGHT", piece.icon, "LEFT", -COIN_ICON_GAP, 0)
+            previous = piece.amount
+        end
+    end
+    return previous
+end
+
 function Theme:VerifyFile(texture, key)
     return verifyFile(texture, key)
 end
 
 -- One row of the loot feed: a soft smudge behind an icon in a quality-tinted frame, the
 -- item name in its quality colour, and a muted line for price and source. A Button, not a
--- Frame, so Gear Refactor has somewhere to put its upgrade badge and Equip button later
--- (PRD 5.3): row.accessory is that anchor and stays empty here.
+-- Frame, so it takes clicks and hover; row.accessory holds Gear Refactor's upgrade badge
+-- (Gear Refactor PRD 5.3) and grows to fit it. Equipping is the upgrade prompt's job.
 -- Motion is three animation groups and no OnUpdate: fade in, hold then fade out, and the
 -- slide the feed plays when the row above it goes away.
 function Theme:LootRow(parent, width)
@@ -1259,6 +1391,8 @@ function Theme:LootRow(parent, width)
     verifyFile(row.iconFrame, "lootIconFrame")
     row.name = shadowed(self:Text(row, "", "body", "TEXT_BODY"))
     row.detail = shadowed(self:Text(row, "", "small", "TEXT_MUTED"))
+    -- One set of coins, since a row carries money on one line at most.
+    row.coins = self:Coins(row)
     -- The chevron is the scrollbar's own arrow: an expander that already reads as one on
     -- this client, rather than a new piece of art.
     row.chevron = CreateFrame("Button", nil, row)
@@ -1269,11 +1403,13 @@ function Theme:LootRow(parent, width)
     row.chevron.row = row
     row.chevron:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.chevron:Hide()
-    -- Reserved for Gear Refactor's badge and Equip button (PRD 5.3). Nothing is parented
-    -- here by Refactor; it exists so the layout already has the space.
+    -- Gear Refactor's badge (its PRD 5.3), made here with the row so a loot burst never
+    -- creates a frame; the feed fills it from Gear Refactor's API.
     row.accessory = CreateFrame("Frame", nil, row)
     row.accessory:SetSize(ROW_ICON, ROW_ICON)
     row.accessory:SetPoint("RIGHT", row.chevron, "LEFT", -ROW_GAP, 0)
+    row.badge = shadowed(self:Text(row.accessory, "", "small", "TEXT_BODY"))
+    row.badge:Hide()
 
     local show = row:CreateAnimationGroup()
     local fadeIn = show:CreateAnimation("Alpha")
@@ -1329,7 +1465,6 @@ function Theme:LootRow(parent, width)
         end
     end
     -- Right click is the feed's own dismiss: the row goes now and the rest close the gap.
-    -- Left click stays free for Gear Refactor's Equip button (PRD 5.3).
     local function dismissRow(target)
         if GameTooltip and GameTooltip.GetOwner and GameTooltip:GetOwner() == target then
             GameTooltip:Hide()
@@ -1378,15 +1513,44 @@ function Theme:LootRow(parent, width)
     end
 
     function row:LayoutText(inset)
-        self.name:ClearAllPoints()
-        self.detail:ClearAllPoints()
-        self.name:SetPoint("TOPLEFT", inset, -3)
-        self.name:SetPoint("RIGHT", self.accessory, "LEFT", -ROW_GAP, 0)
-        self.detail:SetPoint("BOTTOMLEFT", inset, 5)
-        self.detail:SetPoint("RIGHT", self.accessory, "LEFT", -ROW_GAP, 0)
+        self.textInset = inset
+        for key, anchor in pairs(LINE_ANCHORS) do
+            local line = self[key]
+            line:ClearAllPoints()
+            line:SetPoint(anchor[1], inset, anchor[2])
+            -- A line carrying money sizes to its own text so the coins can follow it.
+            if key ~= self.moneyLine then
+                line:SetPoint("RIGHT", self.accessory, "LEFT", -ROW_GAP, 0)
+            end
+        end
         self.underline:ClearAllPoints()
         self.underline:SetPoint("BOTTOMLEFT", inset, 0)
         self.underline:SetPoint("BOTTOMRIGHT", -ROW_GAP, 0)
+        self:LayoutMoney()
+    end
+
+    function row:LayoutMoney()
+        local line = self.moneyLine and self[self.moneyLine]
+        if not line then
+            self.coins:Hide()
+        elseif line:GetText() ~= "" then
+            self.coins:Place(line, self.money, self.moneySuffixText, "LEFT", line, "RIGHT", 0, 0)
+        else
+            -- An empty line has no height to centre on, so the coins take its place.
+            local anchor = LINE_ANCHORS[self.moneyLine]
+            self.coins:Place(line, self.money, self.moneySuffixText, anchor[1], self, anchor[1],
+                self.textInset, anchor[2])
+        end
+    end
+
+    -- Money shown on one line ("name" or "detail"), after whatever text SetLines gave that
+    -- line and before suffix. Call after SetLines, which sets the colour the coins copy.
+    function row:SetMoney(lineKey, amount, suffix)
+        local shown = LINE_ANCHORS[lineKey] ~= nil and type(amount) == "number" and amount >= 0
+        self.moneyLine = shown and lineKey or nil
+        self.money = shown and math.floor(amount) or nil
+        self.moneySuffixText = shown and suffix ~= "" and suffix or nil
+        self:LayoutText(self.textInset)
     end
 
     -- A row with no quality of its own (a group, gold) takes the ordinary body colour.
@@ -1410,6 +1574,28 @@ function Theme:LootRow(parent, width)
         self.chevron.onToggle = onToggle
         Theme:ApplyAsset(self.chevron.art, expanded and "scrollUp" or "scrollDown")
         Theme:Color(self.chevron.art, "ACCENT_COPPER")
+    end
+
+    -- The colour is the badge owner's own, handed over at runtime, never a literal here.
+    function row:SetBadge(text, r, g, b)
+        self.badge:SetShown(text ~= nil)
+        if text then
+            self.badge:SetText(text)
+            self.badge:SetTextColor(r or 1, g or 1, b or 1, 1)
+        end
+        self:LayoutAccessory()
+    end
+
+    -- The accessory never shrinks below its reserved icon width, so text does not reflow
+    -- as badges come and go on neighbouring rows.
+    function row:LayoutAccessory()
+        local used = 0
+        self.badge:ClearAllPoints()
+        if self.badge:IsShown() then
+            self.badge:SetPoint("RIGHT")
+            used = self.badge:GetStringWidth()
+        end
+        self.accessory:SetWidth(math.max(ROW_ICON, used))
     end
 
     -- Called again for a row already on screen (a second drop of the same item): the hold
@@ -1467,8 +1653,10 @@ function Theme:LootRow(parent, width)
         self.lifetime, self.paused, self.link = nil, nil, nil
         self.anchor, self.anchorX, self.anchorY, self.key = nil, nil, nil, nil
         self:SetLines(nil, nil)
+        self:SetMoney(nil)
         self:SetIcon(nil)
         self:SetExpander(false, false, nil)
+        self:SetBadge(nil)
         self:SetUnderlineShown(false)
         self:ClearAllPoints()
         self:Hide()

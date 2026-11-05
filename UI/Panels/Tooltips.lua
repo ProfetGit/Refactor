@@ -8,6 +8,7 @@ local MODE_ENTRIES = {
 }
 local POINTS = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }
 local CURSOR_SIDES = { "RIGHT", "LEFT", "CENTER" }
+local CONTROL_WIDTH, DROPDOWN_GAP, LABEL_HEIGHT, OFFSET_WIDTH, SAVE_WIDTH = 380, 6, 18, 90, 104
 
 -- The nine screen anchors are not translated: they are the same names the API takes, and
 -- a player setting one is reading them as coordinates, not as prose.
@@ -23,32 +24,30 @@ end
 -- except the typed offsets, which wait for Save.
 function UI:BuildTooltipSettings(parent)
     local section = self.Widgets:SettingsBlock(parent, L.UI_TOOLTIP_HELP)
-    local top = section.top
     section:Index(L.UI_TOOLTIP_OPTIONS, L.UI_TOOLTIP_MODE, L.UI_TOOLTIP_POINT, L.UI_TOOLTIP_OFFSET,
         L.UI_TOOLTIP_CURSOR_SIDE, L.UI_TOOLTIP_CURSOR_OFFSET)
-    self.tooltipModeDropdown = self:OptionDropdown(section, "tooltipAnchor", MODE_ENTRIES,
-        "UI_TOOLTIP_MODE", top)
+    self.tooltipModeDropdown = self:OptionDropdown(section, "tooltipAnchor", MODE_ENTRIES, "UI_TOOLTIP_MODE")
     -- One dropdown for both placement lists. The menu is generated when it opens, so
     -- swapping the list is enough for it to offer whichever the current mode uses.
-    self.tooltipPointDropdown = Theme:Dropdown(section, 380, CURSOR_ENTRIES,
+    self.tooltipPointDropdown = Theme:Dropdown(section, CONTROL_WIDTH, CURSOR_ENTRIES,
         function(value) return self:TooltipPlacement() == value end,
         function(value)
             Settings:SetOption(self:TooltipPlacementKey(), value)
             self:LoadTooltips()
         end)
-    self.tooltipPointDropdown:SetPoint("TOPLEFT", 0, top - 34)
+    section:Place(self.tooltipPointDropdown, Theme.dropdownRowHeight, DROPDOWN_GAP)
     for index, entry in ipairs(CURSOR_ENTRIES) do
         CURSOR_ENTRIES[index] = { value = entry.value, text = L[entry.labelKey] }
         section:Index(L[entry.labelKey])
     end
     section:Index(L.UI_TOOLTIP_POINT, L.UI_TOOLTIP_CURSOR_SIDE)
-    self.tooltipOffsetLabel = Theme:Text(section, L.UI_TOOLTIP_OFFSET, "small", "TEXT_MUTED")
-    self.tooltipOffsetLabel:SetPoint("TOPLEFT", 0, top - 66)
-    self.tooltipX = self.Widgets:Input(section, 90, 26)
-    self.tooltipX:SetPoint("TOPLEFT", 0, top - 84)
-    self.tooltipY = self.Widgets:Input(section, 90, 26)
+    self.tooltipOffsetLabel = Theme:Text(section, L.UI_TOOLTIP_OFFSET, "body", "TEXT_BODY")
+    section:Place(self.tooltipOffsetLabel, LABEL_HEIGHT)
+    self.tooltipX = self.Widgets:Input(section, OFFSET_WIDTH)
+    section:Place(self.tooltipX, self.Widgets.INPUT_HEIGHT, self.Widgets.NOTE_GAP)
+    self.tooltipY = self.Widgets:Input(section, OFFSET_WIDTH)
     self.tooltipY:SetPoint("LEFT", self.tooltipX, "RIGHT", 8, 0)
-    local saveOffsets = Theme:Button(section, 104, L.UI_SAVE_SHORT, function()
+    local saveOffsets = Theme:Button(section, SAVE_WIDTH, L.UI_SAVE_SHORT, function()
         local cursor = Settings:GetOption("tooltipAnchor") ~= "point"
         local keyX, keyY = cursor and "tooltipCursorX" or "tooltipX", cursor and "tooltipCursorY" or "tooltipY"
         local x, y = tonumber(self.tooltipX:GetText()), tonumber(self.tooltipY:GetText())
@@ -61,22 +60,22 @@ function UI:BuildTooltipSettings(parent)
         self.tooltipY:ClearFocus()
     end)
     saveOffsets:SetPoint("LEFT", self.tooltipY, "RIGHT", 8, 0)
+    -- Enter in either field saves both, as the button does.
+    for _, field in ipairs({ self.tooltipX, self.tooltipY }) do
+        field:SetScript("OnEnterPressed", function() saveOffsets:GetScript("OnClick")(saveOffsets) end)
+    end
     self.tooltipStatus = Theme:Text(section, "", "small", "TEXT_TITLE")
     self.tooltipStatus:SetPoint("LEFT", saveOffsets, "RIGHT", 12, 0)
     self.tooltipStatus:SetPoint("RIGHT")
-    self.tooltipNote = Theme:Text(section, "", "small", "TEXT_MUTED")
-    self.tooltipNote:SetPoint("TOPLEFT", 0, top - 120)
-    self.tooltipNote:SetPoint("RIGHT")
-    self.tooltipNote:SetHeight(40)
-    self.tooltipNote:SetJustifyV("TOP")
-    section:SetBodyHeight(160)
+    self.tooltipStatus:SetWordWrap(false)
+    section:Finish()
     self:RegisterModuleSettings("tooltips.anchor", section)
 end
 
 function UI:BuildTooltipBorderSettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_TOOLTIP_BORDER_HELP)
-    self:OptionCheckbox(block, "tooltipClassBorder", "UI_TOOLTIP_CLASS_BORDER", block.top)
-    block:SetBodyHeight(32)
+    self:OptionCheckbox(block, "tooltipClassBorder", "UI_TOOLTIP_CLASS_BORDER")
+    block:Finish()
     self:RegisterModuleSettings("tooltips.rarityBorder", block)
 end
 
@@ -107,7 +106,5 @@ function UI:LoadTooltips()
     if not self.tooltipY:HasFocus() then
         self.tooltipY:SetText(tostring(Settings:GetOption(keyY) or 0))
     end
-    local anchorModule = R.moduleByID and R.moduleByID["tooltips.anchor"]
-    self.tooltipNote:SetText(anchorModule and anchorModule.state ~= "enabled" and L.UI_TOOLTIP_ANCHOR_OFF or "")
     self.tooltipStatus:SetText("")
 end

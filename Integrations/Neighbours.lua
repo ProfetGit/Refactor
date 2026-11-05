@@ -25,6 +25,28 @@ R.Integrations.neighbours = {
         modules = { "vendor.autoSell" } },
     { addon = "Plumber", labelKey = "NEIGHBOUR_PLUMBER",
         modules = { "vendor.itemCosts" } },
+    -- The quest, vendor, camera, map, chat, tooltip and loot addons a Forever player is most
+    -- likely to bring along, each against only what it really does too.
+    { addon = "AutoTurnIn", labelKey = "NEIGHBOUR_AUTOTURNIN",
+        modules = { "quest.autoAccept", "quest.autoTurnIn" } },
+    { addon = "Dejunk", labelKey = "NEIGHBOUR_DEJUNK",
+        modules = { "vendor.autoSell" } },
+    { addon = "Peddler", labelKey = "NEIGHBOUR_PEDDLER",
+        modules = { "vendor.autoSell" } },
+    { addon = "DynamicCam", labelKey = "NEIGHBOUR_DYNAMICCAM",
+        modules = { "interface.actionCam" } },
+    { addon = "Leatrix_Maps", labelKey = "NEIGHBOUR_LEATRIX_MAPS",
+        modules = { "interface.mapReveal", "interface.mapZoneLevels" } },
+    { addon = "Mapster", labelKey = "NEIGHBOUR_MAPSTER",
+        modules = { "interface.mapReveal" } },
+    { addon = "TipTac", labelKey = "NEIGHBOUR_TIPTAC",
+        modules = { "tooltips.anchor", "tooltips.rarityBorder" } },
+    { addon = "BasicChatMods", labelKey = "NEIGHBOUR_BASICCHATMODS",
+        modules = { "chat.urls", "chat.copy" } },
+    { addon = "Prat-3.0", labelKey = "NEIGHBOUR_PRAT",
+        modules = { "chat.urls", "chat.copy" } },
+    { addon = "XLoot_Monitor", labelKey = "NEIGHBOUR_XLOOT_MONITOR",
+        modules = { "toasts.loot" } },
 }
 
 function R.Integrations:Conflicts(into)
