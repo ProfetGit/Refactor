@@ -1,4 +1,4 @@
-local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 17)
+local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 18)
 if not Theme then return end
 
 local unpack = unpack
@@ -28,6 +28,9 @@ Theme.colors = {
     RING_FILL = { 0.85, 0.70, 0.42, 1 },
     RING_LAST = { 1, 0.86, 0.36, 1 },
     RING_DONE = { 0.43, 0.82, 0.40, 1 },
+    -- The profession planner's "you can make it now" and "you have enough": small text on a dark row, where
+    -- RING_DONE's softer green read as grey (6 Nov 2026).
+    PLAN_READY = { 0.30, 1, 0.22, 1 },
     -- The loot feed art is white with an alpha channel and carries no colour of its own.
     -- LOOT_ROW is the smudge behind a row, its alpha replaced by the opacity setting.
     LOOT_ROW = { 0.07, 0.05, 0.04, 0.85 },
@@ -979,6 +982,92 @@ function Theme:QuestIndicator(parent)
 
     frame:Hide()
     return frame
+end
+
+local GROUP_SLOTS, GROUP_MARK, GROUP_FONT, GROUP_HEIGHT = 4, 9, 11, 12
+local GROUP_TEXT_GAP, GROUP_SLOT_GAP = 2, 5
+Theme.questGroupSlots = GROUP_SLOTS
+
+-- One line of group progress under a quest indicator: a diamond in each member's class
+-- colour, the same mark a heading starts with, and their count beside it when it differs
+-- from the player's. Members past the last slot fold into "+N", muted so it never reads as
+-- the count of the mark before it.
+function Theme:QuestGroupRow(parent)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(GROUP_MARK, GROUP_HEIGHT)
+    row.marks, row.counts = {}, {}
+    local fontFile
+    for slot = 1, GROUP_SLOTS do
+        local mark = self:Texture(row, "headerMark", "OVERLAY")
+        mark:SetSize(GROUP_MARK, GROUP_MARK)
+        local count = self:Text(row, "", "small", "QUEST_TOTAL")
+        fontFile = fontFile or count:GetFont()
+        count:SetFont(fontFile, GROUP_FONT, "OUTLINE")
+        count:SetShadowOffset(1, -1)
+        count:SetJustifyH("LEFT")
+        count:SetPoint("LEFT", mark, "RIGHT", GROUP_TEXT_GAP, 0)
+        if slot == 1 then
+            mark:SetPoint("LEFT", row, "LEFT", 0, 0)
+        else
+            mark:SetPoint("LEFT", row.counts[slot - 1], "RIGHT", GROUP_SLOT_GAP, 0)
+        end
+        row.marks[slot], row.counts[slot] = mark, count
+    end
+    row.more = self:Text(row, "", "small", "TEXT_MUTED")
+    row.more:SetFont(fontFile, GROUP_FONT, "OUTLINE")
+    row.more:SetShadowOffset(1, -1)
+
+    -- No class known draws the mark in the muted text colour rather than guessing one. A
+    -- member level with the player drops the count and keeps the mark, unless the mark's
+    -- file is not loaded yet: then the count is all that says the member is there.
+    function row:SetMember(slot, red, green, blue, text, level)
+        local mark = self.marks[slot]
+        if red then
+            mark:SetVertexColor(red, green, blue, 1)
+        else
+            Theme:Color(mark, "TEXT_MUTED")
+        end
+        self.counts[slot]:SetText((level and not self.noMark) and "" or text or "")
+    end
+
+    -- Sized to what it shows, so a row anchored by its right edge ends where its text does.
+    function row:SetMemberCount(shown, more)
+        local width = 0
+        for slot = 1, GROUP_SLOTS do
+            local visible = slot <= shown
+            self.marks[slot]:SetShown(visible and not self.noMark)
+            self.counts[slot]:SetShown(visible)
+            if visible then
+                local textWidth = self.counts[slot]:GetStringWidth() or 0
+                width = width + (slot > 1 and GROUP_SLOT_GAP or 0) + GROUP_MARK + GROUP_TEXT_GAP + textWidth
+            end
+        end
+        self.more:ClearAllPoints()
+        if more and shown > 0 then
+            self.more:SetPoint("LEFT", self.counts[shown], "RIGHT", GROUP_SLOT_GAP, 0)
+            self.more:SetText(more)
+            self.more:Show()
+            width = width + GROUP_SLOT_GAP + (self.more:GetStringWidth() or 0)
+        else
+            self.more:SetText("")
+            self.more:Hide()
+        end
+        self:SetWidth(math.max(GROUP_MARK, width))
+    end
+
+    function row:ResetRow()
+        for slot = 1, GROUP_SLOTS do
+            self.counts[slot]:SetText("")
+        end
+        self:SetMemberCount(0, nil)
+        self:ClearAllPoints()
+        self:SetParent(nil)
+        self:Hide()
+    end
+
+    row.noMark = not self:VerifyFile(row.marks[1], "headerMark")
+    row:Hide()
+    return row
 end
 
 -- Refactor's own overlay, never a change to Blizzard's plate textures or alpha.

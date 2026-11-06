@@ -62,28 +62,28 @@ function Visibility:Group(id)
     return self.groups and self.groups[id]
 end
 
--- Alpha is applied as a share of what the frame had when the module took it over, so
--- "visible" leaves Blizzard's own alpha alone. Edit Mode shows everything as the game has
--- it, except the element being tuned, which previews its shown opacity so the slider shows
--- what it does. A spell or item on the cursor shows everything too: a bar that cannot be
--- seen cannot be dropped on.
+-- Alpha is applied as a share of what the frame had when the module took it over, so a
+-- full opacity leaves Blizzard's own alpha alone, and an element with no behaviour is left
+-- exactly there. Edit Mode shows everything as the game has it, so what is being moved can
+-- be seen. A spell or item on the cursor reveals everything too: a bar that cannot be seen
+-- cannot be dropped on.
 function Visibility:ApplyGroup(id, snap)
     local group = self:Group(id)
     if not group or group.status ~= "ok" then
         return
     end
-    local rule = Rules:Rule(id)
-    local target
-    if self.editing then
-        target = self.preview[id] and rule.shownAlpha or 1
-    elseif self.dragging then
-        target = rule.shownAlpha
-    else
-        target = Rules:Resolve(rule, Conditions:State(), group.hovered)
+    local behaviour = Rules:BehaviourFor(id, self.place)
+    local fades, target = behaviour or Rules.defaultFades, 1
+    if behaviour and not self.editing then
+        if self.dragging then
+            target = behaviour.revealed
+        else
+            target = Rules:Resolve(behaviour, Conditions:State(), group.hovered)
+        end
     end
     for _, frame in ipairs(group.frames) do
         local goal = self.captured[frame] * target
-        local seconds = goal > frame:GetAlpha() and rule.fadeIn or rule.fadeOut
+        local seconds = goal > frame:GetAlpha() and fades.fadeIn or fades.fadeOut
         Fade:To(frame, goal, snap and 0 or seconds)
     end
     -- An extra the player has not opted into is left exactly as the client has it, unless
@@ -92,7 +92,7 @@ function Visibility:ApplyGroup(id, snap)
         local wanted = R.Settings:GetOption(extra.option) == true
         if wanted or extra.touched then
             local goal = wanted and extra.shown * target or extra.shown
-            local seconds = goal > extra:GetAlpha() and rule.fadeIn or rule.fadeOut
+            local seconds = goal > extra:GetAlpha() and fades.fadeIn or fades.fadeOut
             Fade:To(extra, goal, (snap or not wanted) and 0 or seconds)
             extra.touched = wanted
         end
@@ -127,28 +127,33 @@ function Visibility:Over(group)
     return false
 end
 
--- The one pass that decides hover for every group. A zone is hovered while any of its
--- members is, so a bar, the bags and the micro menu come and go as one.
+-- The behaviour id an element shares its hover with, when its behaviour reveals together.
+function Visibility:SharedBy(id)
+    local behaviour = Rules:BehaviourFor(id, self.place)
+    return behaviour and behaviour.together and behaviour.id or nil
+end
+
+-- The one pass that decides hover for every group. Elements whose behaviour reveals
+-- together are hovered while any one of them is, so a row of bars comes and goes as one.
 function Visibility:Watch()
     self.watch = nil
     if not self.active then
         return
     end
-    local zones, any = self.zoneOver, false
-    for zone in pairs(zones) do
-        zones[zone] = nil
+    local shared, any = self.sharedOver, false
+    for key in pairs(shared) do
+        shared[key] = nil
     end
-    for _, group in pairs(self.groups) do
+    for id, group in pairs(self.groups) do
         group.over = group.status == "ok" and self:Over(group)
-        if group.over then
-            local zone = Rules:Rule(group.id).zone
-            if zone ~= Rules.noZone then
-                zones[zone] = true
-            end
+        local sharedBy = group.over and self:SharedBy(id)
+        if sharedBy then
+            shared[sharedBy] = true
         end
     end
     for id, group in pairs(self.groups) do
-        local hovered = group.over or zones[Rules:Rule(id).zone] == true
+        local sharedBy = self:SharedBy(id)
+        local hovered = group.over or (sharedBy ~= nil and shared[sharedBy] == true)
         if hovered ~= group.hovered then
             group.hovered = hovered
             self:ApplyGroup(id)
@@ -169,10 +174,10 @@ function Visibility:Hover(id)
     if not group.hovered then
         group.hovered = true
         self:ApplyGroup(id)
-        local zone = Rules:Rule(id).zone
-        if zone ~= Rules.noZone then
+        local sharedBy = self:SharedBy(id)
+        if sharedBy then
             for otherId, other in pairs(self.groups) do
-                if other.status == "ok" and not other.hovered and Rules:Rule(otherId).zone == zone then
+                if other.status == "ok" and not other.hovered and self:SharedBy(otherId) == sharedBy then
                     other.hovered = true
                     self:ApplyGroup(otherId)
                 end
@@ -252,12 +257,26 @@ function Visibility:SetEditing(editing)
     self:ApplyAll(editing)
 end
 
+-- Walking into a city or zoning into an instance can change the setup in use, and with it
+-- every element at once; the companion names the setup it writes to, so it follows.
+function Visibility:Relocate()
+    local place = Rules:SetupPlace(Conditions:State())
+    if place ~= self.place then
+        self.place = place
+        if self.companion then
+            self.companion:Load()
+        end
+    end
+end
+
 function Visibility:OnConditions()
+    self:Relocate()
     self:ApplyAll(false)
 end
 
 function Visibility:OnSettingsChanged(_, key)
     if key == Rules.option or Rules.extraOptions[key] then
+        self:Relocate()
         self:ApplyAll(false)
     end
 end
@@ -370,29 +389,18 @@ function Visibility:OnSystemSelected(systemFrame)
         return
     end
     local ids = Rules:GroupsForSystem(systemFrame, self.editIds)
-    for id in pairs(self.preview) do
-        self.preview[id] = nil
-    end
     if #ids == 0 then
         self.companion:Close()
     else
-        for _, id in ipairs(ids) do
-            self.preview[id] = true
-        end
         self.companion:Open(R.Capabilities:Resolve(DIALOG), ids)
     end
-    self:ApplyAll(true)
 end
 
 function Visibility:OnSystemClosed()
     if not self.active then
         return
     end
-    for id in pairs(self.preview) do
-        self.preview[id] = nil
-    end
     self.companion:Close()
-    self:ApplyAll(true)
 end
 
 function Visibility:HookDialog()
@@ -535,8 +543,8 @@ function Visibility:OnEnable()
         R.Broker:Emit("REFACTOR_MODULE_CHANGED", self.id)
         return
     end
-    self.groups, self.captured, self.preview, self.editIds = {}, {}, {}, {}
-    self.frameGroup, self.zoneOver, self.tooltipGroup, self.watch = {}, {}, nil, nil
+    self.groups, self.captured, self.editIds = {}, {}, {}
+    self.frameGroup, self.sharedOver, self.tooltipGroup, self.watch = {}, {}, nil, nil
     -- One companion for the session: a frame cannot be destroyed, so it is built once.
     self.companion = self.companion or R.UI:CreateVisibilityCompanion(self)
     local tooltip = R.Capabilities:Resolve(TOOLTIP)
@@ -553,6 +561,7 @@ function Visibility:OnEnable()
     self:HookEditMode()
     self:HookDialog()
     Conditions:Start(self)
+    self.place = Rules:SetupPlace(Conditions:State())
     R.Broker:Subscribe("REFACTOR_CONDITIONS_CHANGED", self.OnConditions, self)
     R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", self.OnSettingsChanged, self)
     R.Broker:Subscribe("REFACTOR_VISIBILITY_FRAMES", self.OnFramesChanged, self)
@@ -583,6 +592,6 @@ function Visibility:OnDisable()
             end
         end
     end
-    self.groups, self.captured, self.preview, self.frameGroup, self.zoneOver = nil, nil, nil, nil, nil
+    self.groups, self.captured, self.frameGroup, self.sharedOver, self.place = nil, nil, nil, nil, nil
     self.watch, self.tooltipGroup, self.editing, self.dragging = nil, nil, false, false
 end

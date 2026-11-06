@@ -117,6 +117,34 @@ describe("M2 Retail modules", function()
         assert.is_true(env.R.Registry:Enable(module))
     end)
 
+    it("answers the replace-enchant dialog outside combat and while not paused", function()
+        local env = base()
+        local replaced, hidden = 0, {}
+        local crafted = 0
+        env.C_Item = { ReplaceEnchant = function() replaced = replaced + 1 end,
+            ReplaceTradeskillEnchant = function() crafted = crafted + 1 end }
+        env.StaticPopup_Hide = function(which) hidden[#hidden + 1] = which end
+        env.combat = false
+        env.InCombatLockdown = function() return env.combat end
+        local module = enable(env, "Modules/Items/ReplaceEnchant.lua", "items.replaceEnchant")
+        env:Fire("REPLACE_ENCHANT", "Defense +3", "Defense +3")
+        assert.equals(1, replaced)
+        env:Advance(0)
+        assert.same({ "REPLACE_ENCHANT" }, hidden)
+        env:Fire("REPLACE_TRADESKILL_ENCHANT", "Defense +3", "Defense +3")
+        env:Advance(0)
+        assert.equals(1, crafted)
+        assert.same({ "REPLACE_ENCHANT", "REPLACE_TRADESKILL_ENCHANT" }, hidden)
+        env.combat = true
+        env:Fire("REPLACE_ENCHANT", "a", "b")
+        env.combat = false
+        env.IsControlKeyDown = function() return true end
+        env:Fire("REPLACE_ENCHANT", "a", "b")
+        env:Advance(0)
+        assert.equals(1, replaced)
+        noResidue(env, module)
+    end)
+
     it("fills only the unprotected deletion edit box after Blizzard's event", function()
         local env = base()
         local editBox = {
@@ -318,6 +346,39 @@ describe("M2 Retail modules", function()
         assert.equals(1, repairs)
         noResidue(env, module)
         assert.is_true(env.R.Registry:Enable(module))
+    end)
+
+    it("repairs when the merchant window opens after MERCHANT_SHOW", function()
+        local env = vendor()
+        local repairs = 0
+        env.repairCost = 500000
+        env.CanMerchantRepair = function() return true end
+        env.GetRepairAllCost = function() return env.repairCost, env.repairCost > 0 end
+        env.RepairAllItems = function()
+            repairs = repairs + 1
+            env.money, env.repairCost = env.money - env.repairCost, 0
+        end
+        local module = enable(env, "Modules/Vendor/AutoRepair.lua", "vendor.autoRepair")
+        env.merchantOpen = false
+        env:Fire("MERCHANT_SHOW")
+        assert.equals(0, repairs)
+        env:Advance(0.1)
+        env.merchantOpen = true
+        env:Advance(0.1)
+        assert.equals(1, repairs)
+        assert.equals(0, env:ActiveTimers())
+        env.repairCost, env.merchantOpen = 500000, false
+        env:Fire("MERCHANT_SHOW")
+        env:Fire("MERCHANT_CLOSED")
+        env.merchantOpen = true
+        env:Advance(1)
+        assert.equals(1, repairs)
+        env.merchantOpen = false
+        env:Fire("MERCHANT_SHOW")
+        env:Advance(5)
+        assert.equals(1, repairs)
+        assert.equals(0, env:ActiveTimers())
+        noResidue(env, module)
     end)
 
     it("summarizes only confirmed vendor events and resets each visit", function()

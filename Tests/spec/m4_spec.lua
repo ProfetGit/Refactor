@@ -1419,11 +1419,24 @@ describe("M4 chat and social", function()
 end)
 
 describe("M4 interface, mail, vendor", function()
+    local cameraEnvs = {}
+    -- Every camera test ends with no zoom call dropped: the client takes one a frame, and a
+    -- second one in the same frame is how ActionCam once pushed the camera out on every move.
+    after_each(function()
+        for env in pairs(cameraEnvs) do
+            assert.equal(0, env.droppedZooms, "a zoom call the client would drop")
+            cameraEnvs[env] = nil
+        end
+    end)
+
     local function cameraEnv()
         local env = base()
+        cameraEnvs[env] = true
         env.cvars, env.console, env.zoom, env.hidden = {}, {}, {}, {}
         env.C_CVar = {
             SetCVar = function(name, value) env.cvars[name] = value end,
+            GetCVar = function(name) return env.cvars[name] end,
+            GetCVarBool = function() return env.reduce == true end,
             GetCVarDefault = function(name)
                 if name == "cameraDistanceMaxZoomFactor" then return "1.9" end
                 if name == "CameraKeepCharacterCentered" then return "1" end
@@ -1434,12 +1447,38 @@ describe("M4 interface, mail, vendor", function()
         env.StaticPopup_Hide = function(which) env.hidden[which] = true end
         -- A distance the calls move and clamp the way the client does, plus a count of
         -- the moves, so a test can say both where the camera ended and that it stayed put.
-        env.cameraZoom, env.moves = 20, 0
+        -- Like the client, only one zoom call a frame counts and any other is dropped. A
+        -- frame here is one Advance or one timer firing, and GetTime moves with it.
+        env.cameraZoom, env.moves, env.droppedZooms, env.frame = 20, 0, 0, 0
+        local advance, newTimer = env.Advance, env.C_Timer.NewTimer
+        function env:Advance(seconds)
+            self.frame = self.frame + 1
+            return advance(self, seconds)
+        end
+        env.C_Timer.NewTimer = function(delay, callback)
+            return newTimer(delay, function(...)
+                env.frame = env.frame + 1
+                return callback(...)
+            end)
+        end
+        env.GetTime = function() return env.now + env.frame * 1e-6 end
+        local function counts()
+            if env.zoomFrame == env.frame then
+                env.droppedZooms = env.droppedZooms + 1
+                return false
+            end
+            env.zoomFrame = env.frame
+            return true
+        end
         env.CameraZoomIn = function(yards)
-            env.cameraZoom, env.moves = math.max(0, env.cameraZoom - yards), env.moves + 1
+            if counts() then
+                env.cameraZoom, env.moves = math.max(0, env.cameraZoom - yards), env.moves + 1
+            end
         end
         env.CameraZoomOut = function(yards)
-            env.cameraZoom, env.moves = math.min(39, env.cameraZoom + yards), env.moves + 1
+            if counts() then
+                env.cameraZoom, env.moves = math.min(39, env.cameraZoom + yards), env.moves + 1
+            end
         end
         env.GetCameraZoom = function() return env.cameraZoom end
         env.inWorld, env.indoors, env.resting, env.mounted = true, false, false, false
@@ -1452,7 +1491,26 @@ describe("M4 interface, mail, vendor", function()
         env.IsMounted = function() return env.mounted end
         env.UnitOnTaxi = function() return env.taxi end
         env.UnitInVehicle = function() return env.vehicle end
+        env.npc, env.form = true, nil
+        env.UnitExists = function(unit) return unit == "npc" and env.npc end
+        env.GetShapeshiftFormID = function() return env.form end
+        env.Enum = env.Enum or {}
+        env.Enum.PlayerInteractionType = { Trainer = 7, Banker = 8, Auctioneer = 21 }
         return env
+    end
+
+    -- The shoulder glides on the one OnUpdate driver, which the mock clock does not run.
+    local function step(env, seconds)
+        local driver = env.R.Fade.driver
+        local handler = driver:GetScript("OnUpdate")
+        if handler then
+            handler(driver, seconds)
+        end
+    end
+
+    local function ease(env, seconds)
+        env:Advance(seconds)
+        step(env, seconds)
     end
 
     it("camera distance sets its CVar on enable and restores the default on disable", function()
@@ -1487,51 +1545,67 @@ describe("M4 interface, mail, vendor", function()
         assert.is_true(env.hidden.EXPERIMENTAL_CVAR_WARNING)
         assert.same({}, env.console)
         assert.equal("1", cvars.test_cameraDynamicPitch)
-        assert.equal("0.60", cvars.test_cameraOverShoulder)
+        assert.equal("0.40", cvars.test_cameraDynamicPitchBaseFovPad)
         assert.equal("0.30", cvars.test_cameraHeadMovementStrength)
+        assert.equal("0", cvars.test_cameraHeadMovementMovingStrength)
         assert.equal("1", cvars.test_cameraTargetFocusInteractEnable)
         assert.equal("0", cvars.test_cameraTargetFocusEnemyEnable)
-        assert.equal("0", cvars.test_cameraTargetFocusEnemyStrengthYaw)
         -- Blizzard's motion sickness guard overrides every ActionCam CVar, so it is off.
         assert.equal("0", cvars.CameraKeepCharacterCentered)
         assert.equal(9, env.cameraZoom)
-        -- The player wheels in. Indoors moves the camera; the same situation again does not.
+        ease(env, 2)
+        assert.equal("0.60", cvars.test_cameraOverShoulder)
+        -- The player wheels in to 4 and walks indoors: indoors only ever brings the camera
+        -- closer, so it stays at 4 where it used to be pushed out to 6.
         env.cameraZoom = 4
         env.indoors = true
         env:Fire("ZONE_CHANGED_INDOORS")
-        assert.equal(4, env.cameraZoom)
         env:Advance(0)
+        ease(env, 0.6)
         assert.equal("0.00", cvars.test_cameraOverShoulder)
-        assert.equal(6, env.cameraZoom)
+        assert.equal(4, env.cameraZoom)
         local moves = env.moves
         env:Fire("ZONE_CHANGED")
         env:Advance(0)
         assert.equal(moves, env.moves)
-        -- Mounted wins over indoors. A wheel while mounted is not what comes back later.
+        -- Mounted wins over indoors, and moves a camera that is too close. A wheel while
+        -- mounted is not what comes back later.
         env.mounted = true
         env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
         env:Advance(0)
         assert.equal(16, env.cameraZoom)
+        ease(env, 2)
         env.cameraZoom = 12
         -- Another unit's vehicle event is not ours; the player's is.
         env.mounted, env.indoors, env.resting = false, false, true
         env:Fire("UNIT_EXITED_VEHICLE", "party1")
         env:Advance(0)
+        ease(env, 0.6)
         assert.equal("0.00", cvars.test_cameraOverShoulder)
         env:Fire("UNIT_EXITED_VEHICLE", "player")
         env:Advance(0)
-        assert.equal("0.30", cvars.test_cameraOverShoulder)
+        ease(env, 0.6)
+        -- A city keeps the profile's own shoulder: no sideways glide for walking into one.
+        assert.equal("0.60", cvars.test_cameraOverShoulder)
         assert.equal(12, env.cameraZoom)
-        -- Combat wins over the rest area and leans into the shoulder.
+        -- A fight holds the camera exactly where it is, shoulder included.
+        ease(env, 2)
+        moves = env.moves
         env.combat = true
         env:Fire("PLAYER_REGEN_DISABLED")
         env:Advance(0)
-        assert.equal("0.90", cvars.test_cameraOverShoulder)
-        assert.equal(9, env.cameraZoom)
-        -- Out of every situation: the camera goes back to where the player had it.
+        ease(env, 0.6)
+        assert.equal("0.60", cvars.test_cameraOverShoulder)
+        assert.equal(12, env.cameraZoom)
+        assert.equal(moves, env.moves)
+        -- Out of the fight into the open: still held for three seconds, then the camera goes
+        -- back to where the player had it.
         env.combat, env.resting = false, false
         env:Fire("PLAYER_REGEN_ENABLED")
-        env:Advance(0)
+        env:Advance(2)
+        assert.equal(12, env.cameraZoom)
+        env:Advance(1.5)
+        ease(env, 0.6)
         assert.equal("0.60", cvars.test_cameraOverShoulder)
         assert.equal(4, env.cameraZoom)
         -- Off: every CVar back to the client's default, the guard back on, the camera left.
@@ -1544,7 +1618,9 @@ describe("M4 interface, mail, vendor", function()
         assert.equal("1", cvars.CameraKeepCharacterCentered)
         assert.equal(moves, env.moves)
         assert.equal(4, env.cameraZoom)
+        assert.equal(0, env.R.Fade:Active())
         noResidue(env, action)
+        assert.equal(0, env.R.Fade:Active())
     end)
 
     it("ActionCam on Melee leaves the wheel alone and gives it back when switched off", function()
@@ -1553,18 +1629,20 @@ describe("M4 interface, mail, vendor", function()
         assert.is_true(env.R.Settings:SetOption("cameraProfile", "melee"))
         local action = enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
         local cvars = env.cvars
+        ease(env, 2)
         assert.equal(5, env.cameraZoom)
         assert.equal("1.00", cvars.test_cameraOverShoulder)
-        assert.equal("1", cvars.test_cameraTargetFocusEnemyEnable)
-        assert.equal("0.50", cvars.test_cameraTargetFocusEnemyStrengthYaw)
-        assert.equal("0.40", cvars.test_cameraTargetFocusEnemyStrengthPitch)
+        -- A mouse profile does not pull the camera toward the target.
+        assert.equal("0", cvars.test_cameraTargetFocusEnemyEnable)
         -- An NPC window changes the shoulder and nothing else.
         env:Fire("GOSSIP_SHOW")
         env:Advance(0)
+        ease(env, 0.6)
         assert.equal("0.80", cvars.test_cameraOverShoulder)
         assert.equal(5, env.cameraZoom)
         env:Fire("GOSSIP_CLOSED", false)
-        env:Advance(0)
+        env:Advance(0.5)
+        ease(env, 0.6)
         assert.equal(5, env.cameraZoom)
         -- A mount backs off; riding into a building, which Melee says nothing about,
         -- returns the camera to the pre-mount distance.
@@ -1575,6 +1653,7 @@ describe("M4 interface, mail, vendor", function()
         env.mounted, env.indoors = false, true
         env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
         env:Advance(0)
+        ease(env, 0.6)
         assert.equal(5, env.cameraZoom)
         assert.equal("0.60", cvars.test_cameraOverShoulder)
         -- Off while a mount had moved it: back to the player's own distance.
@@ -1582,8 +1661,13 @@ describe("M4 interface, mail, vendor", function()
         env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
         env:Advance(0)
         assert.equal(16, env.cameraZoom)
+        -- Switched off in the same frame as that move: the client would drop a second zoom
+        -- call, so the way back goes out on the next frame, after the module is gone.
         env.R.Registry:Disable(action)
+        assert.equal(16, env.cameraZoom)
+        env:Advance(0)
         assert.equal(5, env.cameraZoom)
+        assert.equal(0, env.R.Fade:Active())
         noResidue(env, action)
     end)
 
@@ -1593,47 +1677,50 @@ describe("M4 interface, mail, vendor", function()
         local cvars = env.cvars
         env:Fire("GOSSIP_SHOW")
         env:Advance(0)
+        ease(env, 0.6)
         assert.equal("0.80", cvars.test_cameraOverShoulder)
         assert.equal(5, env.cameraZoom)
-        -- A gossip closing into a quest, and a close and reopen in the same tick, move nothing.
+        -- A gossip closing into a quest, in the same tick, moves nothing.
         local moves = env.moves
         env:Fire("GOSSIP_CLOSED", true)
-        env:Advance(0)
-        env:Fire("GOSSIP_CLOSED", false)
         env:Fire("QUEST_DETAIL")
         env:Advance(0)
         assert.equal(moves, env.moves)
+        -- The window closing for good waits half a second before the camera goes back.
         env:Fire("QUEST_FINISHED")
-        env:Advance(0)
+        env:Advance(0.4)
+        assert.equal(5, env.cameraZoom)
+        env:Advance(0.2)
+        ease(env, 0.6)
         assert.equal("0.60", cvars.test_cameraOverShoulder)
         assert.equal(9, env.cameraZoom)
-        -- Inside an instance nothing else counts, combat included.
+        -- An instance wins, and a fight inside it moves nothing, before or after.
         env.instanceType = "party"
         env:Fire("ZONE_CHANGED_NEW_AREA")
         env:Advance(0)
+        ease(env, 0.6)
         assert.equal("0.30", cvars.test_cameraOverShoulder)
         assert.equal(14, env.cameraZoom)
         moves = env.moves
         env.combat = true
         env:Fire("PLAYER_REGEN_DISABLED")
         env:Advance(0)
+        env.combat = false
+        env:Fire("PLAYER_REGEN_ENABLED")
+        env:Advance(3.5)
         assert.equal(moves, env.moves)
         for _, case in ipairs({ { "raid", 24, "0.00" }, { "pvp", 16, "0.30" }, { "arena", 12, "0.50" },
             { "scenario", 14, "0.30" } }) do
             env.instanceType = case[1]
             env:Fire("PLAYER_ENTERING_WORLD", false, false)
             env:Advance(0)
+            ease(env, 0.6)
             assert.equal(case[2], env.cameraZoom)
             assert.equal(case[3], cvars.test_cameraOverShoulder)
         end
-        -- Out again, into combat in the open world: the combat distance, and the wheel
-        -- position from before the first instance is still what comes back at the end.
+        -- Out again: the wheel position from before the first instance comes back.
         env.instanceType = "none"
         env:Fire("PLAYER_ENTERING_WORLD", false, false)
-        env:Advance(0)
-        assert.equal(9, env.cameraZoom)
-        env.combat = false
-        env:Fire("PLAYER_REGEN_ENABLED")
         env:Advance(0)
         assert.equal(9, env.cameraZoom)
     end)
@@ -1646,16 +1733,20 @@ describe("M4 interface, mail, vendor", function()
         assert.equal(20, env.cameraZoom)
         env:Fire("PLAYER_ENTERING_WORLD", true, false)
         assert.equal("1", env.cvars.test_cameraDynamicPitch)
+        ease(env, 0.6)
         assert.equal("0.60", env.cvars.test_cameraOverShoulder)
         assert.equal(9, env.cameraZoom)
         env.indoors = true
         env:Fire("ZONE_CHANGED_INDOORS")
         env:Advance(0)
         assert.equal(6, env.cameraZoom)
-        -- A loading screen that is not a login is a zone change: the situation is re-read.
+        -- A loading screen that is not a login is a zone change: the situation is re-read,
+        -- and the building lingers for a second.
         env.indoors = false
         env:Fire("PLAYER_ENTERING_WORLD", false, false)
         env:Advance(0)
+        assert.equal(6, env.cameraZoom)
+        env:Advance(1)
         assert.equal(9, env.cameraZoom)
     end)
 
@@ -1674,10 +1765,11 @@ describe("M4 interface, mail, vendor", function()
         env:Advance(0)
         assert.equal(moves, env.moves)
         assert.equal("0", env.cvars.test_cameraOverShoulder)
-        -- A switch made indoors: the new profile's indoor distance now, and what the player
-        -- had before the building is still what comes back on the way out.
+        -- A switch made indoors: the new profile's indoors rule applies, and at 9 against "at most
+        -- 8" the camera is within a yard or two of it, which is not worth a move.
         assert.is_true(Settings:SetOption("cameraProfile", "controllerRanged"))
-        assert.equal(8, env.cameraZoom)
+        assert.equal(9, env.cameraZoom)
+        ease(env, 0.6)
         assert.equal("0.20", env.cvars.test_cameraOverShoulder)
         assert.equal("0.00", env.cvars.test_cameraHeadMovementStrength)
         -- A gentle pull: the yaw strength is the slider, the pitch follows at Blizzard's ratio.
@@ -1688,20 +1780,515 @@ describe("M4 interface, mail, vendor", function()
         -- situation in play moves it, one for any other situation leaves it alone, and
         -- setting the situation in play to leave the camera gives the wheel back.
         assert.is_true(Profiles:SaveCopy("Mine", Profiles:Active().values))
-        assert.equal(8, env.cameraZoom)
+        assert.equal(9, env.cameraZoom)
         assert.is_true(Profiles:SetField("indoorsShoulder", 1.2))
         assert.equal("1.20", env.cvars.test_cameraOverShoulder)
+        assert.equal(0, env.R.Fade:Active())
         moves = env.moves
         assert.is_true(Profiles:SetField("raidDistance", 30))
         assert.equal(moves, env.moves)
         assert.is_true(Profiles:SetField("indoorsDistance", 5))
         assert.equal(5, env.cameraZoom)
+        -- A second move in the same frame goes out on the next one.
         assert.is_true(Profiles:SetField("indoorsDistance", Profiles.LEAVE))
+        assert.equal(5, env.cameraZoom)
+        env:Advance(0)
         assert.equal(9, env.cameraZoom)
         env.indoors = false
         env:Fire("ZONE_CHANGED_INDOORS")
+        env:Advance(1)
+        assert.equal(9, env.cameraZoom)
+    end)
+
+    it("ActionCam eases the shoulder, and a disable mid-ease leaves the client default", function()
+        local env = cameraEnv()
+        local action = enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        local cvars, Fade = env.cvars, env.R.Fade
+        -- The reset and the tween's first write land in the same call: the shoulder starts at zero.
+        assert.equal("0.00", cvars.test_cameraOverShoulder)
+        assert.equal(1, Fade:Active())
+        step(env, 0.25)
+        local middle = tonumber(cvars.test_cameraOverShoulder)
+        assert.is_true(middle > 0 and middle < 0.6)
+        step(env, 1)
+        assert.equal("0.60", cvars.test_cameraOverShoulder)
+        assert.equal(0, Fade:Active())
+        assert.is_nil(Fade.driver:GetScript("OnUpdate"))
+        -- Indoors it glides toward 0 and has not arrived when the module is switched off.
+        env.indoors = true
+        env:Fire("ZONE_CHANGED_INDOORS")
+        env:Advance(0)
+        step(env, 0.1)
+        assert.is_true(tonumber(cvars.test_cameraOverShoulder) > 0)
+        assert.equal(1, Fade:Active())
+        env.R.Registry:Disable(action)
+        assert.equal("0", cvars.test_cameraOverShoulder)
+        assert.equal(0, Fade:Active())
+        assert.is_nil(Fade.driver:GetScript("OnUpdate"))
+        env:Advance(5)
+        assert.equal("0", cvars.test_cameraOverShoulder)
+    end)
+
+    it("ActionCam moves the camera only the way a situation exists for", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        ease(env, 2)
+        -- Mounting with the wheel already farther than 16 moves nothing, and neither does
+        -- getting off.
+        env.cameraZoom = 25
+        env.mounted = true
+        env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+        env:Advance(0)
+        assert.equal(25, env.cameraZoom)
+        local moves = env.moves
+        env.mounted = false
+        env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+        env:Advance(0)
+        assert.equal(25, env.cameraZoom)
+        assert.equal(moves, env.moves)
+        -- A building with the wheel already closer than 6 moves nothing either.
+        env.cameraZoom = 4
+        env.indoors = true
+        env:Fire("ZONE_CHANGED_INDOORS")
+        env:Advance(0)
+        assert.equal(4, env.cameraZoom)
+        assert.equal(moves, env.moves)
+        env.indoors = false
+        env:Fire("ZONE_CHANGED_INDOORS")
+        env:Advance(1)
+        assert.equal(4, env.cameraZoom)
+        assert.equal(moves, env.moves)
+        -- A mount from 4 backs off to 16, and a dismount into a city is judged against the
+        -- player's own 4, not against the mount: the city's 12 applies.
+        env.mounted = true
+        env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+        env:Advance(0)
+        assert.equal(16, env.cameraZoom)
+        env.mounted, env.resting = false, true
+        env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+        env:Advance(0)
+        assert.equal(12, env.cameraZoom)
+        env.resting = false
+        env:Fire("PLAYER_UPDATE_RESTING")
+        env:Advance(0)
+        assert.equal(4, env.cameraZoom)
+        -- From a wheel at 13 the mount backs off to 16 and the city, 12 or more, is already met:
+        -- the camera returns to the player's own 13.
+        env:Advance(3)
+        env.cameraZoom = 13
+        env.mounted = true
+        env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+        env:Advance(0)
+        assert.equal(16, env.cameraZoom)
+        env.mounted, env.resting = false, true
+        env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+        env:Advance(0)
+        assert.equal(13, env.cameraZoom)
+        -- A wheel at 14 is within two yards of the mount's 16: a nudge that small is skipped.
+        env:Advance(3)
+        env.resting = false
+        env:Fire("PLAYER_UPDATE_RESTING")
+        env:Advance(3)
+        env.cameraZoom = 14
+        moves = env.moves
+        env.mounted = true
+        env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+        env:Advance(0)
+        assert.equal(14, env.cameraZoom)
+        assert.equal(moves, env.moves)
+    end)
+
+    -- The owner's report, 5 Nov 2026: every pull in and out of combat jarred the camera.
+    it("ActionCam holds still through a fight and just after it, and a mount still gets through", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        local cvars = env.cvars
+        ease(env, 2)
+        local moves = env.moves
+        env.combat = true
+        env:Fire("PLAYER_REGEN_DISABLED")
+        env:Advance(0)
+        ease(env, 0.6)
+        assert.equal("0.60", cvars.test_cameraOverShoulder)
+        assert.equal(moves, env.moves)
+        -- Walking into a building mid-fight moves nothing until the fight is over and three
+        -- seconds have passed.
+        env.indoors = true
+        env:Fire("ZONE_CHANGED_INDOORS")
+        env:Advance(1)
+        ease(env, 0.6)
+        assert.equal("0.60", cvars.test_cameraOverShoulder)
+        assert.equal(9, env.cameraZoom)
+        env.combat = false
+        env:Fire("PLAYER_REGEN_ENABLED")
+        env:Advance(2.7)
+        assert.equal(9, env.cameraZoom)
+        -- The next pull arrives inside the hold: still nothing, and no timer left waiting.
+        env.combat = true
+        env:Fire("PLAYER_REGEN_DISABLED")
+        env:Advance(0)
+        assert.equal(0, env:ActiveTimers())
+        assert.equal(moves, env.moves)
+        env.combat = false
+        env:Fire("PLAYER_REGEN_ENABLED")
+        env:Advance(3.1)
+        ease(env, 0.6)
+        assert.equal("0.00", cvars.test_cameraOverShoulder)
+        assert.equal(6, env.cameraZoom)
+        -- Out of the building, a fight, and straight onto a mount: the mount is the player's
+        -- own doing, so it applies at once without waiting out the hold.
+        env.indoors = false
+        env:Fire("ZONE_CHANGED_INDOORS")
+        env:Advance(1.5)
+        env:Advance(2)
+        assert.equal(9, env.cameraZoom)
+        env.combat = true
+        env:Fire("PLAYER_REGEN_DISABLED")
+        env:Advance(0)
+        env.combat, env.mounted = false, true
+        env:Fire("PLAYER_REGEN_ENABLED")
+        env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+        env:Advance(0)
+        ease(env, 0.6)
+        assert.equal("0.00", cvars.test_cameraOverShoulder)
+        assert.equal(16, env.cameraZoom)
+        assert.equal(0, env:ActiveTimers())
+    end)
+
+    -- The owner's report on Forever, 5 Nov 2026: on Ranged the camera went far out, and every
+    -- NPC visit pushed it further. A full zoom in and a zoom out in one frame lose one of the
+    -- two calls; this mock drops the second the way the client does.
+    it("ActionCam moves with one zoom call a frame, and an NPC visit always comes back", function()
+        local env = cameraEnv()
+        assert.is_true(env.R.Settings:SetOption("cameraProfile", "ranged"))
+        local action = enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        assert.equal(11, env.cameraZoom)
+        assert.equal(1, env.moves)
+        for _ = 1, 3 do
+            env:Advance(3)
+            env:Fire("GOSSIP_SHOW")
+            env:Advance(0)
+            assert.equal(5, env.cameraZoom)
+            env:Advance(3)
+            env:Fire("GOSSIP_CLOSED", false)
+            env:Advance(1)
+            assert.equal(11, env.cameraZoom)
+        end
+        -- The wheel's own distance comes back too, not the profile's.
+        env:Advance(3)
+        env.cameraZoom = 17
+        env:Fire("GOSSIP_SHOW")
+        env:Advance(0)
+        assert.equal(5, env.cameraZoom)
+        env:Advance(3)
+        env:Fire("GOSSIP_CLOSED", false)
+        env:Advance(1)
+        assert.equal(17, env.cameraZoom)
+        env.R.Registry:Disable(action)
+        assert.equal(0, env.R.Fade:Active())
+    end)
+
+    it("ActionCam ends the NPC situation when a gossip hands over to a trainer and the trainer closes", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        local Broker = env.R.Broker
+        ease(env, 2)
+        env:Fire("GOSSIP_SHOW")
+        env:Advance(0)
+        assert.equal(5, env.cameraZoom)
+        assert.is_not_nil(Broker.events.PLAYER_STARTED_MOVING)
+        -- Gossip handing over to the trainer window: closed with "continuing", the trainer shown
+        -- in the same tick. Nothing moves.
+        local moves = env.moves
+        env:Fire("GOSSIP_CLOSED", true)
+        env:Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 7)
+        env:Advance(0)
+        env:Advance(1)
+        assert.equal(moves, env.moves)
+        assert.equal(5, env.cameraZoom)
+        -- The trainer closing is what used to be missed: the situation stuck for good.
+        env:Fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", 7)
+        env:Advance(0.5)
+        assert.equal(9, env.cameraZoom)
+        assert.is_nil(Broker.events.PLAYER_STARTED_MOVING)
+        -- A manager window that is not an NPC's (type 99) neither opens nor closes anything.
+        env:Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 99)
         env:Advance(0)
         assert.equal(9, env.cameraZoom)
+        assert.is_nil(Broker.events.PLAYER_STARTED_MOVING)
+    end)
+
+    it("ActionCam counts only a real NPC window: a quest item, a missing npc unit, a flight", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        local Broker = env.R.Broker
+        ease(env, 2)
+        -- A quest that starts from an item is not an NPC talking.
+        env:Fire("QUEST_DETAIL", 12345)
+        env:Advance(0)
+        assert.equal(9, env.cameraZoom)
+        assert.is_nil(Broker.events.PLAYER_STARTED_MOVING)
+        -- A stale window with no npc unit behind it opens nothing, and closes cleanly.
+        env.npc = false
+        env:Fire("GOSSIP_SHOW")
+        env:Advance(0)
+        assert.equal(9, env.cameraZoom)
+        env:Fire("GOSSIP_CLOSED", false)
+        env:Advance(1)
+        assert.is_nil(Broker.events.PLAYER_STARTED_MOVING)
+        -- A quest giver's own offer does count.
+        env.npc = true
+        env:Fire("QUEST_DETAIL", 0)
+        env:Advance(0)
+        assert.equal(5, env.cameraZoom)
+        env:Fire("QUEST_FINISHED")
+        env:Advance(1)
+        assert.equal(9, env.cameraZoom)
+        -- Gossip to a flight master, then the flight: being on the taxi ends the NPC situation
+        -- whatever windows are still on record, and the mount distance applies.
+        env:Fire("GOSSIP_SHOW")
+        env:Fire("TAXIMAP_OPENED")
+        env:Fire("GOSSIP_CLOSED", true)
+        env:Advance(0)
+        assert.equal(5, env.cameraZoom)
+        env.taxi = true
+        env:Fire("PLAYER_CONTROL_LOST")
+        env:Advance(0)
+        assert.equal(16, env.cameraZoom)
+    end)
+
+    it("ActionCam lets go of an NPC on the first step and gives the focus back when the window closes", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        local cvars, Broker = env.cvars, env.R.Broker
+        ease(env, 2)
+        assert.is_nil(Broker.events.PLAYER_STARTED_MOVING)
+        env:Fire("GOSSIP_SHOW")
+        env:Advance(0)
+        assert.equal(5, env.cameraZoom)
+        assert.equal("1", cvars.test_cameraTargetFocusInteractEnable)
+        assert.is_not_nil(Broker.events.PLAYER_STARTED_MOVING)
+        -- The first step, a moment later: the focus is off and the distance is back at once,
+        -- with the window still open.
+        env:Advance(0.2)
+        env:Fire("PLAYER_STARTED_MOVING")
+        assert.equal("0", cvars.test_cameraTargetFocusInteractEnable)
+        assert.equal(9, env.cameraZoom)
+        -- The window closing on its own at the interaction range: focus back, no event left.
+        env:Fire("GOSSIP_CLOSED", false)
+        assert.equal("1", cvars.test_cameraTargetFocusInteractEnable)
+        assert.is_nil(Broker.events.PLAYER_STARTED_MOVING)
+        env:Advance(1)
+        assert.equal(9, env.cameraZoom)
+        -- A new window starts unreleased.
+        env:Fire("GOSSIP_SHOW")
+        env:Advance(0)
+        assert.equal(5, env.cameraZoom)
+        assert.equal("1", cvars.test_cameraTargetFocusInteractEnable)
+        -- A step away, then a quest picked from the still-open gossip: the player is engaging
+        -- again, so the focus and the NPC distance come back.
+        env:Advance(0.2)
+        env:Fire("PLAYER_STARTED_MOVING")
+        assert.equal("0", cvars.test_cameraTargetFocusInteractEnable)
+        assert.equal(9, env.cameraZoom)
+        env:Fire("QUEST_DETAIL", 0)
+        assert.equal("1", cvars.test_cameraTargetFocusInteractEnable)
+        env:Advance(0)
+        assert.equal(5, env.cameraZoom)
+        -- A loading screen ends the window and the release together.
+        env:Fire("PLAYER_STARTED_MOVING")
+        env:Fire("PLAYER_ENTERING_WORLD", false, false)
+        assert.equal("1", cvars.test_cameraTargetFocusInteractEnable)
+        assert.is_nil(Broker.events.PLAYER_STARTED_MOVING)
+    end)
+
+    it("ActionCam treats a druid travel form like a mount", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        ease(env, 2)
+        env.form = 1
+        env:Fire("UPDATE_SHAPESHIFT_FORM")
+        env:Advance(0)
+        assert.equal(9, env.cameraZoom)
+        env.form = 3
+        env:Fire("UPDATE_SHAPESHIFT_FORM")
+        env:Advance(0)
+        assert.equal(16, env.cameraZoom)
+        env.form = nil
+        env:Fire("UPDATE_SHAPESHIFT_FORM")
+        env:Advance(0)
+        assert.equal(9, env.cameraZoom)
+    end)
+
+    it("ActionCam remembers where the player zooms in a situation, for the session", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        local Settings, Profiles = env.R.Settings, env.R.CameraProfiles
+        local status
+        env.R.Broker:Subscribe("REFACTOR_CAMERA_SITUATION", function(_, _, payload) status = payload end, {})
+        local function mount(on)
+            env.mounted = on
+            env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
+            env:Advance(0)
+        end
+        ease(env, 2)
+        mount(true)
+        assert.equal(16, env.cameraZoom)
+        assert.is_false(status.learned)
+        -- The wheel to 22 after the camera settled, off the mount, back on: 22.
+        env:Advance(2.5)
+        env.cameraZoom = 22
+        mount(false)
+        assert.equal(9, env.cameraZoom)
+        env:Advance(2.5)
+        mount(true)
+        assert.equal(22, env.cameraZoom)
+        assert.equal(22, status.target)
+        assert.is_true(status.learned)
+        assert.equal("out", status.direction)
+        -- A profile switch forgets it.
+        env:Advance(2.5)
+        mount(false)
+        assert.is_true(Settings:SetOption("cameraProfile", "cinematic"))
+        assert.is_true(Settings:SetOption("cameraProfile", "immersive"))
+        env:Advance(2.5)
+        mount(true)
+        assert.equal(16, env.cameraZoom)
+        -- With the option off the profile's number stands, learning included.
+        env:Advance(2.5)
+        env.cameraZoom = 23
+        mount(false)
+        env:Advance(2.5)
+        assert.is_true(Settings:SetOption("cameraLearnZoom", false))
+        mount(true)
+        assert.equal(16, env.cameraZoom)
+        env:Advance(2.5)
+        env.cameraZoom = 24
+        mount(false)
+        env:Advance(2.5)
+        mount(true)
+        assert.equal(16, env.cameraZoom)
+        -- Back on, 23 was learned while it was on; an edit to the distance forgets it.
+        assert.is_true(Settings:SetOption("cameraLearnZoom", true))
+        mount(false)
+        env:Advance(2.5)
+        assert.is_true(Profiles:SaveCopy("Mine", Profiles:Active().values))
+        env:Advance(2.5)
+        mount(true)
+        assert.equal(16, env.cameraZoom)
+        env:Advance(2.5)
+        env.cameraZoom = 21
+        mount(false)
+        env:Advance(2.5)
+        mount(true)
+        assert.equal(21, env.cameraZoom)
+        assert.is_true(Profiles:SetField("mountedDistance", 18))
+        env:Advance(0)
+        assert.equal(18, env.cameraZoom)
+        mount(false)
+        env:Advance(2.5)
+        mount(true)
+        assert.equal(18, env.cameraZoom)
+    end)
+
+    it("ActionCam leaves the wheel alone when only tilt is touched, or when a reload lands in a city", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        local Profiles = env.R.CameraProfiles
+        ease(env, 2)
+        assert.is_true(Profiles:SaveCopy("Mine", Profiles:Active().values))
+        ease(env, 2)
+        env.cameraZoom = 4
+        env.indoors = true
+        env:Fire("ZONE_CHANGED_INDOORS")
+        env:Advance(0)
+        assert.equal(4, env.cameraZoom)
+        local moves = env.moves
+        assert.is_true(Profiles:SetField("tilt", 0.6))
+        assert.equal(moves, env.moves)
+        assert.equal("0.60", env.cvars.test_cameraDynamicPitchBaseFovPad)
+        assert.equal("1", env.cvars.test_cameraDynamicPitch)
+        assert.is_true(Profiles:SetField("tilt", 0))
+        assert.equal("0", env.cvars.test_cameraDynamicPitch)
+        assert.equal(moves, env.moves)
+        assert.is_true(Profiles:SetField("swayWhileMoving", true))
+        assert.equal("0", env.cvars.test_cameraHeadMovementMovingStrength)
+        assert.equal(moves, env.moves)
+        -- A /reload with the wheel farther out than the city's 12: the camera stays.
+        env.indoors, env.resting = false, true
+        env.cameraZoom = 20
+        ease(env, 2)
+        env:Fire("PLAYER_ENTERING_WORLD", false, true)
+        assert.equal(20, env.cameraZoom)
+        assert.equal(moves, env.moves)
+    end)
+
+    it("ActionCam writes nothing over a Blizzard preset chosen while the camera was held after a fight", function()
+        local env = cameraEnv()
+        enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        ease(env, 2)
+        env.combat = true
+        env:Fire("PLAYER_REGEN_DISABLED")
+        env:Advance(0)
+        ease(env, 0.6)
+        env.combat = false
+        env:Fire("PLAYER_REGEN_ENABLED")
+        env:Advance(0)
+        assert.equal(1, env:ActiveTimers())
+        assert.is_true(env.R.Settings:SetOption("cameraProfile", "blizzardFull"))
+        assert.equal(0, env:ActiveTimers())
+        env:Advance(10)
+        assert.equal("0", env.cvars.test_cameraOverShoulder)
+        assert.same({ "actioncam full" }, env.console)
+        assert.equal(0, env.R.Fade:Active())
+    end)
+
+    it("ActionCam tells the panel what it is doing, and /refactor camtest prints the live answers", function()
+        local env = cameraEnv()
+        local owner, status = {}, nil
+        env.R.Broker:Subscribe("REFACTOR_CAMERA_SITUATION", function(_, _, payload) status = payload end, owner)
+        env:Load("Core/Commands.lua")
+        assert.same({ env.R.L.CMD_CAMERA_TEST_OFF }, env.R.Commands:Dispatch("camtest"))
+        local action = enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")
+        assert.is_true(status.active)
+        assert.is_false(status.preset)
+        assert.is_nil(status.situation)
+        assert.is_nil(status.target)
+        assert.is_nil(status.direction)
+        assert.equal(0.6, status.shoulder)
+        assert.is_false(status.reduceMovement)
+        env.reduce = true
+        env.indoors = true
+        env:Fire("ZONE_CHANGED_INDOORS")
+        env:Advance(0)
+        assert.equal("indoors", status.situation)
+        assert.equal(6, status.target)
+        assert.equal("in", status.direction)
+        assert.is_false(status.learned)
+        assert.equal(0, status.shoulder)
+        assert.is_true(status.reduceMovement)
+        env.R.Settings:SetOption("cameraProfile", "blizzardOn")
+        assert.is_true(status.preset)
+        assert.is_nil(status.situation)
+        assert.is_nil(status.shoulder)
+        env.R.Settings:SetOption("cameraProfile", "immersive")
+        env.indoors, env.form = false, 3
+        env:Fire("UPDATE_SHAPESHIFT_FORM")
+        env:Advance(0)
+        env.messages = {}
+        assert.is_nil(env.R.Commands:Dispatch("camtest"))
+        local text = table.concat(env.messages, "\n")
+        assert.matches("profile immersive", text)
+        assert.matches("situation mounted", text)
+        assert.matches("backs off to 16 yd", text)
+        assert.matches("Form ID: 3", text)
+        assert.matches("NPC unit exists: true", text)
+        assert.matches("Shoulder 0%.00", text)
+        env.R.Registry:Disable(action)
+        assert.is_false(status.active)
+        assert.is_nil(status.situation)
+        assert.equal(0, env.R.Fade:Active())
+        env.R.Broker:UnsubscribeAll(owner)
     end)
 
     it("screenshots after a delay and cancels the timer on disable", function()

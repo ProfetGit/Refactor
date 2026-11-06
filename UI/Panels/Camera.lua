@@ -3,6 +3,8 @@ local UI, L, Settings = R.UI, R.L, R.Settings
 local Theme, Profiles = R.Theme, R.CameraProfiles
 
 local CONTROL_WIDTH, SLIDER_GAP, DROPDOWN_GAP = 380, 6, 6
+-- A checkbox now sits between sliders, whose labels need the same air above them a slider leaves.
+local CHECKBOX_GAP = 10
 -- The button beside the profile dropdown, the share string box, its two buttons and the
 -- line that reports what the last press did.
 local ACTION_WIDTH, STRING_WIDTH, STRING_HEIGHT, SAVE_WIDTH, STATUS_HEIGHT = 104, 380, 54, 104, 14
@@ -63,13 +65,68 @@ local BASE_DISTANCE = { key = "distance", labelKey = "UI_CAMERA_DISTANCE" }
 local BASE_SHOULDER = { key = "shoulder", labelKey = "UI_CAMERA_SHOULDER", formatter = shoulderText }
 local BASE_SWAY = { key = "headBob", labelKey = "UI_CAMERA_HEAD_BOB", formatter = swayText }
 local BASE_PULL = { key = "targetPull", labelKey = "UI_CAMERA_TARGET_PULL", formatter = swayText }
+local BASE_TILT = { key = "tilt", labelKey = "UI_CAMERA_TILT", formatter = swayText }
 local SITUATION_DISTANCE = { suffix = "Distance", labelKey = "UI_CAMERA_SITUATION_DISTANCE" }
 local SITUATION_SHOULDER = { suffix = "Shoulder", labelKey = "UI_CAMERA_SITUATION_SHOULDER",
     formatter = shoulderText }
-local BOXES = {
-    { key = "pitch", labelKey = "UI_CAMERA_PITCH" },
-    { key = "focusInteract", labelKey = "UI_CAMERA_FOCUS_INTERACT" },
-}
+local SWAY_MOVING_BOX = { key = "swayWhileMoving", labelKey = "UI_CAMERA_SWAY_MOVING" }
+local FOCUS_BOX = { key = "focusInteract", labelKey = "UI_CAMERA_FOCUS_INTERACT" }
+
+-- The situation distance reads as the way it moves the camera: indoors only ever brings it
+-- in, a mount only ever backs it off. The leftmost stop is still "leave it".
+local function directionalDistanceText(value)
+    if value < Profiles.distanceMinimum then
+        return L.UI_CAMERA_LEAVE
+    end
+    local direction = Profiles.directions[UI.cameraSituation]
+    return string.format(direction == "in" and L.UI_CAMERA_COMES_IN or L.UI_CAMERA_BACKS_OFF, value)
+end
+SITUATION_DISTANCE.formatter = directionalDistanceText
+
+local function entryText(situation, values)
+    local distance = values[situation .. "Distance"]
+    if distance == Profiles.LEAVE then
+        distance = L.UI_CAMERA_LEAVE
+    else
+        distance = string.format(Profiles.directions[situation] == "in" and L.UI_CAMERA_AT_MOST
+            or L.UI_CAMERA_AT_LEAST, distance)
+    end
+    return string.format(L.UI_CAMERA_ENTRY, L["UI_CAMERA_SITUATION_" .. situation:upper()], distance,
+        shoulderText(values[situation .. "Shoulder"]))
+end
+
+-- What the module last reported, copied because it reuses its table. Nothing is known
+-- until the first event, which reads the same as off.
+local function nowText(status)
+    if not status.active then
+        return L.UI_CAMERA_NOW_OFF
+    elseif status.preset then
+        return L.UI_CAMERA_NOW_PRESET
+    elseif not status.situation then
+        return L.UI_CAMERA_NOW_NOWHERE
+    end
+    local parts = { L["UI_CAMERA_NOW_" .. status.situation:upper()] }
+    if status.target then
+        local text = string.format(status.direction == "in" and L.UI_CAMERA_COMING_IN
+            or L.UI_CAMERA_BACKING_OFF, status.target)
+        parts[#parts + 1] = status.learned and string.format(L.UI_CAMERA_FROM_WHEEL, text) or text
+    else
+        parts[#parts + 1] = L.UI_CAMERA_YOUR_DISTANCE
+    end
+    if status.shoulder then
+        parts[#parts + 1] = shoulderText(status.shoulder)
+    end
+    return string.format(L.UI_CAMERA_NOW, table.concat(parts, ", "))
+end
+
+-- Reduce Unexpected Camera Movement cancels the shoulder offset, which reads as the profile
+-- doing nothing, so the status says so while it is on.
+local function warningSuffix(status)
+    if not (status.active and status.reduceMovement) then
+        return ""
+    end
+    return "\n|c" .. Theme:Hex("TEXT_WARNING") .. L.UI_CAMERA_REDUCE_WARNING .. "|r"
+end
 
 local function fieldFor(spec, situation)
     return spec.key or (situation .. spec.suffix)
@@ -126,7 +183,7 @@ function UI:CameraCheckbox(block, spec)
             self:LoadCamera()
         end
     end)
-    block:Place(box, Theme.checkboxSize)
+    block:Place(box, Theme.checkboxSize, CHECKBOX_GAP)
     box.fieldKey = spec.key
     block:Index(L[spec.labelKey])
     self.cameraBoxes[#self.cameraBoxes + 1] = box
@@ -161,6 +218,7 @@ end
 function UI:BuildCameraSettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_CAMERA_HELP)
     self.cameraSliders, self.cameraBoxes, self.cameraSituation = {}, {}, DEFAULT_SITUATION
+    self.cameraNowStatus = { active = false }
     for _, profile in ipairs(Profiles.builtIn) do
         block:Index(L[profile.nameKey])
     end
@@ -193,14 +251,24 @@ function UI:BuildCameraSettings(parent)
     end
     self.cameraDetail = block:Note(nil, unpack(details))
 
+    -- One note for the status and, under it, the Accessibility warning in the warning colour:
+    -- blocks are laid out once, so it is sized for the longest status plus the warning, and a
+    -- second note would hold a gap of its own whenever the warning is not showing.
+    local longest = { active = true, situation = "battleground", target = 30, direction = "out",
+        learned = true, shoulder = -2, reduceMovement = true }
+    self.cameraNow = block:Note(nil, nowText(longest) .. warningSuffix(longest))
+    Theme:Color(self.cameraNow, "TEXT_BODY", true)
+    self:ShowCameraNow()
+    R.Broker:Subscribe("REFACTOR_CAMERA_SITUATION", self.OnCameraSituation, self)
+
     block:Group(L.UI_CAMERA_EVERYWHERE)
     self:CameraSlider(block, BASE_DISTANCE)
     self:CameraSlider(block, BASE_SHOULDER)
     self:CameraSlider(block, BASE_SWAY)
+    self:CameraCheckbox(block, SWAY_MOVING_BOX)
+    self:CameraSlider(block, BASE_TILT)
     self:CameraSlider(block, BASE_PULL)
-    for _, spec in ipairs(BOXES) do
-        self:CameraCheckbox(block, spec)
-    end
+    self:CameraCheckbox(block, FOCUS_BOX)
 
     block:Group(L.UI_CAMERA_SITUATIONS)
     self.cameraSituationDropdown = Theme:Dropdown(block, CONTROL_WIDTH, {},
@@ -212,6 +280,8 @@ function UI:BuildCameraSettings(parent)
     block:Place(self.cameraSituationDropdown, Theme.dropdownRowHeight, DROPDOWN_GAP)
     self.cameraSituationDropdown:SetLabel(L.UI_CAMERA_SITUATION)
     block:Note(L.UI_CAMERA_SITUATION_HELP)
+    self:OptionCheckbox(block, "cameraLearnZoom", "UI_CAMERA_LEARN")
+    block:Note(L.UI_CAMERA_LEARN_NOTE)
     local situations = {}
     for index, entry in ipairs(SITUATION_ENTRIES) do
         situations[index] = { value = entry.value, text = L[entry.labelKey] }
@@ -247,6 +317,36 @@ function UI:BuildCameraSettings(parent)
     self.cameraStatus:SetPoint("RIGHT")
     block:Finish()
     self:RegisterModuleSettings("interface.actionCam", block)
+end
+
+function UI:ShowCameraNow()
+    local status = self.cameraNowStatus
+    self.cameraNow:SetText(nowText(status) .. warningSuffix(status))
+end
+
+function UI:OnCameraSituation(_, status)
+    local mine = self.cameraNowStatus
+    for key in pairs(mine) do
+        mine[key] = nil
+    end
+    if status then
+        mine.active, mine.preset, mine.situation = status.active == true, status.preset, status.situation
+        mine.target, mine.direction, mine.learned = status.target, status.direction, status.learned
+        mine.shoulder, mine.reduceMovement = status.shoulder, status.reduceMovement
+    else
+        mine.active = false
+    end
+    self:ShowCameraNow()
+end
+
+-- Called when the block is opened and only then: a drag in progress must never find the
+-- situation it writes to changed under it by the player walking indoors.
+function UI:FollowCameraSituation()
+    local situation = self.cameraNowStatus and self.cameraNowStatus.situation
+    if situation and self.cameraSituationDropdown then
+        self.cameraSituation = situation
+        self:LoadCamera()
+    end
 end
 
 -- The maximum camera distance feature is one number, so its whole panel is one slider.
@@ -291,11 +391,15 @@ function UI:LoadCamera()
         box:SetEnabled(editable)
         Theme:Color(box.label, editable and "TEXT_BODY" or "TEXT_MUTED", true)
     end
-    for _, entry in ipairs(self.cameraSituationEntries) do
+    local situations = {}
+    for index, entry in ipairs(SITUATION_ENTRIES) do
+        situations[index] = { value = entry.value, text = entryText(entry.value, active.values) }
         if entry.value == self.cameraSituation then
-            self.cameraSituationDropdown:SetValueText(entry.text)
+            self.cameraSituationDropdown:SetValueText(L[entry.labelKey])
         end
     end
+    self.cameraSituationDropdown:SetEntries(situations)
+    self.cameraSituationEntries = situations
     self.cameraCustomize:SetShown(not editable)
     self.cameraDelete:SetShown(editable)
     self.cameraStatus:SetText("")

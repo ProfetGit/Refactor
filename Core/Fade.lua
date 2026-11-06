@@ -1,5 +1,5 @@
 --- @core fade
---- Purpose: the one OnUpdate driver in the addon, tweening frame alpha and going idle when nothing moves.
+--- Purpose: the one OnUpdate driver in the addon, tweening frame alpha and other values, idle when nothing moves.
 --- Requires: CreateFrame
 --- Events: none
 --- Hot: no
@@ -30,12 +30,24 @@ local function finish(self, frame)
 end
 
 local function step(_, elapsed)
-    for frame, record in pairs(Fade.records) do
+    for key, record in pairs(Fade.records) do
         record.elapsed = record.elapsed + elapsed
         local progress = min(1, record.elapsed / record.duration)
-        frame:SetAlpha(record.from + (record.to - record.from) * progress)
+        local apply = record.apply
+        if apply then
+            local eased = progress * progress * (3 - 2 * progress)
+            local value = record.from + (record.to - record.from) * eased
+            record.value = value
+            -- An error in the caller's write ends this tween rather than leaving the driver
+            -- running with a record that can never finish.
+            if not R:SafeCall(key, apply, "fade", value) then
+                progress = 1
+            end
+        else
+            key:SetAlpha(record.from + (record.to - record.from) * progress)
+        end
         if progress >= 1 then
-            finish(Fade, frame)
+            finish(Fade, key)
         end
     end
 end
@@ -60,6 +72,33 @@ function Fade:To(frame, alpha, seconds)
         end
     end
     record.from, record.to, record.duration, record.elapsed = current, alpha, duration, 0
+end
+
+-- A number that is not a frame's alpha, a camera CVar say. apply(key, value) writes it, and
+-- key is the caller's own table, so a second call for the same key retargets the tween from
+-- the value last written. A fresh tween writes from before returning, so a reset of the same
+-- value earlier in the frame never reaches the screen. Eased at both ends: a camera that
+-- starts and stops on a straight line reads as a jolt. Without a from, a zero duration, or
+-- nowhere to go, the value is written once and no record is kept.
+function Fade:Value(key, to, seconds, apply, from)
+    local record = self.records[key]
+    local current = record and record.value or from
+    if current == nil or not seconds or seconds <= 0 or current == to then
+        finish(self, key)
+        R:SafeCall(key, apply, "fade", to)
+        return
+    end
+    if not record then
+        record = pool:Acquire()
+        self.records[key] = record
+        self.active = self.active + 1
+        if self.active == 1 then
+            driver:SetScript("OnUpdate", step)
+        end
+        R:SafeCall(key, apply, "fade", current)
+    end
+    record.from, record.to, record.duration, record.elapsed = current, to, seconds, 0
+    record.apply, record.value = apply, current
 end
 
 function Fade:Snap(frame, alpha)

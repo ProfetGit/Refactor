@@ -58,14 +58,21 @@ read_globals = {
     -- Update notice: guild and group membership, and the addon message channel
     "C_ChatInfo", "IsInGuild", "IsInGroup", "IsInRaid", "LE_PARTY_CATEGORY_HOME", "LE_PARTY_CATEGORY_INSTANCE",
     -- Class coloured tooltip border
-    "UnitClassBase", "C_ClassColor",
+    "UnitClassBase", "UnitClass", "C_ClassColor",
     -- Placing a newly learned ability: the spellbook queries, the cursor and the action slots
     "C_Spell", "C_SpellBook", "C_ActionBar", "GetCursorInfo", "ClearCursor",
     -- ActionCam profiles: situation queries and the two camera zoom calls
     "IsIndoors", "IsResting", "IsMounted", "UnitOnTaxi", "UnitInVehicle", "IsPlayerInWorld",
-    "CameraZoomIn", "CameraZoomOut", "GetCameraZoom",
+    "CameraZoomIn", "CameraZoomOut", "GetCameraZoom", "GetShapeshiftFormID",
     -- Zone levels on the map: Blizzard's map frame, the label it hooks and the difficulty colour
     "WorldMapFrame", "C_Map", "UnitLevel", "GetQuestDifficultyColor",
+    -- Bag upgrade: the bag slots, the cursor and the windows where a right-click on a bag means something else
+    "NUM_BAG_SLOTS", "GetInventoryItemID", "CursorHasItem", "PutItemInBag", "CONTAINER_SLOTS",
+    "BankFrame", "MailFrame", "TradeFrame",
+    -- Send to alts: the send tab's attachments and money field, the realm, and crafting professions
+    "ATTACHMENTS_MAX_SEND", "HasSendMailItem", "GetSendMailItem", "GetSendMailItemLink", "GetSendMailPrice",
+    "ClickSendMailItemButton", "MoneyInputFrame_SetCopper", "SendMailMoney", "GetRealmName",
+    "GetProfessions", "GetProfessionInfo", "C_TradeSkillUI",
 }
 
 files["Tests/"] = { std = "+busted" }

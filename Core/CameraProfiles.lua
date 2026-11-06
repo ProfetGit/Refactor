@@ -7,7 +7,7 @@ local _, R = ...
 local Profiles = {}
 R.CameraProfiles = Profiles
 
-local MAX_CUSTOM, VERSION, CUSTOM_PREFIX = 20, "RC3", "custom:"
+local MAX_CUSTOM, VERSION, CUSTOM_PREFIX = 20, "RC4", "custom:"
 Profiles.customPrefix = CUSTOM_PREFIX
 
 -- One flat record per profile. The base fields hold while nothing special is going on;
@@ -19,18 +19,34 @@ Profiles.customPrefix = CUSTOM_PREFIX
 -- offer and what an imported string is held to.
 local DISTANCE_MINIMUM, DISTANCE_MAXIMUM, LEAVE = 4, 30, 0
 Profiles.LEAVE = LEAVE
+Profiles.distanceMinimum, Profiles.distanceMaximum = DISTANCE_MINIMUM, DISTANCE_MAXIMUM
+-- The client's own test_cameraDynamicPitchBaseFovPad, which is how far down the screen the
+-- tilt keeps the character; a profile that tilts uses this unless it says otherwise.
+local TILT_DEFAULT = 0.4
+Profiles.tiltDefault = TILT_DEFAULT
 local FIELDS = {
     { key = "distance", kind = "distance", minimum = DISTANCE_MINIMUM, maximum = DISTANCE_MAXIMUM, step = 1 },
     { key = "shoulder", kind = "number", minimum = -2, maximum = 2, step = 0.1 },
     { key = "headBob", kind = "number", minimum = 0, maximum = 1, step = 0.1 },
-    { key = "pitch", kind = "boolean" },
+    -- Off keeps the head sway to standing still: sway while running is what makes people queasy.
+    { key = "swayWhileMoving", kind = "boolean" },
+    -- How far the camera tilts down as it comes in; off at zero.
+    { key = "tilt", kind = "number", minimum = 0, maximum = 0.8, step = 0.05 },
     { key = "focusInteract", kind = "boolean" },
     -- How hard the camera turns toward the target in combat; off at zero.
     { key = "targetPull", kind = "number", minimum = 0, maximum = 1, step = 0.1 },
 }
 -- Listed in the order the dropdown offers them. Which one wins when several apply is the
 -- module's call, not the profile's.
-local SITUATIONS = { "indoors", "resting", "mounted", "combat", "npc", "dungeon", "raid", "battleground", "arena" }
+-- Combat is not one of them: a fight is when the player least wants the camera to move, so the
+-- module holds it still for the length of one instead (owner's call, 5 Nov 2026).
+local SITUATIONS = { "indoors", "resting", "mounted", "npc", "dungeon", "raid", "battleground", "arena" }
+-- Which way a situation may move the camera. Indoors and an NPC exist to bring it closer, to
+-- keep walls out and a face in frame, so they never push it out; the rest exist to show more,
+-- so they never pull it in. A camera already on the right side of the distance stays put.
+local DIRECTIONS = { indoors = "in", npc = "in", resting = "out", mounted = "out",
+    dungeon = "out", raid = "out", battleground = "out", arena = "out" }
+Profiles.directions = DIRECTIONS
 for _, situation in ipairs(SITUATIONS) do
     FIELDS[#FIELDS + 1] = { key = situation .. "Distance", kind = "distance",
         minimum = DISTANCE_MINIMUM, maximum = DISTANCE_MAXIMUM, step = 1 }
@@ -40,15 +56,26 @@ local FIELD_BY_KEY = {}
 for _, field in ipairs(FIELDS) do
     FIELD_BY_KEY[field.key] = field
 end
+-- RC3 strings carried pitch, an on or off for the tilt, and no sway setting; they decode
+-- against this and are upgraded before they are checked.
+local LEGACY_FIELD_BY_KEY = { pitch = { key = "pitch", kind = "boolean" } }
+-- Fields a profile used to carry and no longer does. A string or a saved record that still has
+-- them reads as though they were not there.
+local DROPPED = { combatDistance = true, combatShoulder = true }
+for key, field in pairs(FIELD_BY_KEY) do
+    if key ~= "tilt" and key ~= "swayWhileMoving" then
+        LEGACY_FIELD_BY_KEY[key] = field
+    end
+end
 Profiles.fields = FIELDS
 Profiles.situations = SITUATIONS
 
--- base is distance, shoulder, head sway, pitch, interact focus, target pull; each situation
--- is distance and shoulder.
+-- base is distance, shoulder, head sway, sway while moving, tilt, interact focus, target
+-- pull; each situation is distance and shoulder.
 local function record(base, situations)
     local values = {
-        distance = base[1], shoulder = base[2], headBob = base[3],
-        pitch = base[4], focusInteract = base[5], targetPull = base[6],
+        distance = base[1], shoulder = base[2], headBob = base[3], swayWhileMoving = base[4],
+        tilt = base[5], focusInteract = base[6], targetPull = base[7],
     }
     for _, situation in ipairs(SITUATIONS) do
         local pair = situations[situation]
@@ -57,35 +84,40 @@ local function record(base, situations)
     return values
 end
 
--- Immersive: the camera sits close over the right shoulder, tilts as it comes in, follows
--- the head only faintly, and turns to face an NPC you talk to. Indoors it comes in and
--- centres so walls stay out of frame; talking to an NPC it comes in closest; in a city or
--- inn it backs off to show the place; mounted it backs off and centres; in combat the
--- shoulder offset grows so the target sits off centre. Dungeons sit a little further
--- back, raids and battlegrounds much further for awareness, arenas in between. No target
--- pull: with a mouse the player already steers, and the camera pulling toward a target
--- fights them.
+-- Read every distance below with the situation's direction: indoors 6 is "at most 6", a
+-- mount 16 is "at least 16". None of the mouse profiles pulls toward the target: with a
+-- mouse the player already steers, and a camera turning on its own fights them. The head
+-- sway is for standing still in all of them.
+--
+-- Immersive: close over the right shoulder, tilting as it comes in, a faint head sway, and
+-- it turns to face an NPC you talk to. Indoors it comes in and centres so walls stay out of
+-- frame; talking to an NPC it comes in closest; in a city or inn it backs off to show the
+-- place; mounted it backs off and centres.
+-- Dungeons sit a little further back, raids and battlegrounds much further, arenas between.
+--
+-- Melee: hard over the shoulder, and the wheel is the player's: nothing moves the camera
+-- except a mount and a raid, because a melee player sits exactly as close as they want.
+--
+-- Ranged: a little wider than Immersive with a milder shoulder, as a caster or a hunter
+-- wants. Pulled in on 5 Nov 2026 after the owner found it too far out everywhere.
+--
+-- Cinematic: further back than Immersive, centred, tilting a little more, and closest of
+-- all at an NPC, which it frames over the shoulder. For the story and the screenshots.
+--
+-- Wide view: far back everywhere, nothing that moves on its own, only the turn toward an
+-- NPC left on. Indoors a little closer so walls stay out of it; an NPC window leaves the
+-- camera where it is. For tanks, healers and raids. Its id is still raider.
+--
+-- Comfort: Immersive's distances with everything that moves on its own switched off: no
+-- tilt, no sway, no focus, one mild shoulder offset everywhere, and an NPC window does not
+-- move the camera. For the player the others make queasy who still wants the
+-- situations.
 --
 -- Controller, in two: a stick has no free hand to keep the target in frame, so the camera
 -- pulls toward it, and no head movement, which fights a stick-driven camera. Ranged sits
 -- wide and pulls gently, because a hard pull toward a mob forty yards out yanks the view
 -- on every tab. Melee sits close and hard over the shoulder and pulls hard, so a target
 -- being circled stays in frame.
---
--- Cinematic: further back than Immersive, centred, tilting as it comes in, no sway, and
--- closest of all at an NPC. For the story and the screenshots, not the fight.
---
--- Raider: far back everywhere, nothing that moves on its own, ActionCam on for the turn
--- toward an NPC and nothing else. Indoors a little closer so walls stay out of it; an NPC
--- window leaves the camera where it is.
---
--- Melee: hard over the shoulder, a medium target pull, so a target you circle stays in frame,
--- and the wheel is the player's: nothing moves the camera except a mount and a raid,
--- because a melee player sits exactly as close as they want. A ranged player would hate it.
---
--- Comfort: Immersive's distances with everything that moves on its own switched off: no
--- tilt, no sway, no focus, a mild shoulder, and no move for an NPC window. For the player
--- it makes queasy who still wants the situations.
 --
 -- Blizzard's three are run through the console command that defines them; the numbers
 -- here are only what the sliders show for them, taken from the community documentation
@@ -94,63 +126,69 @@ end
 local BLIZZARD_DISTANCE = 15
 local function blizzard(shoulder)
     local pair = { BLIZZARD_DISTANCE, shoulder }
-    return { indoors = pair, resting = pair, mounted = pair, combat = pair, npc = pair,
+    return { indoors = pair, resting = pair, mounted = pair, npc = pair,
         dungeon = pair, raid = pair, battleground = pair, arena = pair }
 end
 Profiles.builtIn = {
     { id = "immersive", nameKey = "CAMERA_PROFILE_IMMERSIVE", detailKey = "CAMERA_PROFILE_IMMERSIVE_DETAIL",
-        values = record({ 9, 0.6, 0.3, true, true, 0 }, {
-            indoors = { 6, 0 }, resting = { 12, 0.3 }, mounted = { 16, 0 }, combat = { 9, 0.9 },
+        values = record({ 9, 0.6, 0.3, false, TILT_DEFAULT, true, 0 }, {
+            indoors = { 6, 0 }, resting = { 12, 0.6 }, mounted = { 16, 0 },
             npc = { 5, 0.8 }, dungeon = { 14, 0.3 }, raid = { 24, 0 }, battleground = { 16, 0.3 },
             arena = { 12, 0.5 },
         }) },
-    { id = "controllerRanged", nameKey = "CAMERA_PROFILE_CONTROLLER_RANGED",
-        detailKey = "CAMERA_PROFILE_CONTROLLER_RANGED_DETAIL",
-        values = record({ 13, 0.8, 0, true, true, 0.3 }, {
-            indoors = { 8, 0.2 }, resting = { 14, 0.4 }, mounted = { 17, 0 }, combat = { 13, 0.9 },
-            npc = { 6, 0.8 }, dungeon = { 15, 0.3 }, raid = { 24, 0 }, battleground = { 16, 0.4 },
-            arena = { 14, 0.6 },
+    { id = "melee", nameKey = "CAMERA_PROFILE_MELEE", detailKey = "CAMERA_PROFILE_MELEE_DETAIL",
+        values = record({ LEAVE, 1, 0.2, false, TILT_DEFAULT, true, 0 }, {
+            indoors = { LEAVE, 0.6 }, resting = { LEAVE, 1 }, mounted = { 16, 0 },
+            npc = { LEAVE, 0.8 }, dungeon = { LEAVE, 0.8 }, raid = { 12, 0.6 }, battleground = { LEAVE, 0.8 },
+            arena = { LEAVE, 0.9 },
         }) },
-    { id = "controllerMelee", nameKey = "CAMERA_PROFILE_CONTROLLER_MELEE",
-        detailKey = "CAMERA_PROFILE_CONTROLLER_MELEE_DETAIL",
-        values = record({ 8, 1, 0, true, true, 0.8 }, {
-            indoors = { 6, 0.6 }, resting = { 10, 0.5 }, mounted = { 17, 0 }, combat = { 8, 1 },
-            npc = { 5, 0.8 }, dungeon = { 9, 0.8 }, raid = { 20, 0.5 }, battleground = { 10, 0.8 },
-            arena = { 9, 0.9 },
+    { id = "ranged", nameKey = "CAMERA_PROFILE_RANGED", detailKey = "CAMERA_PROFILE_RANGED_DETAIL",
+        values = record({ 11, 0.4, 0.2, false, TILT_DEFAULT, true, 0 }, {
+            indoors = { 7, 0.2 }, resting = { 12, 0.4 }, mounted = { 15, 0 },
+            npc = { 5, 0.6 }, dungeon = { 14, 0.2 }, raid = { 22, 0 }, battleground = { 15, 0.3 },
+            arena = { 13, 0.4 },
         }) },
     { id = "cinematic", nameKey = "CAMERA_PROFILE_CINEMATIC", detailKey = "CAMERA_PROFILE_CINEMATIC_DETAIL",
-        values = record({ 12, 0, 0, true, true, 0 }, {
-            indoors = { 7, 0 }, resting = { 14, 0 }, mounted = { 18, 0 }, combat = { 12, 0.3 },
+        values = record({ 12, 0, 0.3, false, 0.5, true, 0 }, {
+            indoors = { 7, 0 }, resting = { 14, 0 }, mounted = { 18, 0 },
             npc = { 4, 0.6 }, dungeon = { 15, 0 }, raid = { 24, 0 }, battleground = { 16, 0 },
             arena = { 13, 0 },
         }) },
     { id = "raider", nameKey = "CAMERA_PROFILE_RAIDER", detailKey = "CAMERA_PROFILE_RAIDER_DETAIL",
-        values = record({ 24, 0, 0, false, true, 0 }, {
-            indoors = { 20, 0 }, resting = { 24, 0 }, mounted = { 24, 0 }, combat = { 24, 0 },
-            npc = { LEAVE, 0 }, dungeon = { 24, 0 }, raid = { 24, 0 }, battleground = { 24, 0 },
+        values = record({ 24, 0, 0, false, 0, true, 0 }, {
+            indoors = { 18, 0 }, resting = { 24, 0 }, mounted = { 24, 0 },
+            npc = { LEAVE, 0 }, dungeon = { 24, 0 }, raid = { 28, 0 }, battleground = { 24, 0 },
             arena = { 24, 0 },
         }) },
-    { id = "melee", nameKey = "CAMERA_PROFILE_MELEE", detailKey = "CAMERA_PROFILE_MELEE_DETAIL",
-        values = record({ LEAVE, 1, 0.2, true, true, 0.5 }, {
-            indoors = { LEAVE, 0.6 }, resting = { LEAVE, 0.5 }, mounted = { 16, 0 }, combat = { LEAVE, 1 },
-            npc = { LEAVE, 0.8 }, dungeon = { LEAVE, 0.8 }, raid = { 12, 0.6 }, battleground = { LEAVE, 0.8 },
-            arena = { LEAVE, 0.9 },
-        }) },
     { id = "comfort", nameKey = "CAMERA_PROFILE_COMFORT", detailKey = "CAMERA_PROFILE_COMFORT_DETAIL",
-        values = record({ 9, 0.3, 0, false, false, 0 }, {
-            indoors = { 6, 0.3 }, resting = { 12, 0.3 }, mounted = { 16, 0.3 }, combat = { 9, 0.3 },
+        values = record({ 9, 0.3, 0, false, 0, false, 0 }, {
+            indoors = { 6, 0.3 }, resting = { 12, 0.3 }, mounted = { 16, 0.3 },
             npc = { LEAVE, 0.3 }, dungeon = { 14, 0.3 }, raid = { 24, 0.3 }, battleground = { 16, 0.3 },
             arena = { 12, 0.3 },
         }) },
+    { id = "controllerMelee", nameKey = "CAMERA_PROFILE_CONTROLLER_MELEE",
+        detailKey = "CAMERA_PROFILE_CONTROLLER_MELEE_DETAIL",
+        values = record({ 8, 1, 0, false, TILT_DEFAULT, true, 0.8 }, {
+            indoors = { 6, 0.6 }, resting = { 10, 1 }, mounted = { 17, 0 },
+            npc = { 5, 0.8 }, dungeon = { 9, 0.8 }, raid = { 20, 0.5 }, battleground = { 10, 0.8 },
+            arena = { 9, 0.9 },
+        }) },
+    { id = "controllerRanged", nameKey = "CAMERA_PROFILE_CONTROLLER_RANGED",
+        detailKey = "CAMERA_PROFILE_CONTROLLER_RANGED_DETAIL",
+        values = record({ 13, 0.8, 0, false, TILT_DEFAULT, true, 0.3 }, {
+            indoors = { 8, 0.2 }, resting = { 14, 0.8 }, mounted = { 17, 0 },
+            npc = { 6, 0.8 }, dungeon = { 15, 0.3 }, raid = { 24, 0 }, battleground = { 16, 0.4 },
+            arena = { 14, 0.6 },
+        }) },
     { id = "blizzardBasic", nameKey = "CAMERA_PROFILE_BLIZZARD_BASIC", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
         console = "actioncam basic",
-        values = record({ BLIZZARD_DISTANCE, 0, 0, true, false, 0 }, blizzard(0)) },
+        values = record({ BLIZZARD_DISTANCE, 0, 0, true, TILT_DEFAULT, false, 0 }, blizzard(0)) },
     { id = "blizzardOn", nameKey = "CAMERA_PROFILE_BLIZZARD_ON", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
         console = "actioncam on",
-        values = record({ BLIZZARD_DISTANCE, 1, 1, true, true, 0 }, blizzard(1)) },
+        values = record({ BLIZZARD_DISTANCE, 1, 1, true, TILT_DEFAULT, true, 0 }, blizzard(1)) },
     { id = "blizzardFull", nameKey = "CAMERA_PROFILE_BLIZZARD_FULL", detailKey = "CAMERA_PROFILE_BLIZZARD_DETAIL",
         console = "actioncam full",
-        values = record({ BLIZZARD_DISTANCE, 1, 1, true, true, 0.5 }, blizzard(1)) },
+        values = record({ BLIZZARD_DISTANCE, 1, 1, true, TILT_DEFAULT, true, 0.5 }, blizzard(1)) },
 }
 Profiles.default = "immersive"
 local BUILT_IN_BY_ID = {}
@@ -189,6 +227,56 @@ function Profiles:Valid(values)
         end
     end
     return count == #FIELDS
+end
+
+-- An older record carried pitch, an on or off for the tilt, and swayed whether moving or
+-- not, so it becomes the default tilt or none and keeps swaying while moving. Safe to run
+-- twice, and it changes nothing it does not recognise: whether the result is a profile is
+-- still Valid's call.
+function Profiles:Upgrade(values)
+    if type(values) ~= "table" then
+        return values
+    end
+    local result = copy(values)
+    for key in pairs(DROPPED) do
+        result[key] = nil
+    end
+    if type(result.pitch) == "boolean" then
+        if result.tilt == nil then
+            result.tilt = result.pitch and TILT_DEFAULT or 0
+        end
+        result.pitch = nil
+        if result.swayWhileMoving == nil then
+            result.swayWhileMoving = true
+        end
+    end
+    return result
+end
+
+-- The saved custom profiles, upgraded and filtered one by one, so a record that is not a
+-- profile is dropped alone instead of taking every other profile with it. Names are taken
+-- in sorted order, so which ones survive a table past the cap does not depend on hashing.
+function Profiles:CleanCustom(custom)
+    local result = {}
+    if type(custom) ~= "table" then
+        return result
+    end
+    local names = {}
+    for name in pairs(custom) do
+        if R.Codec:ValidName(name) then
+            names[#names + 1] = name
+        end
+    end
+    table.sort(names)
+    local count = 0
+    for _, name in ipairs(names) do
+        local values = self:Upgrade(custom[name])
+        if count < MAX_CUSTOM and self:Valid(values) then
+            result[name] = values
+            count = count + 1
+        end
+    end
+    return result
 end
 
 -- The saved table of custom profiles: name to values.
@@ -270,24 +358,31 @@ function Profiles:Decode(data)
         return nil, "invalid_encoding"
     end
     local version, name, body = payload:match("^([^\n]*)\n([^\n]*)\n(.*)$")
-    if version ~= VERSION or not R.Codec:ValidName(name) then
+    local legacy = version == "RC3"
+    if (version ~= VERSION and not legacy) or not R.Codec:ValidName(name) then
         return nil, "invalid_profile"
     end
+    local fieldByKey = legacy and LEGACY_FIELD_BY_KEY or FIELD_BY_KEY
     local values = {}
     for line in body:gmatch("([^\n]*)\n") do
         local key, text = line:match("^([%w_]+)=(.+)$")
-        local field = key and FIELD_BY_KEY[key]
-        if not field or values[key] ~= nil then
-            return nil, "invalid_profile"
-        end
-        if field.kind == "boolean" then
-            if text ~= "1" and text ~= "0" then
+        if not (key and DROPPED[key]) then
+            local field = key and fieldByKey[key]
+            if not field or values[key] ~= nil then
                 return nil, "invalid_profile"
             end
-            values[key] = text == "1"
-        else
-            values[key] = tonumber(text)
+            if field.kind == "boolean" then
+                if text ~= "1" and text ~= "0" then
+                    return nil, "invalid_profile"
+                end
+                values[key] = text == "1"
+            else
+                values[key] = tonumber(text)
+            end
         end
+    end
+    if legacy then
+        values = self:Upgrade(values)
     end
     if not self:Valid(values) then
         return nil, "invalid_profile"

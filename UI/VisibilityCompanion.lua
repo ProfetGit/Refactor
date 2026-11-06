@@ -1,70 +1,30 @@
 local _, R = ...
 local UI, L, Settings = R.UI, R.L, R.Settings
-local Theme, Rules, Conditions = R.Theme, R.Visibility, R.Conditions
+local Theme, Rules = R.Theme, R.Visibility
 
-local WIDTH, PAD, GAP = 420, 18, 8
-local DROPDOWN_STEP, NOTE_HEIGHT, LABEL_STEP = 36, 44, 20
-local BOX_WIDTH, BOX_STEP, BOX_COLUMNS = 190, 26, 2
-local SLIDER_STEP = LibStub("LibRefactorTheme-1.0").sliderRowHeight + 6
+local WIDTH, PAD, GAP = 360, 18, 8
+local NOTE_HEIGHT, LABEL_STEP, BOX_STEP = 44, 20, 26
 local TAB_GAP, TAB_ROW = 4, 30
 -- A system stands for at most the four chat elements, so four tabs are built and shown as needed.
 local MAX_TABS = 4
-
-local function onStep(value, step)
-    local scale = math.floor(1 / step + 0.5)
-    return math.floor(value * scale + 0.5) / scale
-end
-
-local function secondsText(value)
-    if value < 0.025 then
-        return L.UI_VIS_INSTANT
-    end
-    return string.format(L.UI_VIS_SECONDS, value)
-end
-
-local function percentText(value)
-    return string.format(L.UI_VIS_PERCENT, math.floor(value * 100 + 0.5))
-end
+local MODULE_ID = "interface.visibility"
+-- The picker's value for "no behaviour". A behaviour id starts with a letter, so it can never be this.
+local NONE = ""
 
 local Companion = {}
 Companion.__index = Companion
 
-function Companion:Write(patch)
-    if self.current then
-        Rules:SetRule(self.current, patch)
+function Companion:Assigned()
+    local behaviour = self.current and Rules:BehaviourFor(self.current, self.module.place)
+    return behaviour and behaviour.id or NONE
+end
+
+-- Writes to the setup in use where the player stands, the one they are looking at.
+function Companion:Assign(value)
+    if self.current and self.module.place then
+        Rules:Assign({ self.current }, self.module.place, value ~= NONE and value or nil)
     end
     self:Load()
-end
-
-function Companion:Set(block, labelKey, field, y)
-    local label = Theme:Text(block, L[labelKey], "small", "TEXT_MUTED")
-    label:SetPoint("TOPLEFT", PAD, y)
-    local boxes = {}
-    for index, name in ipairs(Conditions.names) do
-        local box = Theme:Checkbox(block, BOX_WIDTH, L["VIS_COND_" .. name], function()
-            local set = {}
-            for _, other in ipairs(boxes) do
-                if other:GetChecked() then
-                    set[other.condition] = true
-                end
-            end
-            self:Write({ [field] = set })
-        end)
-        local column, row = (index - 1) % BOX_COLUMNS, math.floor((index - 1) / BOX_COLUMNS)
-        box:SetPoint("TOPLEFT", PAD + column * BOX_WIDTH, y - LABEL_STEP - row * BOX_STEP)
-        box.condition = name
-        boxes[index] = box
-    end
-    return boxes, LABEL_STEP + math.ceil(#Conditions.names / BOX_COLUMNS) * BOX_STEP
-end
-
-function Companion:Slider(block, labelKey, field, range, formatter, y)
-    local slider = Theme:Slider(block, WIDTH - PAD * 2, range.minimum, range.maximum, range.step, function(value)
-        self:Write({ [field] = onStep(value, range.step) })
-    end)
-    slider:SetPoint("TOPLEFT", PAD, y)
-    slider:SetLabel(L[labelKey], formatter)
-    return slider
 end
 
 -- Built once, at the module's first enable, and kept for the session (rule 11).
@@ -106,42 +66,24 @@ function Companion:Build()
     self.status:SetJustifyV("TOP")
     y = y - LABEL_STEP - GAP
 
-    local modeEntries = {}
-    for index, mode in ipairs(Rules.modes) do
-        modeEntries[index] = { value = mode, text = L["VIS_MODE_" .. mode] }
+    self.behaviour = Theme:Dropdown(frame, WIDTH - PAD * 2, {},
+        function(value) return self:Assigned() == value end,
+        function(value) self:Assign(value) end)
+    self.behaviour:SetPoint("TOPLEFT", PAD, y)
+    self.behaviour:SetLabel(L.UI_VIS_BEHAVIOUR)
+    y = y - Theme.dropdownRowHeight - GAP
+
+    self.setup = Theme:Text(frame, "", "small", "TEXT_MUTED")
+    self.setup:SetPoint("TOPLEFT", PAD, y)
+    self.setup:SetJustifyV("TOP")
+    self.setup:SetWordWrap(true)
+    local variants = {}
+    for _, place in ipairs(Rules.places) do
+        variants[#variants + 1] = string.format(L.UI_VIS_COMPANION_SETUP, L["VIS_PLACE_" .. place])
     end
-    self.mode = Theme:Dropdown(frame, WIDTH - PAD * 2, modeEntries,
-        function(value) return self.current ~= nil and Rules:Rule(self.current).mode == value end,
-        function(value) self:Write({ mode = value }) end)
-    self.mode:SetPoint("TOPLEFT", PAD, y)
-    self.mode:SetLabel(L.UI_VIS_MODE)
-    y = y - DROPDOWN_STEP - 2
-
-    local zoneEntries = {}
-    for index, zone in ipairs(Rules.zones) do
-        zoneEntries[index] = { value = zone, text = L["VIS_ZONE_" .. zone] }
-    end
-    self.zone = Theme:Dropdown(frame, WIDTH - PAD * 2, zoneEntries,
-        function(value) return self.current ~= nil and Rules:Rule(self.current).zone == value end,
-        function(value) self:Write({ zone = value }) end)
-    self.zone:SetPoint("TOPLEFT", PAD, y)
-    self.zone:SetLabel(L.UI_VIS_ZONE)
-    y = y - DROPDOWN_STEP - GAP
-
-    self.shownAlpha = self:Slider(frame, "UI_VIS_SHOWN_ALPHA", "shownAlpha", Rules.shownRange, percentText, y)
-    self.hiddenAlpha = self:Slider(frame, "UI_VIS_HIDDEN_ALPHA", "hiddenAlpha", Rules.hiddenRange, percentText,
-        y - SLIDER_STEP)
-    y = y - SLIDER_STEP * 2 - GAP
-
-    local height
-    self.showBoxes, height = self:Set(frame, "UI_VIS_SHOW_WHEN", "showWhen", y)
-    y = y - height - GAP
-    self.hideBoxes, height = self:Set(frame, "UI_VIS_HIDE_WHEN", "hideWhen", y)
-    y = y - height - GAP
-
-    self.fadeIn = self:Slider(frame, "UI_VIS_FADE_IN", "fadeIn", Rules.fadeRange, secondsText, y)
-    self.fadeOut = self:Slider(frame, "UI_VIS_FADE_OUT", "fadeOut", Rules.fadeRange, secondsText, y - SLIDER_STEP)
-    y = y - SLIDER_STEP * 2 - GAP
+    local setupHeight = UI.Widgets:TextHeight(self.setup, WIDTH - PAD * 2, unpack(variants))
+    self.setup:SetHeight(setupHeight)
+    y = y - setupHeight - GAP
 
     self.blobs = Theme:Checkbox(frame, WIDTH - PAD * 2, L.UI_VIS_BLOBS, function(widget)
         Settings:SetOption("uiVisibilityBlobs", widget:GetChecked() == true)
@@ -149,14 +91,11 @@ function Companion:Build()
     self.blobs:SetPoint("TOPLEFT", PAD, y)
     y = y - BOX_STEP - GAP
 
-    self.sameForAll = Theme:Button(frame, WIDTH - PAD * 2, "", function()
-        if self.current then
-            Rules:SetRules(Rules:Siblings(self.current, self.siblings), Rules:Rule(self.current))
-        end
-        self:Load()
+    self.edit = Theme:Button(frame, WIDTH - PAD * 2, L.UI_VIS_EDIT_BEHAVIOURS, function()
+        UI:OpenModule(MODULE_ID)
     end)
-    self.sameForAll:SetPoint("TOPLEFT", PAD, y)
-    y = y - self.sameForAll.height - GAP
+    self.edit:SetPoint("TOPLEFT", PAD, y)
+    y = y - self.edit.height - GAP
 
     -- Measured against every group's note, so the longest one (the minimap's, four lines)
     -- is not cut off by a box sized for three.
@@ -171,7 +110,6 @@ function Companion:Build()
     self.note:SetHeight(noteHeight)
     y = y - noteHeight
     frame:SetHeight(-y + PAD)
-    self.siblings = {}
 end
 
 -- Anchored to Blizzard's dialog, so a drag of theirs carries ours; nothing of theirs is
@@ -191,13 +129,13 @@ function Companion:Close()
     self.frame:Hide()
 end
 
-local function loadBoxes(boxes, set)
-    for _, box in ipairs(boxes) do
-        local supported = Conditions:Supported(box.condition)
-        box:SetChecked(set[box.condition] == true)
-        box:SetEnabled(supported)
-        Theme:Color(box.label, supported and "TEXT_BODY" or "TEXT_MUTED", true)
+-- None first, then every behaviour in the player's order.
+function Companion:Entries()
+    local entries = { { value = NONE, text = L.VIS_BEHAVIOUR_NONE } }
+    for _, behaviour in ipairs(Rules:Behaviours()) do
+        entries[#entries + 1] = { value = behaviour.id, text = Rules:Name(behaviour) }
     end
+    return entries
 end
 
 function Companion:Load()
@@ -234,20 +172,13 @@ function Companion:Load()
         self.status:SetText(L.UI_VIS_STATUS_OK)
         Theme:Color(self.status, "TEXT_MUTED", true)
     end
-    local rule = Rules:Rule(group.id)
-    self.mode:SetValueText(L["VIS_MODE_" .. rule.mode])
-    self.zone:SetValueText(L["VIS_ZONE_" .. rule.zone])
-    self.shownAlpha:SetValue(rule.shownAlpha)
-    self.hiddenAlpha:SetValue(rule.hiddenAlpha)
-    loadBoxes(self.showBoxes, rule.showWhen)
-    loadBoxes(self.hideBoxes, rule.hideWhen)
-    self.fadeIn:SetValue(rule.fadeIn)
-    self.fadeOut:SetValue(rule.fadeOut)
+    self.behaviour:SetEntries(self:Entries())
+    local assigned = Rules:BehaviourFor(group.id, self.module.place)
+    self.behaviour:SetValueText(assigned and Rules:Name(assigned) or L.VIS_BEHAVIOUR_NONE)
+    local place = self.module.place or Rules.world
+    self.setup:SetText(string.format(L.UI_VIS_COMPANION_SETUP, L["VIS_PLACE_" .. place]))
     self.blobs:SetShown(group.extras ~= nil)
     self.blobs:SetChecked(Settings:GetOption("uiVisibilityBlobs") == true)
-    local siblings = Rules:Siblings(group.id, self.siblings)
-    self.sameForAll.label:SetText(string.format(L.UI_VIS_SAME_FOR_ALL, L["VIS_KIND_" .. group.kind]))
-    self.sameForAll:SetShown(#siblings > 0)
     self.note:SetText(group.noteKey and L[group.noteKey] or "")
 end
 

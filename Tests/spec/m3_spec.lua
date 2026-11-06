@@ -23,6 +23,11 @@ local function loaded(addons)
     }
     env.C_TooltipInfo = { GetUnit = function() return nil end }
     env.IsInGroup = function() return false end
+    env.IsInRaid = function() return false end
+    env.UnitExists = function() return false end
+    env.UnitIsUnit = function() return false end
+    env.UnitClass = function() return nil end
+    env.C_ClassColor = { GetClassColor = function() return nil end }
     env.issecretvalue = function() return false end
     env.UnitName = function() return "Me" end
     env.C_NamePlate = { GetNamePlateForUnit = function() return nil end }

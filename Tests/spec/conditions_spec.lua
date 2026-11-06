@@ -14,6 +14,9 @@ local function base()
         env[name] = function() return env.world[key] end
     end
     env.IsInInstance = function() return env.world.instance, env.world.instance and "party" or "none" end
+    -- Nothing at all while not casting, the way the client answers.
+    env.UnitCastingInfo = function(unit) if unit == "player" and env.world.cast == "cast" then return "Fireball" end end
+    env.UnitChannelInfo = function(unit) if unit == "player" and env.world.cast == "channel" then return "Drain" end end
     env.seen = {}
     local owner = {}
     env.R.Broker:Subscribe("REFACTOR_CONDITIONS_CHANGED", function(_, _, flags)
@@ -110,6 +113,56 @@ describe("conditions", function()
         assert.is_true(env.seen[1].resting)
         env:Fire("PLAYER_ENTERING_WORLD")
         assert.equal(1, #env.seen)
+    end)
+
+    it("takes the player's own casts from the event, never another unit's", function()
+        local env, Conditions = base()
+        local consumer = {}
+        local flags = Conditions:Start(consumer)
+        assert.is_false(flags.casting)
+        assert.is_true(Conditions:Supported("casting"))
+        -- Held for the player alone: the client never hands over a party member's cast.
+        assert.equal("player", env.R.Broker.frame.unitEvents.UNIT_SPELLCAST_START)
+        env:Fire("UNIT_SPELLCAST_START", "party1")
+        assert.equal(0, #env.seen)
+        local sequence = { { "UNIT_SPELLCAST_START", true }, { "UNIT_SPELLCAST_STOP", false },
+            { "UNIT_SPELLCAST_CHANNEL_START", true }, { "UNIT_SPELLCAST_CHANNEL_STOP", false },
+            { "UNIT_SPELLCAST_EMPOWER_START", true }, { "UNIT_SPELLCAST_EMPOWER_STOP", false } }
+        for index, entry in ipairs(sequence) do
+            env:Fire(entry[1], "player")
+            assert.equal(entry[2], flags.casting, entry[1])
+            assert.equal(index, #env.seen)
+        end
+        -- After a loading screen the client is asked, by counting what it returns.
+        env.world.cast = "channel"
+        env:Fire("PLAYER_ENTERING_WORLD")
+        assert.is_true(flags.casting)
+        env.world.cast = nil
+        env:Fire("PLAYER_ENTERING_WORLD")
+        assert.is_false(flags.casting)
+        Conditions:Stop(consumer)
+        assert.is_false(env.R.Broker.frame:IsEventRegistered("UNIT_SPELLCAST_START"))
+        assert.is_nil(env.R.Broker.frame.unitEvents.UNIT_SPELLCAST_START)
+    end)
+
+    it("reads the kind of instance as dungeon, raid or pvp, a delve and an arena among them", function()
+        local env, Conditions = base()
+        local kind = "none"
+        env.IsInInstance = function() return kind ~= "none", kind end
+        local flags = Conditions:Start({})
+        assert.same({ false, false, false }, { flags.dungeon, flags.raid, flags.pvp })
+        local expected = { party = "dungeon", scenario = "dungeon", raid = "raid", pvp = "pvp", arena = "pvp" }
+        for instance, flag in pairs(expected) do
+            kind = instance
+            env:Fire("PLAYER_ENTERING_WORLD")
+            for _, name in ipairs({ "dungeon", "raid", "pvp" }) do
+                assert.equal(name == flag, flags[name], instance .. " " .. name)
+            end
+            assert.is_true(flags.inInstance, instance)
+        end
+        kind = "none"
+        env:Fire("PLAYER_ENTERING_WORLD")
+        assert.same({ false, false, false, false }, { flags.dungeon, flags.raid, flags.pvp, flags.inInstance })
     end)
 
     it("treats a reader this client lacks as unsupported and false, and keeps the rest", function()

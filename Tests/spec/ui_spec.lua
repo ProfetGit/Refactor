@@ -424,6 +424,30 @@ describe("window chrome", function()
         for _, slider in ipairs(UI.cameraSliders) do
             assert.is_false(slider.slider:IsEnabled(), "a built-in profile's slider is live")
         end
+        for _, box in ipairs(UI.cameraBoxes) do
+            assert.is_false(box:IsEnabled(), "a built-in profile's checkbox is live")
+        end
+        -- Remembering the wheel is the player's option, not a profile field, so it stays live.
+        local learn
+        for _, box in ipairs(UI.displayToggles) do
+            if box.optionKey == "cameraLearnZoom" then learn = box end
+        end
+        assert.is_truthy(learn)
+        assert.is_true(learn:IsEnabled())
+        assert.is_true(learn:GetChecked())
+        learn:SetChecked(false)
+        learn:GetScript("OnClick")(learn)
+        assert.is_false(Settings:GetOption("cameraLearnZoom"))
+        learn:SetChecked(true)
+        learn:GetScript("OnClick")(learn)
+        assert.is_true(Settings:GetOption("cameraLearnZoom"))
+        -- Each situation lists what the profile does there, and which way it moves the camera.
+        local entryByValue = {}
+        for _, entry in ipairs(UI.cameraSituationEntries) do entryByValue[entry.value] = entry.text end
+        assert.equal("Indoors: at most 6 yd, centred", entryByValue.indoors)
+        assert.equal("Mounted or flying: at least 16 yd, centred", entryByValue.mounted)
+        -- A fight holds the camera still, so it is not a situation to tune.
+        assert.is_nil(entryByValue.combat)
         -- A built-in offers Customize in the slot beside it, never Delete.
         assert.is_true(UI.cameraCustomize:IsShown())
         assert.is_false(UI.cameraDelete:IsShown())
@@ -441,15 +465,41 @@ describe("window chrome", function()
             if slider.spec.key == "shoulder" then shoulder = slider end
             if slider.spec.suffix == "Distance" then situationDistance = slider end
         end
+        local tilt, swayBox
+        for _, slider in ipairs(UI.cameraSliders) do
+            if slider.spec.key == "tilt" then tilt = slider end
+        end
+        for _, box in ipairs(UI.cameraBoxes) do
+            assert.is_true(box:IsEnabled())
+            if box.fieldKey == "swayWhileMoving" then swayBox = box end
+        end
+        assert.is_truthy(tilt)
+        assert.is_truthy(swayBox)
+        tilt.slider:GetScript("OnValueChanged")(tilt.slider, 0.35)
+        assert.equal(0.35, Settings:GetOption("cameraProfiles")[mine].tilt)
+        assert.equal("35%", tilt.valueText:GetText())
+        tilt.slider:GetScript("OnValueChanged")(tilt.slider, 0)
+        assert.equal(R.L.UI_CAMERA_OFF, tilt.valueText:GetText())
+        swayBox:SetChecked(not Settings:GetOption("cameraProfiles")[mine].swayWhileMoving)
+        local before = Settings:GetOption("cameraProfiles")[mine].swayWhileMoving
+        swayBox:GetScript("OnClick")(swayBox)
+        assert.equal(not before, Settings:GetOption("cameraProfiles")[mine].swayWhileMoving)
         shoulder.slider:GetScript("OnValueChanged")(shoulder.slider, 1.2)
         assert.equal(1.2, Settings:GetOption("cameraProfiles")[mine].shoulder)
         assert.equal("1.2 right", shoulder.valueText:GetText())
         -- The situation dropdown swaps which field the two sliders under it show.
-        assert.equal("6 yards", situationDistance.valueText:GetText())
+        assert.equal("comes in to 6 yards", situationDistance.valueText:GetText())
         for _, entry in ipairs(UI.cameraSituationDropdown.button:OpenMenu()) do
             if entry.value == "mounted" then entry.choose() end
         end
-        assert.equal("16 yards", situationDistance.valueText:GetText())
+        assert.equal("backs off to 16 yards", situationDistance.valueText:GetText())
+        for _, entry in ipairs(UI.cameraSituationDropdown.button:OpenMenu()) do
+            if entry.value == "indoors" then entry.choose() end
+        end
+        assert.equal("comes in to 6 yards", situationDistance.valueText:GetText())
+        for _, entry in ipairs(UI.cameraSituationDropdown.button:OpenMenu()) do
+            if entry.value == "mounted" then entry.choose() end
+        end
         situationDistance.slider:GetScript("OnValueChanged")(situationDistance.slider, 20)
         assert.equal(20, Settings:GetOption("cameraProfiles")[mine].mountedDistance)
         -- The leftmost stop sits one under the smallest distance and stores "leave it".
@@ -480,6 +530,158 @@ describe("window chrome", function()
         UI.cameraString:SetText("not a profile")
         UI.cameraImport:GetScript("OnClick")(UI.cameraImport)
         assert.equal(R.L.UI_CAMERA_ERR_invalid_encoding, UI.cameraStatus:GetText())
+    end)
+
+    it("camera block reports the live situation, warns about reduced movement, follows only on open", function()
+        local _, R = loaded()
+        local UI = R.UI
+        local L = R.L
+        UI:Toggle()
+        assert.equal(L.UI_CAMERA_NOW_OFF, UI.cameraNow:GetText())
+        R.Broker:Emit("REFACTOR_CAMERA_SITUATION", { active = true, situation = "indoors", target = 6,
+            direction = "in", learned = false, shoulder = 0 })
+        assert.equal("Right now: indoors, coming in to 6 yards, centred", UI.cameraNow:GetText())
+        local status = { active = true, situation = "mounted", target = 22, direction = "out", learned = true,
+            shoulder = 0, reduceMovement = true }
+        R.Broker:Emit("REFACTOR_CAMERA_SITUATION", status)
+        -- The warning rides under the status in the warning colour, only while the option is on.
+        local text = UI.cameraNow:GetText()
+        assert.equal("Right now: mounted, backing off to 22 yards from your wheel, centred",
+            text:match("^([^\n]*)\n"))
+        assert.is_truthy(text:find(L.UI_CAMERA_REDUCE_WARNING, 1, true))
+        assert.is_truthy(text:find("|c" .. R.Theme:Hex("TEXT_WARNING"), 1, true))
+        status.reduceMovement = false
+        status.situation, status.target, status.direction, status.shoulder = "resting", nil, nil, 1
+        R.Broker:Emit("REFACTOR_CAMERA_SITUATION", status)
+        assert.equal("Right now: in a city or inn, your distance, 1.0 right", UI.cameraNow:GetText())
+        R.Broker:Emit("REFACTOR_CAMERA_SITUATION", { active = true, preset = true })
+        assert.equal(L.UI_CAMERA_NOW_PRESET, UI.cameraNow:GetText())
+        R.Broker:Emit("REFACTOR_CAMERA_SITUATION", { active = true })
+        assert.equal(L.UI_CAMERA_NOW_NOWHERE, UI.cameraNow:GetText())
+        R.Broker:Emit("REFACTOR_CAMERA_SITUATION", { active = false, reduceMovement = true })
+        assert.equal(L.UI_CAMERA_NOW_OFF, UI.cameraNow:GetText())
+        -- The dropdown is not dragged along by the status: only opening the block moves it.
+        R.Broker:Emit("REFACTOR_CAMERA_SITUATION", { active = true, situation = "raid", target = 30,
+            direction = "out" })
+        assert.equal("indoors", UI.cameraSituation)
+        UI:ToggleExpanded("interface.actionCam")
+        assert.equal("raid", UI.cameraSituation)
+        assert.equal(L.UI_CAMERA_SITUATION_RAID, UI.cameraSituationDropdown.button:GetDefaultText())
+        R.Broker:Emit("REFACTOR_CAMERA_SITUATION", { active = true, situation = "combat" })
+        UI:LoadCamera()
+        assert.equal("raid", UI.cameraSituation)
+        -- Closing and opening again with no situation keeps the current selection.
+        UI:ToggleExpanded("interface.actionCam")
+        R.Broker:Emit("REFACTOR_CAMERA_SITUATION", { active = true })
+        UI:ToggleExpanded("interface.actionCam")
+        assert.equal("raid", UI.cameraSituation)
+    end)
+
+    it("visibility block hands behaviours out per setup and edits a behaviour in one place", function()
+        local _, R = loaded()
+        local UI, Rules, L = R.UI, R.Visibility, R.L
+        UI:Toggle()
+        UI:ToggleExpanded("interface.visibility")
+        assert.is_true(UI.moduleSettings["interface.visibility"]:IsShown())
+        -- One row per element, and a fresh install gives none of them a behaviour.
+        assert.equal(#Rules.groups, #UI.visRows)
+        local main
+        for _, row in ipairs(UI.visRows) do
+            assert.equal(L.VIS_BEHAVIOUR_NONE, row.button:GetDefaultText(), row.groupId)
+            if row.groupId == "bars.main" then main = row end
+        end
+        local entries = main.button:OpenMenu()
+        assert.equal(#Rules.starters + 1, #entries)
+        assert.is_true(entries[1].selected)
+        assert.equal(L.VIS_BEHAVIOUR_combatHud, entries[3].text)
+        entries[3].choose()
+        assert.equal("combatHud", Rules:BehaviourFor("bars.main", "world").id)
+        assert.equal(L.VIS_BEHAVIOUR_combatHud, main.button:GetDefaultText())
+        -- A place with no setup of its own shows World's choices and takes no clicks there.
+        local places = UI.visSetupDropdown.button:OpenMenu()
+        assert.equal(#Rules.places, #places)
+        assert.equal(string.format(L.UI_VIS_SETUP_USES_WORLD, L.VIS_PLACE_city), places[2].text)
+        places[2].choose()
+        assert.equal("city", UI.visPlace)
+        assert.is_false(main.button:IsEnabled())
+        assert.equal(L.VIS_BEHAVIOUR_combatHud, main.button:GetDefaultText())
+        assert.is_true(UI.visOwnSetup:IsEnabled())
+        UI.visOwnSetup:SetChecked(true)
+        UI.visOwnSetup:GetScript("OnClick")(UI.visOwnSetup)
+        assert.is_true(Rules:HasOwnSetup("city"))
+        assert.is_true(main.button:IsEnabled())
+        main.button:OpenMenu()[1].choose()
+        assert.is_nil(Rules:BehaviourFor("bars.main", "city"))
+        assert.equal("combatHud", Rules:BehaviourFor("bars.main", "world").id)
+        -- World is always a setup of its own.
+        UI.visSetupDropdown.button:OpenMenu()[1].choose()
+        assert.is_false(UI.visOwnSetup:IsEnabled())
+
+        -- The editor opens on the first behaviour; one change reaches every element with it.
+        assert.equal("fadeAway", UI.visBehaviour)
+        UI.visBehaviourDropdown.button:OpenMenu()[2].choose()
+        assert.equal("combatHud", UI.visBehaviour)
+        assert.equal(L.UI_VIS_USES_ONE, UI.visUses:GetText())
+        local resting
+        for _, slider in ipairs(UI.visSliders) do
+            if slider.field == "resting" then resting = slider end
+        end
+        resting.slider:GetScript("OnValueChanged")(resting.slider, 0.35)
+        assert.equal(0.35, Rules:Behaviour("combatHud").resting)
+        assert.equal("35%", resting.valueText:GetText())
+        -- Each condition is listed once; ticking Hide on a revealing one moves it across.
+        local combat
+        for _, row in ipairs(UI.visConditions) do
+            if row.condition == "combat" then combat = row end
+        end
+        assert.is_true(combat.reveal:GetChecked())
+        combat.hide:SetChecked(true)
+        combat.hide:GetScript("OnClick")(combat.hide)
+        assert.equal("hide", Rules:ConditionRole(Rules:Behaviour("combatHud"), "combat"))
+        assert.is_false(combat.reveal:GetChecked())
+        combat.hide:SetChecked(false)
+        combat.hide:GetScript("OnClick")(combat.hide)
+        assert.is_nil(Rules:ConditionRole(Rules:Behaviour("combatHud"), "combat"))
+        -- Copy as new selects the copy; a name takes on Enter, and a taken one is refused and said so.
+        UI.visCopy:GetScript("OnClick")(UI.visCopy)
+        local copy = UI.visBehaviour
+        assert.is_not.equal("combatHud", copy)
+        assert.equal(L.UI_VIS_COPIED, UI.visStatus:GetText())
+        assert.equal(L.UI_VIS_USES_NONE, UI.visUses:GetText())
+        UI.visName:SetText("Raid bars")
+        UI.visName:GetScript("OnEnterPressed")(UI.visName)
+        assert.equal("Raid bars", Rules:Name(Rules:Behaviour(copy)))
+        UI.visName:SetText("Fade away")
+        UI.visName:GetScript("OnEnterPressed")(UI.visName)
+        assert.equal("Raid bars", Rules:Name(Rules:Behaviour(copy)))
+        assert.equal(L.UI_VIS_ERR_name_taken, UI.visStatus:GetText())
+        -- Deleted, its elements go back to the game's look and the editor moves on.
+        UI.visBehaviourDropdown.button:OpenMenu()[2].choose()
+        UI.visDelete:GetScript("OnClick")(UI.visDelete)
+        assert.is_nil(Rules:Behaviour("combatHud"))
+        assert.equal(L.VIS_BEHAVIOUR_NONE, main.button:GetDefaultText())
+        assert.equal(L.UI_VIS_DELETED, UI.visStatus:GetText())
+        assert.equal("fadeAway", UI.visBehaviour)
+
+        -- The Edit Mode companion is one picker, writing to the setup in use where the player is.
+        local module = { place = "world", groups = {} }
+        local companion = UI:CreateVisibilityCompanion(module)
+        companion:Open(UI.frame, { "bars.main" })
+        assert.equal(L.VIS_BEHAVIOUR_NONE, companion.behaviour.button:GetDefaultText())
+        assert.equal(string.format(L.UI_VIS_COMPANION_SETUP, L.VIS_PLACE_world), companion.setup:GetText())
+        local picks = companion.behaviour.button:OpenMenu()
+        assert.equal(#Rules:Behaviours() + 1, #picks)
+        picks[2].choose()
+        assert.equal(Rules:Behaviours()[1].id, Rules:BehaviourFor("bars.main", "world").id)
+        assert.equal(Rules:Name(Rules:Behaviours()[1]), companion.behaviour.button:GetDefaultText())
+        module.place = "city"
+        companion:Load()
+        assert.equal(string.format(L.UI_VIS_COMPANION_SETUP, L.VIS_PLACE_city), companion.setup:GetText())
+        companion.behaviour.button:OpenMenu()[1].choose()
+        assert.is_nil(Rules:BehaviourFor("bars.main", "city"))
+        assert.is_table(Rules:BehaviourFor("bars.main", "world"))
+        companion:Close()
+        assert.equal(0, #R.errors)
     end)
 
     it("puts every numeric option on a slider the validator accepts end to end", function()

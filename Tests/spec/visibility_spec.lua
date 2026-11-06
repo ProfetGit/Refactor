@@ -50,9 +50,11 @@ local function base(options)
     env.IsResting = function() return env.world.resting end
     env.UnitExists = function() return false end
     env.IsInGroup = function() return false end
-    env.IsInInstance = function() return false, "none" end
+    env.IsInInstance = function() return env.world.instance ~= nil, env.world.instance or "none" end
     env.IsStealthed = function() return false end
     env.UnitIsDeadOrGhost = function() return false end
+    env.UnitCastingInfo = function() end
+    env.UnitChannelInfo = function() end
     env.FCF_FadeInChatFrame = function() end
     env.GameTooltip = fakeFrame("GameTooltip")
     env.GameTooltip.SetOwner = function(tip, owner) tip.owner, tip.shown = owner, true end
@@ -89,6 +91,8 @@ local function base(options)
         self.dialog, self.ids = dialog, { unpack(ids) }
     end
     function env.companion:Close() self.ids = nil end
+    -- The module asks it to reread when the setup in use changes, since it names that setup.
+    function env.companion:Load() self.loads = (self.loads or 0) + 1 end
     R.UI = { CreateVisibilityCompanion = function() return env.companion end }
     -- The calendar sits inside the minimap cluster, so it belongs to two groups at once.
     env.MinimapCluster.children = { env.GameTimeFrame }
@@ -149,177 +153,288 @@ local function settle(env, R)
     step(R, 5)
 end
 
+-- A behaviour with every field, for the resolver and the validator.
+local function behaviourOf(patch)
+    local entry = { id = "test", resting = 0.2, revealed = 0.9, mouseover = true, reveal = {}, hide = {},
+        together = false, fadeIn = 0.15, fadeOut = 0.4 }
+    for key, value in pairs(patch or {}) do entry[key] = value end
+    return entry
+end
+
+-- A whole option written at once: these behaviours, and assign(group) naming each group's.
+local function apply(R, behaviours, assign)
+    local settings = { behaviours = behaviours, setups = { world = {} } }
+    for _, group in ipairs(R.Visibility.groups) do
+        settings.setups.world[group.id] = assign(group)
+    end
+    assert.is_true(R.Settings:SetOption("uiVisibility", settings))
+end
+
+local function fadeAway(id, patch)
+    local entry = behaviourOf({ id = id, resting = 0, revealed = 1, together = true })
+    for key, value in pairs(patch or {}) do entry[key] = value end
+    return entry
+end
+
+-- The first version's immersion preset rebuilt from behaviours: everything fades away and
+-- comes back under the mouse a whole side of the screen at a time, each side a behaviour that
+-- reveals together. The chat input art takes no mouse, so it simply stays faded. overrides
+-- gives single groups another behaviour: "alone" comes back by itself, and extra adds more.
+local SIDES = {
+    ["chat.frames"] = "left", ["chat.tabs"] = "left", ["chat.buttons"] = "left",
+    ["unit.player"] = "top", ["unit.target"] = "top", ["unit.party"] = "top", ["unit.raid"] = "top",
+    ["hud.status"] = "bottom", ["hud.microMenu"] = "bottom", ["hud.bags"] = "bottom",
+    ["hud.objectives"] = "right", ["hud.minimap"] = "right", ["hud.minimapButtons"] = "right",
+}
+local function immersion(R, overrides, extra)
+    local behaviours = { fadeAway("left"), fadeAway("top"), fadeAway("bottom"), fadeAway("right"),
+        fadeAway("alone", { together = false }), fadeAway("art", { mouseover = false, together = false }) }
+    for _, entry in ipairs(extra or {}) do behaviours[#behaviours + 1] = entry end
+    overrides = overrides or {}
+    apply(R, behaviours, function(group)
+        if overrides[group.id] ~= nil then
+            return overrides[group.id] or nil
+        end
+        return group.kind == "bars" and "bottom" or SIDES[group.id] or "art"
+    end)
+end
+
 describe("visibility rules", function()
-    local R, Rules
+    local env, R, Rules
     before_each(function()
-        local env = Runtime.new()
+        env = Runtime.new()
         R, Rules = env.R, env.R.Visibility
     end)
 
-    it("resolves hover, then show, then hide, then the base mode, for every combination", function()
-        -- mode, hovered, a show condition holds, a hide condition holds, expected alpha
+    it("resolves mouseover, then a hide, then a reveal, then rest, for every combination", function()
+        -- mouseover on, hovered, a reveal condition holds, a hide condition holds, expected opacity
         local cases = {
-            { "always", false, false, false, 1 }, { "always", false, false, true, 0 },
-            { "always", false, true, false, 1 }, { "always", false, true, true, 1 },
-            { "always", true, false, false, 1 }, { "always", true, false, true, 0 },
-            { "always", true, true, false, 1 }, { "always", true, true, true, 1 },
-            { "mouseover", false, false, false, 0 }, { "mouseover", false, false, true, 0 },
-            { "mouseover", false, true, false, 1 }, { "mouseover", false, true, true, 1 },
-            { "mouseover", true, false, false, 1 }, { "mouseover", true, false, true, 1 },
-            { "mouseover", true, true, false, 1 }, { "mouseover", true, true, true, 1 },
-            { "hidden", false, false, false, 0 }, { "hidden", false, false, true, 0 },
-            { "hidden", false, true, false, 1 }, { "hidden", false, true, true, 1 },
-            { "hidden", true, false, false, 0 }, { "hidden", true, false, true, 0 },
-            { "hidden", true, true, false, 1 }, { "hidden", true, true, true, 1 },
+            { true, true, true, true, 0.9 }, { true, true, true, false, 0.9 },
+            { true, true, false, true, 0.9 }, { true, true, false, false, 0.9 },
+            { true, false, true, true, 0 }, { true, false, true, false, 0.9 },
+            { true, false, false, true, 0 }, { true, false, false, false, 0.2 },
+            { false, true, true, true, 0 }, { false, true, true, false, 0.9 },
+            { false, true, false, true, 0 }, { false, true, false, false, 0.2 },
+            { false, false, true, true, 0 }, { false, false, true, false, 0.9 },
+            { false, false, false, true, 0 }, { false, false, false, false, 0.2 },
         }
-        local state = { combat = true, mounted = true, resting = false }
-        -- The answer is the rule's own opacity for that state, not a bare 1 or 0.
-        local dimmed = Rules:DefaultRule()
-        dimmed.mode, dimmed.shownAlpha, dimmed.hiddenAlpha = "mouseover", 0.7, 0.2
-        assert.equal(0.7, Rules:Resolve(dimmed, state, true))
-        assert.equal(0.2, Rules:Resolve(dimmed, state, false))
-        dimmed.hideWhen = { mounted = true }
-        assert.equal(0.7, Rules:Resolve(dimmed, state, true))
-        dimmed.mode = "always"
-        assert.equal(0.2, Rules:Resolve(dimmed, state, true))
+        local state = { combat = true, mounted = true, resting = false, dead = false }
         for _, case in ipairs(cases) do
-            local rule = Rules:DefaultRule()
-            rule.mode = case[1]
-            -- resting never holds, so a set naming only it is a set with no hit.
-            rule.showWhen = case[3] and { combat = true } or { resting = true }
-            rule.hideWhen = case[4] and { mounted = true } or { resting = true }
-            assert.equal(case[5], Rules:Resolve(rule, state, case[2]),
-                table.concat({ case[1], tostring(case[2]), tostring(case[3]), tostring(case[4]) }, " "))
+            -- resting and dead never hold, so a set naming only one of them has no hit.
+            local entry = behaviourOf({ mouseover = case[1],
+                reveal = case[3] and { combat = true } or { resting = true },
+                hide = case[4] and { mounted = true } or { dead = true } })
+            assert.equal(case[5], Rules:Resolve(entry, state, case[2]),
+                table.concat({ tostring(case[1]), tostring(case[2]), tostring(case[3]), tostring(case[4]) }, " "))
         end
     end)
 
-    it("validates a rule and the whole option, and drops a bad saved table on init", function()
-        local good = Rules:DefaultRule()
-        assert.is_true(Rules:ValidRule(good))
-        local function broken(patch)
-            local rule = Rules:DefaultRule()
-            for key, value in pairs(patch) do rule[key] = value end
-            return rule
+    it("validates a behaviour and the whole option, and keeps the good parts of a bad saved table", function()
+        assert.is_true(Rules:ValidSettings(Rules:Default()))
+        for _, starter in ipairs(Rules.starters) do
+            assert.is_true(Rules:ValidBehaviour(starter), starter.id)
         end
-        assert.is_false(Rules:ValidRule(broken({ mode = "sometimes" })))
-        assert.is_false(Rules:ValidRule(broken({ showWhen = { flying = true } })))
-        assert.is_false(Rules:ValidRule(broken({ hideWhen = { combat = 1 } })))
-        assert.is_false(Rules:ValidRule(broken({ fadeIn = 3 })))
-        assert.is_false(Rules:ValidRule(broken({ fadeOut = -1 })))
-        assert.is_false(Rules:ValidRule(broken({ fadeOut = 0 / 0 })))
-        assert.is_false(Rules:ValidRule(broken({ shownAlpha = 0.05 })))
-        assert.is_false(Rules:ValidRule(broken({ shownAlpha = 1.5 })))
-        assert.is_false(Rules:ValidRule(broken({ hiddenAlpha = -0.1 })))
-        assert.is_true(Rules:ValidRule(broken({ hiddenAlpha = 0.5, shownAlpha = 0.1 })))
-        assert.is_false(Rules:ValidRule(broken({ zone = "middle" })))
-        assert.is_true(Rules:ValidRule(broken({ zone = "right" })))
-        assert.is_false(Rules:ValidRule(broken({ extra = true })))
-        local short = Rules:DefaultRule()
-        short.fadeIn = nil
-        assert.is_false(Rules:ValidRule(short))
-        assert.is_true(Rules:ValidSettings({ preset = "off", groups = {} }))
-        assert.is_true(Rules:ValidSettings({ preset = "custom", groups = { ["bars.main"] = good } }))
-        assert.is_false(Rules:ValidSettings({ preset = "mine", groups = {} }))
-        assert.is_false(Rules:ValidSettings({ preset = "off" }))
-        assert.is_false(Rules:ValidSettings({ preset = "off", groups = { ["not an id"] = good } }))
-        assert.is_false(Rules:ValidSettings({ preset = "off", groups = { ["bars.main"] = { mode = "always" } } }))
-        assert.is_false(R.Settings:SetOption("uiVisibility", { preset = "off", groups = { ["bars.main"] = {} } }))
-        local account = { options = { uiVisibility = { preset = "immersion", groups = { ["bars.main"] = {} } } } }
+        assert.is_true(Rules:ValidBehaviour(behaviourOf()))
+        assert.is_true(Rules:ValidBehaviour(behaviourOf({ name = "Raid bars", resting = 0, revealed = 0.1 })))
+        local broken = {
+            { resting = -0.1 }, { revealed = 0.05 }, { revealed = 1.5 }, { fadeIn = 3 }, { fadeOut = 0 / 0 },
+            { mouseover = "yes" }, { together = 1 }, { reveal = { flying = true } }, { hide = { combat = 1 } },
+            -- The instance kinds pick a setup; they are not triggers.
+            { reveal = { raid = true } },
+            -- One condition cannot both reveal and hide.
+            { reveal = { combat = true }, hide = { combat = true } },
+            { extra = true }, { id = "1x" }, { id = "a b" }, { id = 7 },
+            { name = "" }, { name = "two\nlines" }, { name = string.rep("x", 33) }, { name = " lead" },
+        }
+        for index, patch in ipairs(broken) do
+            assert.is_false(Rules:ValidBehaviour(behaviourOf(patch)), "case " .. index)
+        end
+        local missing = behaviourOf()
+        missing.fadeIn = nil
+        assert.is_false(Rules:ValidBehaviour(missing))
+
+        local function settings(patch)
+            local value = { behaviours = { behaviourOf() }, setups = { world = { ["bars.main"] = "test" } } }
+            for key, part in pairs(patch or {}) do value[key] = part end
+            return value
+        end
+        assert.is_true(Rules:ValidSettings(settings()))
+        assert.is_true(Rules:ValidSettings(settings({ setups = { world = {}, raid = { ["hud.gone"] = "test" } } })))
+        assert.is_false(Rules:ValidSettings(settings({ setups = { raid = {} } })))
+        assert.is_false(Rules:ValidSettings(settings({ setups = { world = {}, moon = {} } })))
+        assert.is_false(Rules:ValidSettings(settings({ setups = { world = { ["bars.main"] = "nope" } } })))
+        assert.is_false(Rules:ValidSettings(settings({ setups = { world = { ["not an id"] = "test" } } })))
+        assert.is_false(Rules:ValidSettings(settings({ behaviours = { behaviourOf(), behaviourOf() } })))
+        assert.is_false(Rules:ValidSettings(settings({ behaviours = { [2] = behaviourOf() } })))
+        assert.is_false(Rules:ValidSettings(settings({ preset = "off" })))
+        assert.is_false(R.Settings:SetOption("uiVisibility", settings({ setups = {} })))
+
+        -- At login one bad behaviour costs itself and its assignments, not everything else.
+        local account = { options = { uiVisibility = {
+            behaviours = { behaviourOf(), behaviourOf({ id = "bad", resting = 4 }) },
+            setups = { world = { ["bars.main"] = "test", ["bars.right"] = "bad" }, moon = {},
+                city = { ["hud.bags"] = "test" } },
+        } } }
         R.Settings:Init(account, {}, "Player-test")
-        assert.equal("off", account.options.uiVisibility.preset)
-        assert.same({}, account.options.uiVisibility.groups)
+        local value = account.options.uiVisibility
+        assert.equal(1, #value.behaviours)
+        assert.same({ ["bars.main"] = "test" }, value.setups.world)
+        assert.same({ ["hud.bags"] = "test" }, value.setups.city)
+        assert.is_nil(value.setups.moon)
+        -- Something that is not a table at all is replaced by the default.
+        account = { options = { uiVisibility = "everything" } }
+        R.Settings:Init(account, {}, "Player-test")
+        assert.same(Rules:Default(), account.options.uiVisibility)
     end)
 
-    it("writes a preset into every group and turns the selection custom on a hand edit", function()
-        assert.is_false(Rules:ApplyPreset("nope"))
-        assert.is_true(Rules:ApplyPreset("combatOnly"))
-        local settings = Rules:Settings()
-        assert.equal("combatOnly", settings.preset)
-        for _, group in ipairs(Rules.groups) do
-            local rule = settings.groups[group.id]
-            assert.is_table(rule, group.id)
-            if group.kind == "bars" or group.kind == "unit" then
-                assert.equal("hidden", rule.mode)
-                assert.same({ combat = true }, rule.showWhen)
-            elseif group.kind == "art" then
-                assert.equal("hidden", rule.mode)
-                assert.same({}, rule.showWhen)
-            else
-                assert.equal("mouseover", rule.mode)
-                assert.same({}, rule.showWhen)
-            end
-            assert.same({}, rule.hideWhen)
-            assert.equal(0.15, rule.fadeIn)
-            assert.equal(0.4, rule.fadeOut)
-            assert.equal(Rules.zoneDefaults[group.id] or "none", rule.zone, group.id)
+    it("converts the first version's rules, one behaviour per distinct rule and zone", function()
+        env:Load("Locales/Visibility.enUS.lua")
+        local function rule(patch)
+            local old = { mode = "mouseover", showWhen = { combat = true },
+                hideWhen = { combat = true, mounted = true }, fadeIn = 0.2, fadeOut = 0.5, shownAlpha = 0.8,
+                hiddenAlpha = 0.1, zone = "bottom" }
+            for key, value in pairs(patch or {}) do old[key] = value end
+            return old
         end
-        assert.equal("bottom", Rules:Rule("bars.pet").zone)
-        assert.equal("bottom", Rules:Rule("hud.bags").zone)
-        assert.equal("left", Rules:Rule("chat.tabs").zone)
-        assert.equal("top", Rules:Rule("unit.raid").zone)
-        assert.equal("right", Rules:Rule("hud.objectives").zone)
-        -- A zone is part of the rule, so changing it is a hand edit.
-        assert.is_true(Rules:SetRule("hud.objectives", { zone = "none" }))
-        assert.equal("custom", Rules:Settings().preset)
-        assert.is_true(Rules:ApplyPreset("combatOnly"))
-        assert.is_true(Rules:ApplyPreset("mounted"))
-        assert.same({ mounted = true }, Rules:Rule("chat.tabs").hideWhen)
-        assert.equal("always", Rules:Rule("chat.tabs").mode)
-        -- A fade or an opacity is tuning and keeps the preset; a rule change makes it custom.
-        assert.is_true(Rules:SetRule("bars.main", { fadeOut = 1 }))
-        assert.is_true(Rules:SetRule("bars.main", { shownAlpha = 0.6, hiddenAlpha = 0.2 }))
-        assert.equal("mounted", Rules:Settings().preset)
-        assert.equal(1, Rules:Rule("bars.main").fadeOut)
-        assert.equal(0.6, Rules:Rule("bars.main").shownAlpha)
-        assert.is_true(Rules:SetRule("bars.main", { showWhen = { combat = true, resting = true } }))
-        assert.equal("custom", Rules:Settings().preset)
-        assert.same({ combat = true, resting = true }, Rules:Rule("bars.main").showWhen)
-        assert.same({ mounted = true }, Rules:Rule("bars.main").hideWhen)
-        assert.is_false(Rules:SetRule("bars.main", { mode = "gone" }))
-        assert.is_false(Rules:SetRule("hud.nothing", { mode = "hidden" }))
-        assert.equal("custom", Rules:Settings().preset)
-        -- Presets keep the fades and opacities the player chose.
-        assert.is_true(Rules:ApplyPreset("off"))
-        assert.equal(1, Rules:Rule("bars.main").fadeOut)
-        assert.equal(0.2, Rules:Rule("bars.main").hiddenAlpha)
-        assert.equal("always", Rules:Rule("bars.main").mode)
-        -- What Settings hands out is a copy: editing it changes nothing saved.
-        Rules:Rule("bars.main").mode = "hidden"
-        assert.equal("always", Rules:Rule("bars.main").mode)
-        Rules:Settings().groups["bars.main"].mode = "hidden"
-        assert.equal("always", Rules:Rule("bars.main").mode)
+        local account = { options = { uiVisibility = { preset = "custom", groups = {
+            ["bars.main"] = rule(), ["bars.right"] = rule(),
+            -- The same rule in another zone stays apart, so two sides never merge.
+            ["hud.bags"] = rule({ zone = "right" }),
+            -- Always visible with nothing hiding it is the game's own look: no behaviour.
+            ["chat.frames"] = rule({ mode = "always", showWhen = {}, hideWhen = {}, shownAlpha = 1, zone = "left" }),
+            ["chat.tabs"] = rule({ mode = "always", showWhen = { resting = true }, hideWhen = { mounted = true },
+                shownAlpha = 0.6, zone = "none" }),
+            ["unit.player"] = rule({ mode = "hidden", hideWhen = {}, hiddenAlpha = 0.3, zone = "top" }),
+            ["hud.gone"] = rule({ zone = "none" }),
+            ["bad id"] = rule(),
+        } } } }
+        R.Settings:Init(account, {}, "Player-test")
+        local value = account.options.uiVisibility
+        assert.is_true(Rules:ValidSettings(value))
+        for index, starter in ipairs(Rules.starters) do
+            assert.equal(starter.id, value.behaviours[index].id)
+        end
+        assert.equal(#Rules.starters + 5, #value.behaviours)
+        local main = Rules:BehaviourFor("bars.main", "world")
+        assert.equal(main, Rules:BehaviourFor("bars.right", "world"))
+        -- A show condition beat a hide on the same condition, so combat stays a reveal.
+        assert.same({ id = main.id, name = main.name, resting = 0.1, revealed = 0.8, mouseover = true,
+            reveal = { combat = true }, hide = { mounted = true }, together = true, fadeIn = 0.2, fadeOut = 0.5 }, main)
+        assert.truthy(main.name:match("^Imported %d$"))
+        assert.is_not.equal(main.id, Rules:BehaviourFor("hud.bags", "world").id)
+        assert.is_nil(Rules:BehaviourFor("chat.frames", "world"))
+        local tabs = Rules:BehaviourFor("chat.tabs", "world")
+        assert.same({ 0.6, 0.6, false, {}, { mounted = true }, false },
+            { tabs.resting, tabs.revealed, tabs.mouseover, tabs.reveal, tabs.hide, tabs.together })
+        local player = Rules:BehaviourFor("unit.player", "world")
+        assert.same({ 0.3, 0.8, false, { combat = true }, true },
+            { player.resting, player.revealed, player.mouseover, player.reveal, player.together })
+        assert.is_string(value.setups.world["hud.gone"])
+        assert.is_nil(value.setups.world["bad id"])
+        -- Converted once: a second login changes nothing.
+        assert.same(value, Rules:Clean(value))
     end)
 
-    it("writes one patch onto several groups at once, whole or not at all", function()
-        assert.is_true(Rules:ApplyPreset("off"))
+    it("edits, copies, renames and deletes behaviours, and every element that has one follows", function()
+        env:Load("Locales/Visibility.enUS.lua")
         local seen = {}
         R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", function(_, _, key) seen[#seen + 1] = key end, seen)
-        local bars = { "bars.main", "bars.bottomLeft", "bars.pet" }
-        assert.is_true(Rules:SetRules(bars, { mode = "mouseover", showWhen = { combat = true }, shownAlpha = 0.8 }))
+        assert.is_true(Rules:Assign({ "bars.main", "bars.right" }, "world", "combatHud"))
         assert.same({ "uiVisibility" }, seen)
-        for _, id in ipairs(bars) do
-            local rule = Rules:Rule(id)
-            assert.equal("mouseover", rule.mode, id)
-            assert.same({ combat = true }, rule.showWhen, id)
-            assert.equal(0.8, rule.shownAlpha, id)
-        end
-        assert.equal("always", Rules:Rule("bars.right").mode)
-        assert.equal("custom", Rules:Settings().preset)
-        -- Each target gets its own set: editing one later leaves the others alone.
-        assert.is_true(Rules:SetRule("bars.main", { showWhen = { resting = true } }))
-        assert.same({ combat = true }, Rules:Rule("bars.pet").showWhen)
-        -- One bad target or a bad value refuses the whole write; an empty list writes nothing.
+        assert.equal(2, Rules:Uses("combatHud"))
+        assert.is_true(Rules:UpdateBehaviour("combatHud", { resting = 0.4, together = true }))
+        assert.equal(0.4, Rules:BehaviourFor("bars.right", "world").resting)
+        assert.is_true(Rules:BehaviourFor("bars.main", "world").together)
         seen = {}
-        assert.is_false(Rules:SetRules({ "bars.main", "hud.nothing" }, { mode = "hidden" }))
-        assert.is_false(Rules:SetRules(bars, { shownAlpha = 2 }))
-        assert.is_false(Rules:SetRules({}, { mode = "hidden" }))
-        assert.is_false(Rules:SetRules("bars.main", { mode = "hidden" }))
+        assert.is_false(Rules:UpdateBehaviour("combatHud", { resting = 2 }))
+        assert.is_false(Rules:UpdateBehaviour("combatHud", { reveal = {} }))
+        assert.is_false(Rules:UpdateBehaviour("combatHud", { id = "other" }))
+        assert.is_false(Rules:UpdateBehaviour("nope", { resting = 0.1 }))
         assert.equal(0, #seen)
-        assert.equal("mouseover", Rules:Rule("bars.main").mode)
+
+        -- A condition reveals, hides or neither; moving it to one takes it out of the other.
+        assert.is_true(Rules:SetCondition("combatHud", "combat", "hide"))
+        local entry = Rules:Behaviour("combatHud")
+        assert.is_nil(entry.reveal.combat)
+        assert.equal("hide", Rules:ConditionRole(entry, "combat"))
+        assert.equal("reveal", Rules:ConditionRole(entry, "hasTarget"))
+        assert.is_true(Rules:SetCondition("combatHud", "combat", nil))
+        assert.is_nil(Rules:ConditionRole(Rules:Behaviour("combatHud"), "combat"))
+        assert.is_false(Rules:SetCondition("combatHud", "raid", "reveal"))
+        assert.is_false(Rules:SetCondition("combatHud", "combat", "both"))
+
+        -- A copy sits right after its source and has no elements; the source keeps its own.
+        local copy = Rules:CopyBehaviour("combatHud")
+        assert.equal("Combat HUD copy", Rules:Name(Rules:Behaviour(copy)))
+        assert.equal(copy, Rules:Behaviours()[3].id)
+        assert.equal(0.4, Rules:Behaviour(copy).resting)
+        assert.equal(0, Rules:Uses(copy))
+        assert.equal(2, Rules:Uses("combatHud"))
+        assert.equal("Combat HUD copy 2", Rules:Name(Rules:Behaviour(Rules:CopyBehaviour("combatHud"))))
+        local fresh = Rules:CopyBehaviour(nil)
+        assert.equal(fresh, Rules:Behaviours()[#Rules:Behaviours()].id)
+        assert.equal("New behaviour", Rules:Name(Rules:Behaviour(fresh)))
+
+        assert.same({ true }, { Rules:RenameBehaviour(copy, "  Raid bars  ") })
+        assert.equal("Raid bars", Rules:Name(Rules:Behaviour(copy)))
+        assert.same({ false, "name_taken" }, { Rules:RenameBehaviour(fresh, "raid BARS") })
+        -- A starter's name is taken too, though it is only a locale key.
+        assert.same({ false, "name_taken" }, { Rules:RenameBehaviour(fresh, "Fade away") })
+        assert.same({ false, "invalid_name" }, { Rules:RenameBehaviour(fresh, "   ") })
+        assert.same({ false, "invalid_name" }, { Rules:RenameBehaviour(fresh, string.rep("x", 33)) })
+        assert.same({ false, "missing" }, { Rules:RenameBehaviour("nope", "Name") })
+
+        -- Deleted, its elements go back to the game's own look.
+        assert.is_true(Rules:DeleteBehaviour("combatHud"))
+        assert.is_nil(Rules:BehaviourFor("bars.main", "world"))
+        assert.equal(0, Rules:Uses("combatHud"))
+        assert.is_false(Rules:DeleteBehaviour("combatHud"))
+
+        -- What Settings hands out is a copy: editing it changes nothing saved.
+        Rules:Settings().behaviours[1].resting = 0.99
+        assert.equal(0, Rules:Behaviours()[1].resting)
+        -- There is a ceiling, and a copy past it is refused rather than dropped later.
+        local last
+        repeat last = Rules:CopyBehaviour("fadeAway") until not last
+        assert.same({ nil, "full" }, { Rules:CopyBehaviour("fadeAway") })
+        assert.is_true(Rules:ValidSettings(R.Settings:GetOption("uiVisibility")))
     end)
 
-    it("maps an Edit Mode system frame to its groups and a group to its siblings", function()
-        local env = Runtime.new()
+    it("hands behaviours out per setup, a place without its own following World's", function()
+        assert.same({}, R.Settings:GetOption("uiVisibility").setups.world)
+        assert.is_true(Rules:Assign({ "bars.main" }, "world", "fadeAway"))
+        assert.is_false(Rules:HasOwnSetup("city"))
+        assert.is_false(Rules:Assign({ "bars.main" }, "city", "combatHud"))
+        assert.equal("fadeAway", Rules:BehaviourFor("bars.main", "city").id)
+        -- Its own setup starts as a copy of World's and then goes its own way.
+        assert.is_true(Rules:SetOwnSetup("city", true))
+        assert.equal("fadeAway", Rules:BehaviourFor("bars.main", "city").id)
+        assert.is_true(Rules:Assign({ "bars.main" }, "city", nil))
+        assert.is_nil(Rules:BehaviourFor("bars.main", "city"))
+        assert.equal("fadeAway", Rules:BehaviourFor("bars.main", "world").id)
+        assert.is_false(Rules:SetOwnSetup("world", false))
+        assert.is_false(Rules:SetOwnSetup("moon", true))
+        assert.is_false(Rules:Assign({ "bars.main", "hud.nothing" }, "world", "combatHud"))
+        assert.is_false(Rules:Assign({ "bars.main" }, "world", "nope"))
+        assert.is_false(Rules:Assign({}, "world", "fadeAway"))
+        assert.is_false(Rules:Assign("bars.main", "world", "fadeAway"))
+        assert.equal("fadeAway", Rules:BehaviourFor("bars.main", "world").id)
+
+        -- An instance says more than a rest area inside it; a place without a setup uses World's.
+        assert.equal("world", Rules:PlaceOf({}))
+        assert.equal("city", Rules:PlaceOf({ resting = true }))
+        assert.equal("dungeon", Rules:PlaceOf({ dungeon = true, resting = true }))
+        assert.equal("raid", Rules:PlaceOf({ raid = true }))
+        assert.equal("pvp", Rules:PlaceOf({ pvp = true }))
+        assert.equal("city", Rules:SetupPlace({ resting = true }))
+        assert.equal("world", Rules:SetupPlace({ raid = true }))
+        -- Giving the setup up goes back to World's.
+        assert.is_true(Rules:SetOwnSetup("city", false))
+        assert.equal("fadeAway", Rules:BehaviourFor("bars.main", "city").id)
+        assert.equal("world", Rules:SetupPlace({ resting = true }))
+    end)
+
+    it("maps an Edit Mode system frame to its groups", function()
         local R2 = env.R
         env.ChatFrame1, env.MainActionBar = {}, {}
         env.MainStatusTrackingBarContainer, env.SecondaryStatusTrackingBarContainer = {}, {}
@@ -329,10 +444,12 @@ describe("visibility rules", function()
         assert.same({ "hud.status" }, R2.Visibility:GroupsForSystem(env.SecondaryStatusTrackingBarContainer))
         assert.same({}, R2.Visibility:GroupsForSystem({}))
         assert.same({}, R2.Visibility:GroupsForSystem(nil))
-        assert.same({ "bars.bottomLeft", "bars.bottomRight", "bars.right", "bars.left", "bars.five", "bars.six",
-            "bars.seven", "bars.pet", "bars.stance" }, R2.Visibility:Siblings("bars.main"))
-        assert.same({}, R2.Visibility:Siblings("chat.inputArt"))
-        assert.same({}, R2.Visibility:Siblings("hud.nothing"))
+        -- Every group is listed under one of the setup list's headings.
+        local kinds = {}
+        for _, kind in ipairs(Rules.kinds) do kinds[kind] = true end
+        for _, group in ipairs(Rules.groups) do
+            assert.is_true(kinds[group.kind], group.id)
+        end
     end)
 
     it("names only frames and functions the API index has evidence for", function()
@@ -411,6 +528,59 @@ describe("fade driver", function()
     end)
 end)
 
+describe("fade driver values", function()
+    it("eases a value through its writer, retargets from where it is, and goes idle", function()
+        local env = Runtime.new()
+        local Fade = env.R.Fade
+        local owner, writes = {}, {}
+        local function write(key, value)
+            assert.equal(owner, key)
+            writes[#writes + 1] = value
+        end
+        -- A fresh tween writes its start at once, so the frame never shows a reset value.
+        Fade:Value(owner, 1, 0.5, write, 0)
+        assert.same({ 0 }, writes)
+        assert.equal(1, Fade:Active())
+        step(env.R, 0.25)
+        assert.is_true(math.abs(writes[#writes] - 0.5) < 1e-9)
+        -- Eased: a quarter of the way in time is well short of a quarter of the distance.
+        Fade:Value(owner, 0, 0.5, write, 99)
+        step(env.R, 0.125)
+        assert.is_true(math.abs(writes[#writes] - 0.5 * (1 - 0.15625)) < 1e-9)
+        step(env.R, 1)
+        assert.equal(0, writes[#writes])
+        assert.equal(0, Fade:Active())
+        assert.is_nil(Fade.driver:GetScript("OnUpdate"))
+        -- Nowhere to go, no start, or no time: one write and no record.
+        local count = #writes
+        Fade:Value(owner, 0.4, 0.5, write, 0.4)
+        Fade:Value(owner, 0.6, 0.5, write)
+        Fade:Value(owner, 0.8, 0, write, 0)
+        assert.same({ 0.4, 0.6, 0.8 }, { writes[count + 1], writes[count + 2], writes[count + 3] })
+        assert.equal(0, Fade:Active())
+        -- Cancel stops it where it is; an error in the writer ends the tween instead of the driver
+        -- running forever.
+        Fade:Value(owner, 1, 1, write, 0)
+        Fade:Cancel(owner)
+        assert.equal(0, Fade:Active())
+        assert.is_nil(Fade.driver:GetScript("OnUpdate"))
+        local broken = {}
+        Fade:Value(broken, 1, 1, function(_, value) if value > 0 then error("boom") end end, 0)
+        step(env.R, 0.1)
+        assert.equal(0, Fade:Active())
+        assert.is_nil(Fade.driver:GetScript("OnUpdate"))
+        -- A value and a frame share the driver without one writing to the other.
+        local frame = fakeFrame("Frame", 1)
+        Fade:To(frame, 0, 1)
+        Fade:Value(owner, 1, 1, write, 0)
+        assert.equal(2, Fade:Active())
+        step(env.R, 2)
+        assert.equal(0, frame.alpha)
+        assert.equal(1, writes[#writes])
+        assert.equal(0, Fade:Active())
+    end)
+end)
+
 describe("interface.visibility", function()
     it("enables on a full client, applies the rule, and follows hover, conditions and settings", function()
         local env, R, module = base()
@@ -419,12 +589,13 @@ describe("interface.visibility", function()
         for _, group in ipairs(R.Visibility.groups) do
             assert.equal("ok", module.groups[group.id].status, group.id)
         end
-        -- Off means every frame keeps the alpha it had, including the button frame's 0.2.
+        -- A fresh install gives no element a behaviour, so every frame keeps the alpha it had,
+        -- including the button frame's 0.2.
         assert.equal(1, env.MainActionBar.alpha)
         assert.equal(0.2, env.ChatFrame1ButtonFrame.alpha)
         assert.equal(0, R.Fade:Active())
 
-        R.Visibility:ApplyPreset("immersion")
+        immersion(R)
         -- A settings change fades rather than snaps.
         assert.equal(1, env.MainActionBar.alpha)
         assert.is_true(R.Fade:Active() > 0)
@@ -436,7 +607,7 @@ describe("interface.visibility", function()
         assert.equal(0, env.ChatFrame1ButtonFrame.alpha)
         assert.equal(0, R.Fade:Active())
 
-        -- A button's tooltip is the hover; the bar and its whole zone come back.
+        -- A button's tooltip is the hover; the bar and everything sharing its behaviour come back.
         local button = env.MainActionBar.children[1]
         assert.is_nil(button.scripts.OnEnter)
         assert.is_nil(env.MainActionBar.scripts.OnEnter)
@@ -447,7 +618,7 @@ describe("interface.visibility", function()
         assert.equal(1, env.BagsBar.alpha)
         assert.equal(0, env.ChatFrame1.alpha)
         assert.equal(0, env.MinimapCluster.alpha)
-        -- Still over a frame of the zone: the watch keeps it. Off everything: one tick drops it.
+        -- Still over one of them: the watch keeps it. Off everything: one tick drops it.
         tooltipOff(env)
         env.BagsBar.mouseOver = true
         settle(env, R)
@@ -465,7 +636,7 @@ describe("interface.visibility", function()
         assert.equal(1, env.ChatFrame1.alpha)
         assert.equal(1, env.ChatFrame7.alpha)
         assert.equal(1, env.GeneralDockManager.alpha)
-        -- The chat buttons share the left zone with the windows, so they come along.
+        -- The chat buttons share the windows' behaviour, so they come along.
         assert.equal(0.2, env.ChatFrame1ButtonFrame.alpha)
         assert.equal(0, env.MainActionBar.alpha)
         env.ChatFrame1.hasBeenFaded = nil
@@ -482,8 +653,11 @@ describe("interface.visibility", function()
         settle(env, R)
         assert.equal(0, env.ChatFrame1.alpha)
 
-        -- Conditions: hidden bars with a show-in-combat rule.
-        R.Visibility:ApplyPreset("combatOnly")
+        -- Conditions: bars and unit frames gone until combat reveals them, the rest at rest.
+        apply(R, { behaviourOf({ id = "combat", resting = 0, revealed = 1, mouseover = false,
+            reveal = { combat = true } }), fadeAway("rest", { together = false }) }, function(group)
+            return (group.kind == "bars" or group.kind == "unit") and "combat" or "rest"
+        end)
         step(R, 5)
         assert.equal(0, env.MultiBarRight.alpha)
         env.world.combat = true
@@ -491,25 +665,50 @@ describe("interface.visibility", function()
         step(R, 5)
         assert.equal(1, env.MultiBarRight.alpha)
         assert.equal(1, env.MainActionBar.alpha)
+        assert.equal(0, env.ChatFrame1.alpha)
         env.world.combat = false
         env:Fire("PLAYER_REGEN_ENABLED")
         step(R, 5)
         assert.equal(0, env.MultiBarRight.alpha)
-        -- A hide condition on a visible rule, and a show condition beating it.
-        R.Visibility:ApplyPreset("mounted")
+        -- A hide beats a reveal: mounted in combat stays clean. Mouseover still reaches it.
+        apply(R, { behaviourOf({ id = "clean", resting = 1, revealed = 1, reveal = { combat = true },
+            hide = { mounted = true } }) }, function() return "clean" end)
         step(R, 5)
         assert.equal(1, env.MultiBarRight.alpha)
+        assert.equal(1, env.ChatFrame1.alpha)
         env.world.mounted = true
         env:Fire("PLAYER_MOUNT_DISPLAY_CHANGED")
         step(R, 5)
         assert.equal(0, env.MultiBarRight.alpha)
         assert.equal(0, env.ChatFrame1.alpha)
-        R.Visibility:SetRule("bars.right", { showWhen = { combat = true } })
         env.world.combat = true
         env:Fire("PLAYER_REGEN_DISABLED")
         step(R, 5)
+        assert.equal(0, env.MultiBarRight.alpha)
+        tooltipOn(env, env.MultiBarRight)
+        step(R, 5)
         assert.equal(1, env.MultiBarRight.alpha)
         assert.equal(0, env.MainActionBar.alpha)
+        tooltipOff(env)
+        settle(env, R)
+        assert.equal(0, env.MultiBarRight.alpha)
+        -- Casting is a condition like the rest: a bar can step aside while a cast runs, and
+        -- only the player's own cast counts.
+        apply(R, { behaviourOf({ id = "cast", resting = 1, revealed = 1, mouseover = false,
+            hide = { casting = true } }) }, function() return "cast" end)
+        step(R, 5)
+        assert.equal(1, env.MultiBarRight.alpha)
+        env:Fire("UNIT_SPELLCAST_START", "party1")
+        step(R, 5)
+        assert.equal(1, env.MultiBarRight.alpha)
+        env:Fire("UNIT_SPELLCAST_START", "player")
+        step(R, 5)
+        assert.equal(0, env.MultiBarRight.alpha)
+        env:Fire("UNIT_SPELLCAST_STOP", "player")
+        step(R, 5)
+        assert.equal(1, env.MultiBarRight.alpha)
+        immersion(R)
+        step(R, 5)
 
         -- Edit Mode shows everything at once and hands back on exit.
         env.EventRegistry.callbacks["EditMode.Enter"]()
@@ -524,8 +723,7 @@ describe("interface.visibility", function()
 
     it("watches the mouse rather than trusting a leave, so nothing is stranded visible", function()
         local env, R, module = base()
-        R.Visibility:ApplyPreset("immersion")
-        R.Visibility:SetRule("hud.minimap", { zone = "none" })
+        immersion(R, { ["hud.minimap"] = "alone" })
         assert.is_true(R.Registry:Enable(MODULE))
         step(R, 5)
         -- A plain frame's own OnEnter, with no OnLeave ever hooked or fired.
@@ -558,19 +756,19 @@ describe("interface.visibility", function()
         local overlay, blip = fakeFrame("MinimapBackdrop"), fakeFrame("MinimapPin")
         overlay.mouse = false
         env.MinimapCluster.children = { env.GameTimeFrame, overlay, blip }
-        R.Visibility:ApplyPreset("immersion")
+        immersion(R)
         assert.is_true(R.Registry:Enable(MODULE))
         assert.is_nil(overlay.scripts.OnEnter)
         assert.equal(1, #blip.scripts.OnEnter)
         assert.equal(0, #R.errors)
     end)
 
-    it("reveals a whole zone from any of its elements and only that element outside one", function()
+    it("reveals every element of a together behaviour from any one of them, and only itself otherwise", function()
         local env, R = base()
-        R.Visibility:ApplyPreset("immersion")
+        immersion(R)
         assert.is_true(R.Registry:Enable(MODULE))
         step(R, 5)
-        -- The bags are in the bottom zone with every bar: their tooltip brings the bars back.
+        -- The bags share the bars' behaviour: their tooltip brings the bars back.
         tooltipOn(env, env.BagsBar)
         step(R, 5)
         assert.equal(1, env.BagsBar.alpha)
@@ -581,8 +779,8 @@ describe("interface.visibility", function()
         tooltipOff(env)
         settle(env, R)
         assert.equal(0, env.MainActionBar.alpha)
-        -- Taken out of the zone, the main bar answers to its own hover alone.
-        R.Visibility:SetRule("bars.main", { zone = "none" })
+        -- Given a behaviour of its own, the main bar answers to its own hover alone.
+        R.Visibility:Assign({ "bars.main" }, "world", "alone")
         step(R, 5)
         tooltipOn(env, env.BagsBar)
         step(R, 5)
@@ -602,8 +800,7 @@ describe("interface.visibility", function()
 
     it("shows everything while something is on the cursor", function()
         local env, R = base()
-        R.Visibility:ApplyPreset("immersion")
-        R.Visibility:SetRule("bars.main", { shownAlpha = 0.7 })
+        immersion(R, { ["bars.main"] = "dim" }, { fadeAway("dim", { revealed = 0.7 }) })
         assert.is_true(R.Registry:Enable(MODULE))
         step(R, 5)
         assert.equal(0, env.MainActionBar.alpha)
@@ -619,10 +816,11 @@ describe("interface.visibility", function()
         assert.equal(0, env.ChatFrame1.alpha)
     end)
 
-    it("fades to the element's own shown and hidden opacity", function()
+    it("fades to the behaviour's own resting and revealed opacity", function()
         local env, R = base()
-        R.Visibility:ApplyPreset("immersion")
-        R.Visibility:SetRule("bars.main", { shownAlpha = 0.8, hiddenAlpha = 0.3 })
+        immersion(R, { ["bars.main"] = "dim", ["chat.buttons"] = "half" }, {
+            fadeAway("dim", { resting = 0.3, revealed = 0.8, together = false }),
+            behaviourOf({ id = "half", resting = 0.5, revealed = 0.5 }) })
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal(0.3, env.MainActionBar.alpha)
         assert.equal(0, env.MultiBarRight.alpha)
@@ -630,10 +828,9 @@ describe("interface.visibility", function()
         step(R, 5)
         assert.equal(0.8, env.MainActionBar.alpha)
         -- A share of the frame's own alpha: the button frame ships at 0.2.
-        R.Visibility:SetRule("chat.buttons", { mode = "always", shownAlpha = 0.5 })
         step(R, 5)
         assert.is_true(math.abs(env.ChatFrame1ButtonFrame.alpha - 0.1) < 1e-9)
-        -- Edit Mode ignores the rule's opacity and shows the frame as the game has it.
+        -- Edit Mode ignores the behaviour and shows the frame as the game has it.
         env.EventRegistry.callbacks["EditMode.Enter"]()
         assert.equal(1, env.MainActionBar.alpha)
         assert.equal(0.2, env.ChatFrame1ButtonFrame.alpha)
@@ -643,10 +840,9 @@ describe("interface.visibility", function()
         assert.equal(0.2, env.ChatFrame1ButtonFrame.alpha)
     end)
 
-    it("opens the companion beside Blizzard's dialog for the selected system and previews the element", function()
+    it("opens the companion beside Blizzard's dialog for the selected system", function()
         local env, R = base()
-        R.Visibility:ApplyPreset("immersion")
-        R.Visibility:SetRule("bars.main", { shownAlpha = 0.8 })
+        immersion(R)
         assert.is_true(R.Registry:Enable(MODULE))
         local dialog = env.EditModeSystemSettingsDialog
         local attach = env.hooks[dialog].AttachToSystemFrame
@@ -656,12 +852,9 @@ describe("interface.visibility", function()
         attach(dialog, env.MainActionBar)
         assert.same({ "bars.main" }, env.companion.ids)
         assert.equal(dialog, env.companion.dialog)
-        assert.equal(0.8, env.MainActionBar.alpha)
+        -- Nothing previews: what is being moved stays as the game has it.
+        assert.equal(1, env.MainActionBar.alpha)
         assert.equal(1, env.MultiBarRight.alpha)
-        -- A slider move while previewing shows at once.
-        R.Visibility:SetRule("bars.main", { shownAlpha = 0.5 })
-        step(R, 5)
-        assert.equal(0.5, env.MainActionBar.alpha)
         attach(dialog, env.ChatFrame1)
         assert.same({ "chat.frames", "chat.tabs", "chat.buttons", "chat.inputArt" }, env.companion.ids)
         assert.equal(1, env.MainActionBar.alpha)
@@ -688,7 +881,7 @@ describe("interface.visibility", function()
 
     it("hovers unit frames through their tooltip and puts no script on a secure button", function()
         local env, R, module = base()
-        R.Visibility:ApplyPreset("immersion")
+        immersion(R)
         assert.is_true(R.Registry:Enable(MODULE))
         for name, id in pairs({ PlayerFrame = "unit.player", TargetFrame = "unit.target", PartyFrame = "unit.party",
             CompactRaidFrameContainer = "unit.raid" }) do
@@ -704,7 +897,7 @@ describe("interface.visibility", function()
         assert.equal(0, env.PlayerFrame.alpha)
         assert.equal(0, env.PartyFrame.alpha)
         assert.equal(0, env.CompactRaidFrameManager.alpha)
-        -- The unit frames share the top zone, so the player's tooltip brings them all.
+        -- The unit frames share a behaviour, so the player's tooltip brings them all.
         tooltipOn(env, env.PlayerFrame)
         step(R, 5)
         assert.equal(1, env.PlayerFrame.alpha)
@@ -716,7 +909,7 @@ describe("interface.visibility", function()
         assert.equal(0, env.PlayerFrame.alpha)
         assert.equal(0, env.TargetFrame.alpha)
         -- The pet frame reaches the player frame's group through its parents.
-        R.Visibility:SetRules({ "unit.player", "unit.target", "unit.party", "unit.raid" }, { zone = "none" })
+        R.Visibility:Assign({ "unit.player", "unit.target", "unit.party", "unit.raid" }, "world", "alone")
         step(R, 5)
         tooltipOn(env, env.PetFrame)
         step(R, 5)
@@ -742,7 +935,7 @@ describe("interface.visibility", function()
 
     it("restores every frame and leaves every hook inert across enable, disable, enable", function()
         local env, R, module = base()
-        R.Visibility:ApplyPreset("immersion")
+        immersion(R)
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal(0, env.MainActionBar.alpha)
         assert.equal(0, env.ChatFrame1ButtonFrame.alpha)
@@ -795,7 +988,7 @@ describe("interface.visibility", function()
 
     it("marks a group missing when a frame it needs is gone and keeps the rest working", function()
         local env, R, module = base({ missing = { MultiBar7 = true, ChatFrame9 = true } })
-        R.Visibility:ApplyPreset("immersion")
+        immersion(R)
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal("missing", module.groups["bars.seven"].status)
         assert.equal("MultiBar7", module.groups["bars.seven"].missing)
@@ -814,7 +1007,7 @@ describe("interface.visibility", function()
         -- Twice is once: a second enable of the owning module must not double the group.
         assert.is_true(R.Visibility:Contribute("chat.buttons", copy))
         assert.equal(1, #R.Visibility:Contributions("chat.buttons"))
-        R.Visibility:ApplyPreset("immersion")
+        immersion(R)
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal(0, copy.alpha)
         -- It hovers like any other frame in the group, so reaching for it reveals it.
@@ -849,7 +1042,7 @@ describe("interface.visibility", function()
 
     it("stands down per group behind a bar addon and as a whole behind ElvUI", function()
         local env, R, module = base({ loaded = { Bartender4 = true } })
-        R.Visibility:ApplyPreset("immersion")
+        immersion(R)
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal("owned", module.groups["bars.main"].status)
         assert.equal("Bartender4", module.groups["bars.main"].owner)
@@ -859,7 +1052,7 @@ describe("interface.visibility", function()
         assert.is_true(R.Registry:Disable(MODULE))
 
         local env2, R2, module2 = base({ loaded = { ElvUI = true } })
-        R2.Visibility:ApplyPreset("immersion")
+        immersion(R2)
         assert.is_false(R2.Registry:Enable(MODULE))
         assert.equal("unavailable", module2.state)
         assert.equal("Handled by ElvUI, which replaces these frames.", module2.unavailableReason)
@@ -874,8 +1067,7 @@ describe("interface.visibility", function()
 
     it("fades the minimap's quest areas only when asked, and puts them back at its own strength", function()
         local env, R = base()
-        R.Visibility:ApplyPreset("immersion")
-        R.Visibility:SetRule("hud.minimap", { zone = "none" })
+        immersion(R, { ["hud.minimap"] = "alone" })
         assert.is_true(R.Registry:Enable(MODULE))
         step(R, 5)
         assert.equal(0, env.MinimapCluster.alpha)
@@ -923,7 +1115,7 @@ describe("interface.visibility", function()
         table.insert(R.Visibility.groups, { id = "hud.buffs", kind = "hud", labelKey = "X", frames = { "BuffFrame" },
             optional = {}, hover = { frames = true }, reapply = { { frame = "BuffFrame",
             method = "UpdateSystemSettingOpacity" }, "MissingGlobal" } })
-        R.Visibility:ApplyPreset("immersion")
+        immersion(R)
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal("ok", module.groups["hud.buffs"].status)
         assert.equal(0, env.BuffFrame.alpha)
@@ -933,12 +1125,12 @@ describe("interface.visibility", function()
         env.hooks[env.BuffFrame].UpdateSystemSettingOpacity(env.BuffFrame)
         assert.equal(0, env.BuffFrame.alpha)
         assert.equal(0, R.Fade:Active())
-        -- The player frame's Edit Mode opacity is a baseline: the rule becomes a share of it.
+        -- The player frame's Edit Mode opacity is a baseline: the behaviour becomes a share of it.
         env.PlayerFrame.UpdateSystemSettingOpacity(env.PlayerFrame)
         env.hooks[env.PlayerFrame].UpdateSystemSettingOpacity(env.PlayerFrame)
         assert.equal(0, env.PlayerFrame.alpha)
         assert.equal(0.5, module.captured[env.PlayerFrame])
-        R.Visibility:SetRule("unit.player", { mode = "always" })
+        R.Visibility:Assign({ "unit.player" }, "world", nil)
         step(R, 5)
         assert.equal(0.5, env.PlayerFrame.alpha)
         assert.is_true(R.Registry:Disable(MODULE))
@@ -949,15 +1141,14 @@ describe("interface.visibility", function()
 
     it("reveals every group a shared frame belongs to and resolves a child by its parent key", function()
         local env, R, module = base()
-        R.Visibility:ApplyPreset("immersion")
-        R.Visibility:SetRules({ "hud.minimap", "hud.minimapButtons", "hud.objectives" }, { zone = "none" })
+        immersion(R, { ["hud.minimap"] = "alone", ["hud.minimapButtons"] = "alone", ["hud.objectives"] = "alone" })
         assert.is_true(R.Registry:Enable(MODULE))
         assert.equal("ok", module.groups["hud.minimapButtons"].status)
         assert.equal(0, env.MinimapCluster.alpha)
         assert.equal(0, env.GameTimeFrame.alpha)
         assert.equal(0, env.MinimapCluster.Tracking.alpha)
         assert.equal(0, env.Minimap.ZoomIn.alpha)
-        -- Chat input art is textures: hidden under the preset, no hover hooks asked of it.
+        -- Chat input art is textures: faded with no mouseover, no hover hooks asked of it.
         assert.equal(0, env.ChatFrame1EditBoxLeft.alpha)
         assert.equal(0, env.ChatFrame4EditBoxFocusMid.alpha)
         assert.equal(1, env.ChatFrame1.editBox.alpha)
@@ -974,5 +1165,51 @@ describe("interface.visibility", function()
         assert.is_true(R.Registry:Disable(MODULE))
         assert.equal(1, env.MinimapCluster.Tracking.alpha)
         assert.equal(1, env.ChatFrame1EditBoxLeft.alpha)
+    end)
+
+    it("switches to the setup of the place the player is in, and back to World's", function()
+        local env, R, module = base()
+        local Rules = R.Visibility
+        assert.is_true(Rules:Assign({ "bars.main", "bars.right" }, "world", "fadeAway"))
+        assert.is_true(Rules:SetOwnSetup("city", true))
+        assert.is_true(Rules:Assign({ "bars.main" }, "city", nil))
+        assert.is_true(R.Registry:Enable(MODULE))
+        assert.equal("world", module.place)
+        assert.equal(0, env.MainActionBar.alpha)
+        assert.equal(1, env.MultiBar5.alpha)
+        -- A city with a setup of its own: the main bar is left as the game has it there.
+        env.world.resting = true
+        env:Fire("PLAYER_UPDATE_RESTING")
+        step(R, 5)
+        assert.equal("city", module.place)
+        assert.is_true((env.companion.loads or 0) > 0)
+        assert.equal(1, env.MainActionBar.alpha)
+        assert.equal(0, env.MultiBarRight.alpha)
+        env.world.resting = false
+        env:Fire("PLAYER_UPDATE_RESTING")
+        step(R, 5)
+        assert.equal("world", module.place)
+        assert.equal(0, env.MainActionBar.alpha)
+        -- A raid with no setup of its own follows World's, until it gets one.
+        env.world.instance = "raid"
+        env:Fire("PLAYER_ENTERING_WORLD")
+        step(R, 5)
+        assert.equal("world", module.place)
+        assert.equal(0, env.MainActionBar.alpha)
+        assert.is_true(Rules:SetOwnSetup("raid", true))
+        assert.equal("raid", module.place)
+        assert.is_true(Rules:Assign({ "bars.main" }, "raid", "combatHud"))
+        step(R, 5)
+        assert.is_true(math.abs(env.MainActionBar.alpha - 0.2) < 1e-9)
+        -- Raid to delve is one loading screen with an instance on both sides: still a change.
+        env.world.instance = "scenario"
+        env:Fire("PLAYER_ENTERING_WORLD")
+        step(R, 5)
+        assert.equal("world", module.place)
+        assert.equal(0, env.MainActionBar.alpha)
+        assert.is_true(R.Registry:Disable(MODULE))
+        assert.equal(1, env.MainActionBar.alpha)
+        assert.is_nil(module.place)
+        assert.equal(0, #R.errors)
     end)
 end)

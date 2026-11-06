@@ -426,6 +426,7 @@ function UI:ToggleExpanded(id)
         self.expanded, self.collapsing = nil, id
     else
         self.expanded, self.collapsing = id, nil
+        if id == "interface.actionCam" then self:FollowCameraSituation() end
     end
     self:Refresh()
     -- A filtered list opens whatever the query reached, so there is no single block to
@@ -522,6 +523,7 @@ function UI:OpenModule(id)
     self.frame:Show()
     self:OnPixelsChanged()
     self.expanded = id
+    if id == "interface.actionCam" then self:FollowCameraSituation() end
     self:SelectCategory(self:Category(module))
 end
 
@@ -878,6 +880,7 @@ local nameplateToggles = {
     { key = "nameplateShowIcon", label = "UI_NAMEPLATE_ICON" },
     { key = "nameplateDimCompleted", label = "UI_NAMEPLATE_DIM" },
     { key = "nameplateShowMore", label = "UI_NAMEPLATE_MORE" },
+    { key = "nameplateShowGroup", label = "UI_NAMEPLATE_GROUP" },
     { key = "nameplateReduceAnimation", label = "UI_NAMEPLATE_REDUCE" },
 }
 
@@ -1074,6 +1077,9 @@ function UI:Initialize()
     self:BuildQuestSettings(self.scroll.child)
     self:BuildGossipSettings(self.scroll.child)
     self:BuildResurrectSettings(self.scroll.child)
+    self:BuildBagUpgradeSettings(self.scroll.child)
+    self:BuildMailAltsSettings(self.scroll.child)
+    self:BuildPlannerSettings(self.scroll.child)
     self:BuildQuickInviteSettings(self.scroll.child)
     self:BuildTooltipSettings(self.scroll.child)
     self:BuildTooltipBorderSettings(self.scroll.child)

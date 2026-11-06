@@ -75,6 +75,11 @@ local function vendorRowsText(value)
     return string.format(L.UI_VENDOR_ROW_COUNT, value)
 end
 
+local function keepGoldText(value)
+    if value <= 0 then return L.UI_MAIL_ALTS_GOLD_OFF end
+    return string.format(L.UI_MAIL_ALTS_GOLD_AMOUNT, value)
+end
+
 local function toPercent(stored) return math.floor((stored or 1) * 100 + 0.5) end
 local function fromPercent(value) return value / 100 end
 
@@ -98,8 +103,17 @@ local VENDOR_COLUMNS = { key = "vendorColumns", minimum = 2, maximum = 5, step =
     labelKey = "UI_VENDOR_COLUMNS", formatter = columnsText }
 local VENDOR_ROWS = { key = "vendorRows", minimum = 2, maximum = 8, step = 1,
     labelKey = "UI_VENDOR_ROWS", formatter = vendorRowsText }
+-- Zero is off. A thousand gold kept back is past what a levelling character carries.
+local MAIL_KEEP_GOLD = { key = "mailKeepGold", minimum = 0, maximum = 1000, step = 10,
+    labelKey = "UI_MAIL_ALTS_KEEP_GOLD", formatter = keepGoldText }
 -- Automatic is the whole chain in order. The rest name one provider and stay on it, which
 -- is what a player with two price addons installed and an opinion is asking for.
+local function keyCount(key)
+    local count = 0
+    for _ in pairs(Settings:GetOption(key) or {}) do count = count + 1 end
+    return count
+end
+
 local function learnedCount()
     local count = 0
     for _, entries in pairs(Settings:GetOption("gossipLearned") or {}) do
@@ -309,6 +323,47 @@ function UI:BuildResurrectSettings(parent)
     self:RegisterModuleSettings("social.acceptResurrect", block)
 end
 
+function UI:BuildBagUpgradeSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_BAG_UPGRADE_HELP)
+    self:OptionCheckbox(block, "bagUpgradeRightClick", "UI_BAG_UPGRADE_RIGHT_CLICK")
+    self:OptionCheckbox(block, "bagUpgradePrompt", "UI_BAG_UPGRADE_PROMPT")
+    self:OptionCheckbox(block, "bagUpgradeCarry", "UI_BAG_UPGRADE_CARRY")
+    block:Finish()
+    self:RegisterModuleSettings("items.bagUpgrade", block)
+end
+
+function UI:BuildMailAltsSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_MAIL_ALTS_HELP)
+    self:OptionCheckbox(block, "mailKeepCrafts", "UI_MAIL_ALTS_KEEP_CRAFTS")
+    self:OptionCheckbox(block, "mailFillRecipient", "UI_MAIL_ALTS_FILL_TO")
+    self:OptionSlider(block, MAIL_KEEP_GOLD)
+    self.mailForgetButton = Theme:Button(block, FORGET_WIDTH, "", function()
+        Settings:SetOption("mailLearning", {})
+        Settings:SetOption("mailItemRoutes", {})
+        self:LoadDisplay()
+    end)
+    block:Place(self.mailForgetButton, Theme.buttonHeight)
+    self.mailNeverButton = Theme:Button(block, FORGET_WIDTH, "", function()
+        Settings:SetOption("mailNeverIDs", {})
+        self:LoadDisplay()
+    end)
+    block:Place(self.mailNeverButton, Theme.buttonHeight)
+    block:Finish()
+    self:RegisterModuleSettings("items.sendToAlts", block)
+end
+
+local PLANNER_GOALS = {
+    { value = "crafts", labelKey = "PLANNER_GOAL_CRAFTS" },
+    { value = "gold", labelKey = "PLANNER_GOAL_GOLD" },
+}
+
+function UI:BuildPlannerSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_PLANNER_HELP)
+    self:OptionDropdown(block, "plannerGoal", PLANNER_GOALS, "PLANNER_GOAL")
+    block:Finish()
+    self:RegisterModuleSettings("items.professionPlanner", block)
+end
+
 function UI:BuildQuickInviteSettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_QUICKINVITE_HELP)
     self.inviteModifierDropdown = self:OptionDropdown(block, "inviteModifier", MODIFIER_ENTRIES,
@@ -354,6 +409,11 @@ function UI:LoadDisplay()
     self.gossipForgetButton.label:SetText(string.format(L.UI_GOSSIP_FORGET, learned))
     -- Nothing to forget is a button that would do nothing, so it says so by being greyed.
     self.gossipForgetButton:SetEnabled(learned > 0)
+    local routes, never = keyCount("mailItemRoutes"), keyCount("mailNeverIDs")
+    self.mailForgetButton.label:SetText(string.format(L.UI_MAIL_ALTS_FORGET, routes))
+    self.mailForgetButton:SetEnabled(routes + keyCount("mailLearning") > 0)
+    self.mailNeverButton.label:SetText(string.format(L.UI_MAIL_ALTS_CLEAR_NEVER, never))
+    self.mailNeverButton:SetEnabled(never > 0)
     local integrations = R.Integrations or {}
     self.priceNote:SetText(string.format(L.UI_PRICE_NOTE,
         integrations.tsmAvailable and L.UI_PRICE_FOUND or L.UI_PRICE_MISSING,

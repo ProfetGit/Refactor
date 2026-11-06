@@ -304,6 +304,84 @@ downloaded, and the line does not yet say where to get the update, because no do
 exists. The limitation is inherent: with nobody nearby on a newer build, nothing is said.
 `/refactor update` reports what has been seen and asks again.
 
+Added to M4 on 5 Nov 2026 at the owner's request, and to PRD 7.4: every class spell in the
+spellbook, as `interface.allSpells`. Tier full, risk visible, off by default.
+
+Retail draws this itself: its spellbook lists future spells as `Enum.SpellBookItemType.FutureSpell`,
+desaturated, with "Available at level N", so on 12.1 this is the "native, so not built" case.
+Forever's spellbook lists learned spells only (owner's screenshot, 5 Nov 2026), and no API lists
+the rest. The class trainer does: every rank with its level, filtered by Blizzard's
+available, unavailable and used switches. The module records the trainer's list per class,
+account wide, on every visit, with all three switches on for the read and put back after, and
+that visit is the cache's invalidation. The list is the spellbook's own spells joined with the
+recorded ones, grouped by skill line, each with its level, unlearned ones in grey and the ones
+the player can train now marked. It is a Refactor side panel docked to the spellbook's right
+edge, with search and All, To learn and Learned tabs, switched by a Refactor button in the book.
+Nothing is added to Blizzard's spell list: each of its entries is a spellbook slot, which an
+unlearned spell does not have, and replacing that code would taint the buttons that cast (rule 1).
+A first version laid a page over the book; the owner asked for the side panel instead. Unknown on the client: whether `GetTrainerServiceInfo` has the
+Mainline return order on Forever, whether `C_TooltipInfo.GetTrainerService` carries the spell ID,
+and where the search box sits in Forever's layout, so the anchors are found by structure and
+the button falls back to the book's top right.
+
+Added to M4 on 5 Nov 2026 at the owner's request, and to PRD 7.1: group progress on
+nameplates, the `nameplateShowGroup` option of `nameplates.questProgress`, off by default.
+
+The group tooltip already carries it: every member's objectives sit under their name. The data
+half reads those sections into slots beside the player's own result, one per member the mob
+still counts for, holding their objective closest to done. A section counts only when its name
+is someone in the roster, read from `party1-4` or `raid1-40` on `GROUP_ROSTER_UPDATE` as
+"Name", "Name Surname" (Forever) or "Name-Realm" (Retail), so a name the module cannot place,
+the player's own included, is never drawn as a member. Each member is a diamond in their class
+colour under the player's count, with their count when it differs from the player's; past four,
+"+N". A mob the player finished is dimmed only when no member still needs it, and a quest only
+a member has shows the row alone beside the plate. Unknown on the client: whether a member's
+progress fires `UNIT_QUEST_LOG_CHANGED` for their party token (Blizzard's quest map filters that
+event to "player", which suggests it does), and whether member names reach Lua as secret values
+in instances, in which case they are left out.
+
+Added to M4 on 5 Nov 2026 at the owner's request: ActionCam taken from working to polished,
+and its built-in profiles reworked. The owner's own report drove two of the changes: the camera
+stayed glued to an NPC while walking away, and target pull fights a mouse (their copy of Melee
+had it at zero).
+
+- Situations move the camera only the way they exist for (`CameraProfiles.directions`): indoors
+  and an NPC only bring it in, everything else only backs it off, each judged against the
+  player's own distance (`saved`, or the zoom), so a camera already on the right side stays put.
+  A rule is never judged on a camera still easing: for two seconds after a move the module
+  trusts the distance it asked for over `GetCameraZoom`.
+- The shoulder offset eases over half a second through `Fade:Value`, so Core/Fade.lua stays the
+  one OnUpdate driver. Leaving a building waits 1 s and an NPC window 0.5 s, only into an
+  ambient situation.
+- The NPC situation no longer trusts the interaction manager alone: Blizzard drives the Gossip,
+  QuestGiver and TaxiNode frames from their own events, not from
+  `PLAYER_INTERACTION_MANAGER_FRAME_SHOW` (none is a `RegisterPlayerInteraction` type at 12.1).
+  It is a set of open sources, each closed by its own event, held only while `UnitExists("npc")`
+  and not on a taxi. `PLAYER_STARTED_MOVING`, registered only while an interaction is open, lets
+  go at the first step: interact focus off, camera back. That step also ends every case the
+  event list misses.
+- A wheel turn inside a situation is remembered for the session (`cameraLearnZoom`, on).
+- Travel, aquatic, flight forms and Ghost Wolf count as mounted, by `GetShapeshiftFormID`. The IDs
+  have no Blizzard source and are checked in game.
+- Profiles gain `tilt` (replacing `pitch`) and `swayWhileMoving`. Saved copies and RC3 share
+  strings are upgraded, and a bad saved record is now dropped alone instead of wiping every
+  custom profile. A new Ranged profile; Melee loses its target pull; Raider reads Wide view.
+- `/refactor camtest` reports the camera state in game.
+- Same day, after the owner tried Ranged: the camera went far out, and every NPC visit pushed it
+  further. `SetDistance` zoomed fully in and back out in one frame, and the client takes one zoom
+  call a frame (LibCamera's source says so). The zoom in was dropped, so each move added its
+  whole distance. A move is now one call, by the difference from where the camera is heading:
+  the last distance sent, for two seconds, then `GetCameraZoom`. A second move in the same frame
+  goes out on the next. The m4 mock now drops a second call in a frame, and a test fails on the
+  old code. Ranged pulled in to an 11 yd base.
+- Same day again: every pull in and out of combat still jarred the camera, because combat was a
+  situation that backed the camera off and shifted the shoulder. Combat is no longer a
+  situation. A fight holds the camera still (`holding`), and for 3 s after it only a non-ambient
+  change (a mount, an NPC, an instance) gets through (`hold`). The profile fields
+  `combatDistance` and `combatShoulder` are dropped from saved records and share strings. A
+  situation also no longer moves the camera to fix a gap of 2 yd or less (`SLACK`). A city keeps
+  the base shoulder in every built-in profile.
+
 Status 18 Sep 2026: every deliverable above is written and specced headless except the
 native ones listed. Manual checklist for the in-game pass, none of it done yet:
 
@@ -393,29 +471,46 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
 - Class border: hovering a player of each of two classes tints the tooltip border with that class
   colour and the colour clears when the tooltip does; a mob, an NPC and a totem leave it white; with
   the option off, an item still tints the border and a player does not
-- ActionCam profiles: with Immersive on, `/dump C_CVar.GetCVar("test_cameraOverShoulder")`
-  reads 0.6 outdoors, 0 the moment you step into a building, 0.3 in an inn, 0 mounted,
-  0.9 in combat and 0.8 with a gossip open, and `CameraKeepCharacterCentered` reads 0;
-  the camera goes to 9 yards on enable, 6 indoors, 5 at an NPC, 16 on a mount, 14 in a
-  dungeon and 24 in a raid, easing straight there with no dip through first person (if it
-  dips, the client is not clamping the zoom target and `SetDistance` needs another way);
-  wheel to 4 yards, walk into a building, walk out: the camera reads 6 inside and 4 again
-  outside, so `GetCameraZoom` answers in the same yards `CameraZoomIn` moves (if the
-  return lands elsewhere, the two units differ and `MoveFor` needs a scale); on Melee an
-  NPC window changes the shoulder and nothing else, a mount backs off and a dismount
-  returns exactly; a gossip that hands over to a quest or a vendor does not flick the
-  camera; off while mounted the camera returns to the pre-mount distance and nothing is
-  left in Accessibility; a login and a `/reload` put the camera at the profile's distance
-  for where you stand (if the camera is wrong at login, `IsPlayerInWorld` is true at
-  PLAYER_LOGIN before the situation queries answer); `CameraZoomIn` from the module raises
-  no protected-call error; Blizzard: Full reads as `/console actioncam full` does and
-  never moves the zoom; a saved copy's distance slider moves the camera as it is dragged,
-  its leftmost stop reads "stays where you had it" and gives the wheel back, and a slider
-  for another situation does not move anything; export, import and delete round trip
-  through the share box; on Controller: Melee with a mob targeted the camera visibly
-  turns toward it and on Controller: Ranged only a little, and at the slider's left stop
-  `test_cameraTargetFocusEnemyEnable` reads 0; Reduce Unexpected Camera Movement on in
-  Accessibility is expected to cancel the shoulder offset
+- ActionCam (reworked 5 Nov 2026, seen only headless). `/refactor camtest` in each situation
+  answers what the camera is doing. With Immersive on, `CameraKeepCharacterCentered` reads 0 and
+  the shoulder glides, with no snap, to 0.6 outdoors and in a city, 0 in a building (an inn
+  included), 0 mounted and 0.8 at an NPC, and stays where it is when a fight starts. Distance rules:
+  - Wheel to 4 and walk into a building: the camera stays at 4.
+  - From 15, a building brings it to 6, and walking out returns it to 15.
+  - Mount at 25: it stays at 25. Mount at 9: it backs off to 16, and dismounting returns it to 9.
+  - Enable at 9 yards: it eases straight there with no dip through first person.
+  - Ranged: talk to an NPC five times in a row. The camera comes back to the same distance
+    every time. camtest's "Last move asked for" and its zoom line agree a few seconds after a
+    move. If they disagree, the zoom calls do not move in the yards `GetCameraZoom` reads.
+  - A login and a `/reload` in a city with the wheel at 25 move nothing.
+
+  Fights: pulling a mob moves neither the zoom nor the shoulder, chain pulls never touch the
+  camera, and a doorway walked through mid-fight applies three seconds after it ends.
+  Mounting right after a fight backs off at once. NPCs:
+  - Talk to one and walk away: the first step stops the camera facing them and puts it back at
+    your distance, while the gossip window stays open until you are out of range. Turning in
+    place does not let go.
+  - Gossip to a trainer, a banker and a flight master: closing each ends the NPC camera, and
+    taking a flight backs off for the mount.
+  - A quest shared by a party member, or started from an item, moves nothing.
+  - camtest's `npc` line reads true while any of those windows is open. If it reads false, the
+    `UnitExists("npc")` guard is wrong for that window.
+
+  Other checks:
+  - Druid travel form backs off like a mount, and camtest prints form ID 3. Check 4, 27 and 29
+    for the water and flight forms, and 16 for Ghost Wolf.
+  - Wheel to 22 on a mount, dismount, remount: 22.
+  - On Melee an NPC window changes the shoulder and nothing else, and no pull turns the camera
+    toward a target. On Controller: Melee it turns visibly toward a target, and on Controller:
+    Ranged only a little.
+  - Off while mounted: the camera returns to the pre-mount distance, and nothing is left in
+    Accessibility. Blizzard: Full reads as `/console actioncam full` does and never moves the zoom.
+  - A saved copy's distance slider for the situation you are in moves the camera as it is
+    dragged. A slider for another situation, the tilt slider and the sway box move nothing.
+  - "My Melee" is still there after the update, with every value intact.
+  - Export, import and delete round trip. An RC3 string from before still imports.
+  - Turn Reduce Unexpected Camera Movement on: the panel's warning shows. `CameraZoomIn` from the
+    module raises no protected-call error.
 - `/refactor farmtest` over a dark and a snow-bright zone after a full client restart:
   every HUD texture loads, the text shadows keep both lines readable, the hold to reset
   fills the meter and cancels on an early release, and the chevron opens and closes the
@@ -475,6 +570,12 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   `/refactor errors` stays empty. On Forever, check first that `C_ChatInfo.SendAddonMessage`
   exists, or the feature reads unavailable and names it
 - Conflict panel with Leatrix Plus installed (carried from M3)
+- Group progress on nameplates (5 Nov 2026), seen only headless and in the layout preview. In
+  a party, with "Show your group's progress" on: a mob a member still needs shows a diamond in
+  their class colour under your count, with their count only when it differs from yours. Finish
+  your objective first: the plate stays bright, and the member's diamond moves beside the bar.
+  A quest only a member has shows their diamond alone. A member who leaves the group drops off
+  the plates. Off, nothing changes from before. `/refactor errors` stays empty
 - Polish pass (25 Sep 2026), seen only in the headless preview so far. The window fades in on
   open; every feature row shows its name over a one-line description, neither cut off, and
   the description takes the row's width when the row has no warning; section headings read
@@ -530,6 +631,11 @@ Exit criteria:
 | 25-player CPU measurement in a battleground, published as a follow-up release |
 | Level 60 checks for anything level-dependent |
 | Patch-day fixes within hours |
+| UI visibility rework at the owner's request, 6 Nov 2026: behaviours and setups replace per-element rules and presets (PRD 7.4.1) |
+| Bag upgrade (`items.bagUpgrade`) at the owner's request, 6 Nov 2026: right-click or prompt swaps in a bigger bag and carries the contents over (PRD 7.6.1) |
+| Send to alts (`items.sendToAlts`) at the owner's request, 6 Nov 2026: a mailbox panel suggests what to mail to your other characters and attaches it on a click (PRD 7.6.2) |
+| Confirm replacing enchants (`items.replaceEnchant`) at the owner's request, 6 Nov 2026: answers Yes on the replace-enchant dialog, off by default (PRD 7.6) |
+| Profession levelling planner (`items.professionPlanner`) at the owner's request, 6 Nov 2026: a panel beside the profession window plans the path to the rank's cap from a generated threshold table, falls back to observed colours, and replans on every change (PRD 7.9.1) |
 
 ---
 

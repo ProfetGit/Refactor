@@ -35,10 +35,28 @@ local function base()
     env.guids = {}
     -- A group tooltip heads each player's objectives with their name, the player's own too.
     -- Forever's UnitName gives the surname as a second value; env.surname plays that.
+    -- env.party plays the group: unit token to { name, second value, class file }.
+    env.party = {}
     env.UnitName = function(unit)
         if unit == "player" then return "Me", env.surname end
+        local member = env.party[unit]
+        if member then return member[1], member[2] end
         return nil
     end
+    env.IsInRaid = function() return false end
+    env.UnitExists = function(unit) return unit == "player" or env.party[unit] ~= nil end
+    env.UnitIsUnit = function(a, b) return a == b end
+    env.UnitClass = function(unit)
+        local member = env.party[unit]
+        if member then return member[3], member[3] end
+        return nil
+    end
+    env.C_ClassColor = { GetClassColor = function(classFile)
+        local colors = { MAGE = { 0.25, 0.78, 0.92 }, PRIEST = { 1, 1, 1 }, WARLOCK = { 0.53, 0.53, 0.93 } }
+        local rgb = colors[classFile]
+        if not rgb then return nil end
+        return { GetRGB = function() return rgb[1], rgb[2], rgb[3] end }
+    end }
     env:Load("Integrations/Questie.lua")
     env:Load("Integrations/Plater.lua")
     env:Load("Modules_LoD/Nameplates/QuestProgress_Data.lua")
@@ -628,5 +646,265 @@ describe("quest progress module", function()
         assert.equal(unitFrame.PlayerLevelDiffFrame, module:AnchorFor(plate))
         unitFrame.LevelFrame:Show()
         assert.equal(unitFrame.LevelFrame, module:AnchorFor(plate))
+    end)
+end)
+
+local function inParty(env, members)
+    env.grouped = true
+    for index, member in ipairs(members) do
+        env.party["party" .. index] = member
+    end
+end
+
+local SKIRMISH = "Creature-0-3061-1-42177-38038-002FAC4343"
+
+describe("group progress resolution", function()
+    local function roster(env, names, seconds, classes)
+        env.grouped = true
+        env.R.QuestData:SetRoster(names, seconds, classes, #names)
+        env.R.QuestData:SetTrackGroup(true)
+    end
+
+    local function groupOut()
+        return { groupMember = {}, groupClass = {}, groupFulfilled = {}, groupRequired = {}, groupRatio = {} }
+    end
+
+    -- The 5 Nov 2026 party-of-four tooltip, with the player listed and one quest they lack.
+    local function partyTooltip(env)
+        env.R.QuestData:SetPlayerNames("Profet", "Profet Ashbringer")
+        env.objectives[301] = { { type = "monster", text = "1/12 Kobold Laborer slain" } }
+        env.offQuests[302] = true
+        env.tooltips.target = { lines = {
+            title(301, "Skirmish at Echo Ridge"),
+            player("Profet Ashbringer"), objective("1/12 Kobold Laborer slain", 1, 12),
+            player("Azhue Azhue"), objective("1/12 Kobold Laborer slain", 1, 12),
+            player("Ghost Type"), objective("5/12 Kobold Laborer slain", 5, 12),
+            title(302, "Rascally Rodents"),
+            player("Goobie Patootie"), objective("2/8 Stolen Book", 2, 8),
+            player("Ghost Type"), objective("7/8 Stolen Book", 7, 8),
+        } }
+    end
+
+    it("collects every member's open objective by the names the tooltip writes", function()
+        local env = base()
+        partyTooltip(env)
+        roster(env, { "Azhue", "Ghost", "Goobie" }, { "Azhue", "Type", "Patootie" },
+            { "MAGE", "PRIEST", "WARLOCK" })
+        local out = env.R.QuestData:Resolve("target", groupOut())
+        assert.is_true(out.ok)
+        assert.equal(1, out.fulfilled)
+        assert.equal(3, out.groupCount)
+        assert.same({ 1, 2, 3 }, { out.groupMember[1], out.groupMember[2], out.groupMember[3] })
+        assert.same({ 1, 12 }, { out.groupFulfilled[1], out.groupRequired[1] })
+        -- One slot per member: Ghost Type keeps the objective closest to done, 7/8 over 5/12.
+        assert.same({ 7, 8 }, { out.groupFulfilled[2], out.groupRequired[2] })
+        assert.equal("PRIEST", out.groupClass[2])
+        assert.same({ 2, 8 }, { out.groupFulfilled[3], out.groupRequired[3] })
+    end)
+
+    it("never makes a member of the player, a stranger or someone already finished", function()
+        local env = base()
+        env.R.QuestData:SetPlayerNames("Me", nil)
+        env.objectives[101] = { { type = "monster", text = "2/6 slain" } }
+        env.tooltips.target = { lines = {
+            title(101, "Culling"),
+            player("Me"), objective("2/6 slain", 2, 6),
+            player("Stranger"), objective("1/6 slain", 1, 6),
+            player("Done"), objective("6/6 slain", 6, 6, true),
+        } }
+        roster(env, { "Done" }, { false }, { "MAGE" })
+        local out = env.R.QuestData:Resolve("target", groupOut())
+        assert.equal(2, out.fulfilled)
+        assert.equal(0, out.groupCount)
+    end)
+
+    it("matches a Retail name across realms and nothing that only starts the same", function()
+        local env = base()
+        env.objectives[101] = { { type = "monster" } }
+        env.tooltips.target = { lines = {
+            title(101, "Culling"),
+            player("Me"), objective("2/6 slain", 2, 6),
+            player("Friend-Silvermoon"), objective("3/6 slain", 3, 6),
+            player("Friendly Fire"), objective("4/6 slain", 4, 6),
+        } }
+        roster(env, { "Friend" }, { "Silvermoon" }, { "MAGE" })
+        local out = env.R.QuestData:Resolve("target", groupOut())
+        assert.equal(1, out.groupCount)
+        assert.equal(3, out.groupFulfilled[1])
+    end)
+
+    it("collects nothing while off, and nothing into a result without group arrays", function()
+        local env = base()
+        partyTooltip(env)
+        roster(env, { "Ghost" }, { "Type" }, { "PRIEST" })
+        local out = env.R.QuestData:Resolve("target", {})
+        assert.equal(0, out.groupCount)
+        env.R.QuestData:SetTrackGroup(false)
+        out = env.R.QuestData:Resolve("target", groupOut())
+        assert.equal(0, out.groupCount)
+        assert.equal(1, out.fulfilled)
+    end)
+end)
+
+describe("group progress on the plate", function()
+    local function partyPlate(env, own, friend, other)
+        env.objectives[301] = { { type = "monster", text = own and string.format("%d/12 slain", own) or "x" } }
+        local lines = { title(301, "Skirmish") }
+        if own then
+            lines[#lines + 1] = player("Me")
+            lines[#lines + 1] = objective(string.format("%d/12 slain", own), own, 12, own >= 12)
+        end
+        lines[#lines + 1] = player("Friend Surname")
+        lines[#lines + 1] = objective(string.format("%d/12 slain", friend), friend, 12, friend >= 12)
+        if other then
+            lines[#lines + 1] = player("Other")
+            lines[#lines + 1] = objective(string.format("%d/12 slain", other), other, 12, other >= 12)
+        end
+        env.tooltips.nameplate1 = { lines = lines }
+    end
+
+    local function show(env)
+        addPlate(env, "nameplate1", SKIRMISH)
+        env:Fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+        env:Advance(0.1)
+    end
+
+    it("is off by default and the plate reads as before", function()
+        local env = base()
+        inParty(env, { { "Friend", "Surname", "MAGE" } })
+        local module = withModule(env)
+        assert.is_false(env.R.Settings:GetOption("nameplateShowGroup"))
+        partyPlate(env, 3, 1)
+        show(env)
+        assert.equal("3", module.shown.nameplate1.value:GetText())
+        assert.is_nil(module.rows.nameplate1)
+    end)
+
+    it("shows a member behind the player with their count, in their class colour", function()
+        local env = base()
+        inParty(env, { { "Friend", "Surname", "MAGE" } })
+        local module = withModule(env)
+        env.R.Settings:SetOption("nameplateShowGroup", true)
+        partyPlate(env, 3, 1)
+        show(env)
+        local row = module.rows.nameplate1
+        assert.is_true(row:IsShown())
+        assert.equal("3", module.shown.nameplate1.value:GetText())
+        assert.equal("1/12", row.counts[1]:GetText())
+        assert.same({ 0.25, 0.78, 0.92, 1 }, row.marks[1].color)
+        assert.is_true(row.marks[1]:IsShown())
+        assert.is_false(row.marks[2]:IsShown())
+        assert.is_false(row.more:IsShown())
+    end)
+
+    it("gives a member level with the player the mark alone", function()
+        local env = base()
+        inParty(env, { { "Friend", "Surname", "MAGE" } })
+        local module = withModule(env)
+        env.R.Settings:SetOption("nameplateShowGroup", true)
+        partyPlate(env, 3, 3)
+        show(env)
+        local row = module.rows.nameplate1
+        assert.equal("", row.counts[1]:GetText())
+        assert.is_true(row.marks[1]:IsShown())
+    end)
+
+    it("keeps a mob the player finished bright while a member still needs it", function()
+        local env = base()
+        inParty(env, { { "Friend", "Surname", "MAGE" } })
+        local module = withModule(env)
+        env.R.Settings:SetOption("nameplateShowGroup", true)
+        partyPlate(env, 12, 4)
+        show(env)
+        assert.is_nil(module.shown.nameplate1)
+        assert.is_nil(module.dimmed.nameplate1)
+        local row = module.rows.nameplate1
+        assert.equal("4/12", row.counts[1]:GetText())
+        -- The member finishes too: now nobody needs it, and it dims as it always did.
+        partyPlate(env, 12, 12)
+        env:Fire("UNIT_QUEST_LOG_CHANGED", "party1")
+        env:Advance(0.5)
+        assert.is_nil(module.rows.nameplate1)
+        assert.is_true(module.dimmed.nameplate1:IsShown())
+    end)
+
+    it("shows a quest only a member has as the row alone, beside the plate", function()
+        local env = base()
+        inParty(env, { { "Friend", "Surname", "MAGE" } })
+        local module = withModule(env)
+        env.R.Settings:SetOption("nameplateShowGroup", true)
+        partyPlate(env, nil, 5)
+        env.offQuests[301] = true
+        local row = module.groupRows.free[#module.groupRows.free]
+        local anchored
+        row.SetPoint = function(_, point, relative) anchored = { point, relative } end
+        show(env)
+        assert.equal(row, module.rows.nameplate1)
+        assert.is_nil(module.shown.nameplate1)
+        assert.equal("5/12", row.counts[1]:GetText())
+        assert.equal("LEFT", anchored[1])
+        assert.equal(env.plates.nameplate1.UnitFrame.HealthBarsContainer, anchored[2])
+    end)
+
+    it("folds members past the last slot into +N", function()
+        local env = base()
+        env.grouped = true
+        env.IsInRaid = function() return true end
+        env.objectives[301] = { { type = "monster", text = "1/12 slain" } }
+        local lines = { title(301, "Skirmish"), player("Me"), objective("1/12 slain", 1, 12) }
+        for index = 1, 6 do
+            env.party["raid" .. index] = { "Raider" .. index, nil, "WARLOCK" }
+            lines[#lines + 1] = player("Raider" .. index)
+            lines[#lines + 1] = objective("0/12 slain", 0, 12)
+        end
+        env.party.raid7 = { "Me", nil, "MAGE" }
+        env.UnitIsUnit = function(a, b) return a == b or (a == "raid7" and b == "player") end
+        env.tooltips.nameplate1 = { lines = lines }
+        local module = withModule(env)
+        env.R.Settings:SetOption("nameplateShowGroup", true)
+        show(env)
+        local row = module.rows.nameplate1
+        assert.is_true(row.marks[4]:IsShown())
+        assert.equal("+2", row.more:GetText())
+        assert.is_true(row.more:IsShown())
+    end)
+
+    it("applies the switch to plates already up, and follows the roster", function()
+        local env = base()
+        inParty(env, { { "Friend", "Surname", "MAGE" } })
+        local module = withModule(env)
+        partyPlate(env, 3, 1)
+        show(env)
+        assert.is_nil(module.rows.nameplate1)
+        env.R.Settings:SetOption("nameplateShowGroup", true)
+        env:Advance(0.1)
+        assert.equal("1/12", module.rows.nameplate1.counts[1]:GetText())
+        -- The member leaves: the cached entry named them, so it goes with them.
+        env.party.party1 = nil
+        env:Fire("GROUP_ROSTER_UPDATE")
+        env:Advance(0.5)
+        assert.is_nil(module.rows.nameplate1)
+        assert.equal("3", module.shown.nameplate1.value:GetText())
+        env.R.Settings:SetOption("nameplateShowGroup", false)
+        env:Advance(0.1)
+        assert.is_nil(module.rows.nameplate1)
+    end)
+
+    it("enable, disable, enable leaves no rows behind", function()
+        local env = base()
+        inParty(env, { { "Friend", "Surname", "MAGE" } })
+        local module = withModule(env)
+        env.R.Settings:SetOption("nameplateShowGroup", true)
+        partyPlate(env, 3, 1)
+        show(env)
+        local row = module.rows.nameplate1
+        assert.is_true(env.R.Registry:Disable(module))
+        assert.is_false(row:IsShown())
+        assert.equal("", row.counts[1]:GetText())
+        assert.equal(0, env:ActiveTimers())
+        assert.is_true(env.R.Registry:Enable(module))
+        env:Fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+        env:Advance(0.1)
+        assert.equal("1/12", module.rows.nameplate1.counts[1]:GetText())
     end)
 end)

@@ -128,6 +128,27 @@ describe("event broker and timers", function()
         assert.equal(12, result)
     end)
 
+    it("holds a unit event for one unit, filtered by the client, and never mixes it with every unit", function()
+        local owner, other, units = {}, {}, {}
+        R.Broker:SubscribeUnit("UNIT_TEST", "player", function(_, _, unit) units[#units + 1] = unit end, owner)
+        R.Broker:SubscribeUnit("UNIT_TEST", "player", function() end, other)
+        assert.equal("player", R.Broker.frame.unitEvents.UNIT_TEST)
+        env:Fire("UNIT_TEST", "party1")
+        env:Fire("UNIT_TEST", "player")
+        assert.same({ "player" }, units)
+        assert.has_error(function() R.Broker:Subscribe("UNIT_TEST", function() end, {}) end)
+        assert.has_error(function() R.Broker:SubscribeUnit("UNIT_TEST", "target", function() end, {}) end)
+        assert.has_error(function() R.Broker:SubscribeUnit("REFACTOR_X", "player", function() end, {}) end)
+        R.Broker:UnsubscribeAll(owner)
+        assert.is_true(R.Broker.frame:IsEventRegistered("UNIT_TEST"))
+        R.Broker:UnsubscribeAll(other)
+        assert.is_false(R.Broker.frame:IsEventRegistered("UNIT_TEST"))
+        assert.is_nil(R.Broker.frame.unitEvents.UNIT_TEST)
+        -- Let go, the event can be held for every unit again.
+        R.Broker:Subscribe("UNIT_TEST", function() end, owner)
+        assert.is_true(R.Broker.frame:IsEventRegistered("UNIT_TEST"))
+    end)
+
     it("throttles with the latest trailing payload and cancels on unsubscribe", function()
         local owner, values = {}, {}
         R.Broker:Subscribe("TEST_EVENT", function(_, _, value) values[#values + 1] = value end, owner, 1)

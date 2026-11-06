@@ -16,21 +16,10 @@ local function invoke(subscription, event, args, count)
     end
 end
 
-function Broker:Subscribe(event, handler, owner, throttle, priority)
-    assert(type(event) == "string" and type(handler) == "function" and type(owner) == "table")
-    assert(throttle == nil or type(throttle) == "number" and throttle >= 0, "invalid throttle")
-    local entries = self.events[event]
-    if entries then
-        for _, entry in ipairs(entries) do
-            if entry.owner == owner and entry.handler == handler then
-                return entry
-            end
-        end
-    else
-        entries = {}
-        self.events[event] = entries
-        if not isInternal(event) then
-            frame:RegisterEvent(event)
+local function append(self, entries, handler, owner, throttle, priority)
+    for _, entry in ipairs(entries) do
+        if entry.owner == owner and entry.handler == handler then
+            return entry
         end
     end
     self.nextOrder = self.nextOrder + 1
@@ -46,6 +35,37 @@ function Broker:Subscribe(event, handler, owner, throttle, priority)
         return a.priority > b.priority
     end)
     return subscription
+end
+
+function Broker:Subscribe(event, handler, owner, throttle, priority)
+    assert(type(event) == "string" and type(handler) == "function" and type(owner) == "table")
+    assert(throttle == nil or type(throttle) == "number" and throttle >= 0, "invalid throttle")
+    local entries = self.events[event]
+    assert(not (entries and entries.unit), "event is held for one unit")
+    if not entries then
+        entries = {}
+        self.events[event] = entries
+        if not isInternal(event) then
+            frame:RegisterEvent(event)
+        end
+    end
+    return append(self, entries, handler, owner, throttle, priority)
+end
+
+-- A unit event the client filters before Lua sees it: the player's spellcasts arrive, a
+-- raid's never do, and nothing has to read the payload's unit, which can be secret while
+-- casts are restricted. An event is held for one unit or for every unit, never both.
+function Broker:SubscribeUnit(event, unit, handler, owner)
+    assert(type(event) == "string" and not isInternal(event) and type(unit) == "string")
+    assert(type(handler) == "function" and type(owner) == "table")
+    local entries = self.events[event]
+    assert(entries == nil or entries.unit == unit, "event is held for another unit")
+    if not entries then
+        entries = { unit = unit }
+        self.events[event] = entries
+        frame:RegisterUnitEvent(event, unit)
+    end
+    return append(self, entries, handler, owner)
 end
 
 function Broker:Unsubscribe(event, owner)

@@ -45,10 +45,26 @@ FACETS = (
     ("#a77b45", "M25 118L10 103L15 100.93L27.07 113Z"),
     ("#cda362", "M10 103V25L15 27.07V100.93Z"),
 )
-# Raidho, the rune for R. Centred by eye, not by box: the stem carries most of the weight.
-RUNE = '<path d="M49 25V103"/><path d="M49 33L78 50L49 67"/><path d="M53 66L84 102"/>'
 
-# The wordmark is built from the rune's stroke: 12 units wide, cut flat at cap height 66.
+
+def cog(r_out, r_root, teeth, tip_half, root_half, hole):
+    """A cog centred in the 128 unit icon: straight tapered teeth, round valleys, a round hub hole."""
+    def at(angle, r):
+        a = math.radians(angle)
+        return f"{64 + r * math.cos(a):.2f} {64 + r * math.sin(a):.2f}"
+    d = ""
+    for i in range(teeth):
+        c = i * 360 / teeth - 90
+        d += ("M" if i == 0 else "L") + at(c - root_half, r_root)
+        d += "L" + at(c - tip_half, r_out) + "L" + at(c + tip_half, r_out) + "L" + at(c + root_half, r_root)
+        d += f"A{r_root} {r_root} 0 0 1 " + at(c + 360 / teeth - root_half, r_root)
+    return d + f"ZM{64 + hole} 64A{hole} {hole} 0 1 0 {64 - hole} 64A{hole} {hole} 0 1 0 {64 + hole} 64Z"
+
+
+# The mark carved into the plate. The plate shows through the hub.
+MARK = cog(41, 31, 8, 9, 13.5, 12)
+
+# The wordmark is built from one 12 unit stroke, cut flat at cap height 66.
 LETTERS = {
     "R": (47, '<path d="M6 -8V74"/><path d="M6 2L35 19L6 36"/><path d="M10 35L41 71"/>'),
     "E": (38, '<path d="M6 -8V74"/><path d="M0 6H38"/><path d="M0 33H32"/><path d="M0 60H38"/>'),
@@ -102,29 +118,25 @@ def rasterise(doc, w, h):
     return Image.open(BytesIO(png)).convert("RGBA")
 
 
-def rune(p, glow=0.0):
-    """The carved rune in icon units: lit lip below, shadowed top wall, floor that can glow."""
+def mark(p, glow=0.0):
+    """The carved cog in icon units: lit lip below, shadowed top wall, floor that can glow."""
     floor = mix("#3d2914", "#f0883a", glow)
-    out = (f'<defs><clipPath id="{p}cut"><rect x="0" y="31" width="128" height="66"/></clipPath>'
-           f'<g id="{p}rune" fill="none" stroke-linejoin="miter" stroke-linecap="butt" '
-           f'clip-path="url(#{p}cut)">{RUNE}</g>'
+    out = (f'<defs><path id="{p}mark" d="{MARK}" fill-rule="evenodd"/>'
            f'<mask id="{p}ch" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">'
-           f'<use href="#{p}rune" stroke="#fff" stroke-width="12"/></mask>'
+           f'<use href="#{p}mark" fill="#fff"/></mask>'
            f'<filter id="{p}bloom" x="-50%" y="-50%" width="200%" height="200%">'
            f'<feGaussianBlur stdDeviation="6"/></filter>'
            f'<filter id="{p}soft" x="-20%" y="-20%" width="140%" height="140%">'
-           f'<feGaussianBlur stdDeviation="1.4"/></filter></defs>'
-           f'<use href="#{p}rune" stroke="#f3dca8" stroke-width="12" transform="translate(0 2)"/>'
-           f'<use href="#{p}rune" stroke="#1e1309" stroke-width="12"/>'
-           f'<g mask="url(#{p}ch)"><use href="#{p}rune" stroke="{floor}" stroke-width="12" '
-           f'transform="translate(0 2.5)"/>')
+           f'<feGaussianBlur stdDeviation="3"/></filter></defs>'
+           f'<use href="#{p}mark" fill="#f3dca8" transform="translate(0 2)"/>'
+           f'<use href="#{p}mark" fill="#1e1309"/>'
+           f'<g mask="url(#{p}ch)"><use href="#{p}mark" fill="{floor}" transform="translate(0 2.5)"/>')
     if glow > 0.01:
-        out += (f'<use href="#{p}rune" stroke="#ffe1a8" stroke-width="4" opacity="{0.9 * glow:.3f}" '
-                f'filter="url(#{p}soft)" transform="translate(0 1.5)"/>')
+        out += (f'<use href="#{p}mark" fill="#ffe1a8" opacity="{0.6 * glow:.3f}" filter="url(#{p}soft)" '
+                f'transform="translate(64 66) scale(0.8) translate(-64 -64)"/>')
     out += "</g>"
     if glow > 0.01:
-        out += (f'<use href="#{p}rune" stroke="#ff8f3a" stroke-width="12" opacity="{0.6 * glow:.3f}" '
-                f'filter="url(#{p}bloom)"/>')
+        out += f'<use href="#{p}mark" fill="#ff8f3a" opacity="{0.6 * glow:.3f}" filter="url(#{p}bloom)"/>'
     return out
 
 
@@ -133,17 +145,17 @@ def plate(p, glow=0.0):
     return (f'<path fill="{RIM}" d="{OCTAGON}"/>{facets}<path fill="{FACE}" d="{PLATE_FACE}"/>'
             f'<path d="{PLATE_LINE}" fill="none" stroke="#d6af6e" stroke-width="1.2" transform="translate(0 1.2)"/>'
             f'<path d="{PLATE_LINE}" fill="none" stroke="#7a5629" stroke-width="1.5"/>'
-            + rune(p, glow))
+            + mark(p, glow))
 
 
 def disc(p):
-    """The minimap copy: the same face and rune on a coin, since the button is round."""
+    """The minimap copy: the same face and cog on a coin, since the button is round."""
     return (f'<defs><linearGradient id="{p}bevel" x1="0" y1="0" x2="1" y2="1">'
             f'<stop offset="0" stop-color="#e6c485"/><stop offset="1" stop-color="#7c5730"/>'
             f'</linearGradient></defs>'
             f'<circle cx="64" cy="64" r="63" fill="{RIM}"/>'
             f'<circle cx="64" cy="64" r="58" fill="url(#{p}bevel)"/>'
-            f'<circle cx="64" cy="64" r="52" fill="{FACE}"/>' + rune(p))
+            f'<circle cx="64" cy="64" r="52" fill="{FACE}"/>' + mark(p))
 
 
 def word_geometry(text):
@@ -251,7 +263,7 @@ TEXT_X = ICON_X + ICON_SIZE + 44
 WORD_Y = 70
 
 
-def rune_glow(t, period):
+def mark_glow(t, period):
     return 0.1 + 0.9 * (0.5 - 0.5 * math.cos(2 * math.pi * t / period)) ** 2
 
 
@@ -291,7 +303,7 @@ def banner(t):
              f'<path d="{OCTAGON}" fill="#fff"/></mask>'
              f'<filter id="ish" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4"/></filter></defs>'
              f'<path d="{OCTAGON}" fill="#000" opacity="0.6" filter="url(#ish)" transform="translate(0 6)"/>'
-             + plate("b", rune_glow(t, B_LOOP / 2))
+             + plate("b", mark_glow(t, B_LOOP / 2))
              + (f'<g mask="url(#im)" opacity="0.35">{band(icon_glint, 0, 128, 22, 20)}</g>' if icon_glint is not None else "")
              + "</g>")
     body += (f'<g transform="translate({TEXT_X:.2f} {WORD_Y}) scale({s:.4f})">'

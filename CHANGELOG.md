@@ -58,6 +58,85 @@ you can search, and a new character starts with the settings your others already
 
 ## Development notes
 
+Profession levelling plan (6 Nov 2026), checked headless and in the layout preview, not yet in
+game:
+
+- With a crafting profession open, a panel on the right of the window plans the way from your
+  skill to the cap of your rank, in the fewest crafts or, with TSM or Auctionator prices, the
+  least gold. Each step says what to craft, how many times and how many you can make now, and
+  the current one has a bar that fills as you craft.
+- It plans again whenever your skill, recipes, bags or prices change, so levelling some other
+  way never leaves it behind. Where nothing you know gives skill any more, it names the recipes
+  you have not learned that would.
+- The reagents for the rest of the plan are listed against what your bags and bank hold.
+- Click a step to show its recipe, Shift-click to link it. It never crafts for you. Less folds
+  the panel down to the current step.
+- Recipe colours come from the game's own data; where that disagrees with the window, the
+  window's own colours are used and remembered.
+
+Send to alts (6 Nov 2026), checked headless, not yet in game:
+
+- With Send Mail open, a panel beside the mail window lists what belongs with your other
+  characters: herbs, metal and stone, cloth, leather and other trade goods, recipes, and gear
+  that binds when equipped. Pick your bank alt once; each kind goes there unless you right-click
+  an item and send that kind, or that one item, to another character, or keep it.
+- Click attaches a stack, Shift-click every stack of that item, and Fill mail attaches a whole
+  mail. After you send it, the next batch for the same character is attached for you. You always
+  press Send yourself.
+- Mail something by hand to the same character twice and it is suggested for them from then on.
+  Mats your own crafts use stay with you, and the panel shows the postage and what the attached
+  items are worth.
+- An option keeps an amount of gold back and adds the rest to the mail with one button.
+
+Bag upgrade (6 Nov 2026), checked headless, not yet in game:
+
+- Right-click a bag that is bigger than one you wear and it takes the place of your smallest
+  bag of the same kind. The old bag's items move into the new one, and the old bag goes where
+  the new one was. A herb bag only ever replaces a herb bag, and the backpack and the reagent
+  bag are never touched.
+- A bigger bag that lands in your bags is offered at the top of the screen with Equip and Not
+  now, which also works with bag addons. An empty bag slot is filled before anything is
+  replaced.
+- Short of room, it first combines partial stacks of the same item, only as many as it needs,
+  and puts herbs and other trade goods into a profession bag with space.
+- Nothing moves when your other bags still lack the room; it says how many slots to free. A bag
+  that binds when equipped still asks you first, combat pauses a swap, and a move the game
+  refuses ends it with your items still in your bags.
+
+Group progress on nameplates (5 Nov 2026), checked headless and in the layout preview, not yet
+in game:
+
+- A new nameplate option, Show your group's progress, off by default. Each party member a mob
+  still counts for gets a diamond in their class colour under your count, with their count when
+  it differs from yours. Past four members the rest read "+N". A mob you finished stays bright
+  while someone still needs it, and a quest only a party member has now shows their mark.
+
+ActionCam (5 Nov 2026), checked headless, not yet in game:
+
+- The camera no longer creeps further out each time a situation moves it, and an NPC visit
+  puts it back where it was. Ranged sits closer than before.
+- Indoors and talking to an NPC only ever bring the camera closer. A mount, a city and
+  instances only back it off. A camera that is already there stays put, so walking into a
+  building with the camera close, or mounting with it far out, no longer moves it.
+- A fight never moves the camera: it holds still through the fight and for three seconds
+  after, so pulling in and out of combat no longer jars it. A mount or an NPC right after a
+  fight still applies at once.
+- The shoulder offset glides into place instead of jumping. Leaving a building waits a second,
+  so doorways no longer swing the camera, and a move of a yard or two is skipped altogether.
+- The first step away from an NPC lets go of them: the camera stops turning toward them and
+  goes back to your distance.
+- A trainer, banker or flight master reached through their gossip no longer leaves the camera
+  stuck close. A quest shared by a party member or started from an item no longer zooms in.
+- The camera remembers where you zoom in each situation until you log out: wheel out on a mount,
+  and the next mount goes there. A checkbox turns it off.
+- Travel, aquatic and flight forms and Ghost Wolf count as mounted.
+- A new Ranged profile, and Melee no longer pulls toward your target. Raider is now Wide view.
+- Every profile has a tilt strength and a choice of head sway while moving, which the built-in
+  ones keep to standing still. Your own copies keep every number they had.
+- The settings show which situation you are in right now and what each situation does, and warn
+  when Accessibility's Reduce Unexpected Camera Movement cancels the shoulder offset.
+- /refactor camtest says what the camera is doing.
+
 Launch fixes (5 Nov 2026), checked headless, not yet in game:
 
 - An upgrade opens a prompt at the top centre of the screen instead of putting an Equip

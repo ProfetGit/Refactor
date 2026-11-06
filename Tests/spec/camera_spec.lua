@@ -14,8 +14,22 @@ describe("camera profiles", function()
             assert.is_true(Profiles:Valid(profile.values), profile.id)
             ids[#ids + 1] = profile.id
         end
-        assert.same({ "immersive", "controllerRanged", "controllerMelee", "cinematic", "raider", "melee",
-            "comfort", "blizzardBasic", "blizzardOn", "blizzardFull" }, ids)
+        assert.same({ "immersive", "melee", "ranged", "cinematic", "raider", "comfort", "controllerMelee",
+            "controllerRanged", "blizzardBasic", "blizzardOn", "blizzardFull" }, ids)
+        -- Every situation says which way it may move the camera, and only the two that exist to
+        -- bring it closer bring it closer.
+        for _, situation in ipairs(Profiles.situations) do
+            local direction = Profiles.directions[situation]
+            assert.is_true(direction == "in" or direction == "out", situation)
+            assert.equal(situation == "indoors" or situation == "npc", direction == "in", situation)
+        end
+        -- A mouse never fights a camera turning on its own: only the controller profiles and
+        -- Blizzard's own Full pull toward the target.
+        for _, profile in ipairs(Profiles.builtIn) do
+            local pulls = profile.values.targetPull > 0
+            assert.equal(profile.id == "controllerMelee" or profile.id == "controllerRanged"
+                or profile.id == "blizzardFull", pulls, profile.id)
+        end
         local values = Profiles:Resolve("immersive").values
         values.distance = nil
         assert.is_false(Profiles:Valid(values))
@@ -30,7 +44,14 @@ describe("camera profiles", function()
         values.shoulder = "0.5"
         assert.is_false(Profiles:Valid(values))
         values = Profiles:Resolve("immersive").values
-        values.pitch = 1
+        values.swayWhileMoving = 1
+        assert.is_false(Profiles:Valid(values))
+        values = Profiles:Resolve("immersive").values
+        values.tilt = 0.9
+        assert.is_false(Profiles:Valid(values))
+        -- The old shape is not a profile until it is upgraded.
+        values = Profiles:Resolve("immersive").values
+        values.tilt, values.swayWhileMoving, values.pitch = nil, nil, true
         assert.is_false(Profiles:Valid(values))
         -- LEAVE is a distance; nothing between it and the floor is, and a shoulder cannot use it.
         values = Profiles:Resolve("immersive").values
@@ -73,7 +94,7 @@ describe("camera profiles", function()
         assert.same({ nil, "invalid_encoding" }, { Profiles:Decode("not base64!") })
         assert.same({ nil, "invalid_encoding" }, { Profiles:Decode(R.Codec:EncodeText("RC1\nPad")) })
         -- The right shape with one number outside its range, one key twice, and one unknown.
-        local lines = { "RC3", "Pad" }
+        local lines = { "RC4", "Pad" }
         for _, field in ipairs(Profiles.fields) do
             local value = values[field.key]
             local text = field.kind == "boolean" and (value and "1" or "0") or tostring(value)
@@ -90,7 +111,9 @@ describe("camera profiles", function()
         assert.equal(0, Profiles:Decode(withLine("distance=0", 3)).values.distance)
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("distance=1")) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("mystery=1")) })
-        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("pitch=yes", 6)) })
+        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("swayWhileMoving=yes", 6)) })
+        -- pitch is only an RC3 field.
+        assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("pitch=1")) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Decode(withLine("RC2", 1)) })
         assert.same({ nil, "invalid_profile" }, { Profiles:Encode("", values) })
     end)
@@ -148,9 +171,69 @@ describe("camera profiles", function()
         Settings:Init(account, {}, "Player-test")
         assert.equal("immersive", account.options.cameraProfile)
         assert.same(values, account.options.cameraProfiles.Kept)
+        -- A bad record is dropped on its own; the good one and the selection of it stay.
         account = { options = { cameraProfile = "custom:Kept", cameraProfiles = { Kept = values, Bad = {} } } }
         Settings:Init(account, {}, "Player-test")
+        assert.same({ Kept = values }, account.options.cameraProfiles)
+        assert.equal("custom:Kept", account.options.cameraProfile)
+        account = { options = { cameraProfiles = "not a table" } }
+        Settings:Init(account, {}, "Player-test")
         assert.same({}, account.options.cameraProfiles)
-        assert.equal("immersive", account.options.cameraProfile)
+    end)
+
+    -- The owner's own copy of Melee, exactly as Forever saved it before tilt and sway while
+    -- moving existed. It has to come through an upgrade with every number it had.
+    local MY_MELEE = {
+        pitch = true, indoorsDistance = 0, mountedShoulder = 0, dungeonDistance = 0, mountedDistance = 16,
+        combatShoulder = 1, battlegroundDistance = 0, headBob = 0.2, raidDistance = 12, npcDistance = 0,
+        indoorsShoulder = 0.6, restingDistance = 0, targetPull = 0, distance = 0, arenaShoulder = 0.9,
+        restingShoulder = 0.5, dungeonShoulder = 0.8, raidShoulder = 0.6, npcShoulder = 0.8,
+        battlegroundShoulder = 0.8, focusInteract = true, arenaDistance = 0, shoulder = 1, combatDistance = 0,
+    }
+
+    it("upgrades a saved profile from before tilt and keeps every value it had", function()
+        local account = { options = { cameraProfile = "custom:My Melee",
+            cameraProfiles = { ["My Melee"] = MY_MELEE } } }
+        Settings:Init(account, {}, "Player-test")
+        assert.equal("custom:My Melee", account.options.cameraProfile)
+        local upgraded = account.options.cameraProfiles["My Melee"]
+        assert.is_true(Profiles:Valid(upgraded))
+        assert.is_nil(upgraded.pitch)
+        assert.equal(Profiles.tiltDefault, upgraded.tilt)
+        assert.is_true(upgraded.swayWhileMoving)
+        -- Combat is no longer a situation, so its two fields go; everything else stays.
+        assert.is_nil(upgraded.combatDistance)
+        assert.is_nil(upgraded.combatShoulder)
+        for key, value in pairs(MY_MELEE) do
+            if key ~= "pitch" and key ~= "combatDistance" and key ~= "combatShoulder" then
+                assert.equal(value, upgraded[key], key)
+            end
+        end
+        -- Once more changes nothing, and no tilt becomes zero tilt.
+        Settings:Init(account, {}, "Player-test")
+        assert.same(upgraded, account.options.cameraProfiles["My Melee"])
+        local flat = {}
+        for key, value in pairs(MY_MELEE) do flat[key] = value end
+        flat.pitch = false
+        assert.equal(0, Profiles:Upgrade(flat).tilt)
+        assert.equal("text", Profiles:Upgrade("text"))
+    end)
+
+    it("imports a share string from before tilt", function()
+        local lines = { "RC3", "Old" }
+        for key, value in pairs(MY_MELEE) do
+            lines[#lines + 1] = key .. "=" .. (type(value) == "boolean" and (value and "1" or "0") or tostring(value))
+        end
+        local decoded = Profiles:Decode(R.Codec:EncodeText(table.concat(lines, "\n") .. "\n"))
+        assert.equal("Old", decoded.name)
+        assert.is_true(Profiles:Valid(decoded.values))
+        assert.equal(Profiles.tiltDefault, decoded.values.tilt)
+        assert.equal(16, decoded.values.mountedDistance)
+        -- An RC3 string never carried the new fields.
+        lines[#lines + 1] = "tilt=0.4"
+        assert.same({ nil, "invalid_profile" },
+            { Profiles:Decode(R.Codec:EncodeText(table.concat(lines, "\n") .. "\n")) })
+        -- Exports are RC4 from now on.
+        assert.equal("RC4", R.Codec:DecodeText(Profiles:Encode("New", decoded.values)):match("^([^\n]*)"))
     end)
 end)

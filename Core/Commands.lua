@@ -95,6 +95,13 @@ function Commands:Dispatch(input)
         R.Broker:Emit("REFACTOR_INVITE_TEST")
         return nil
     end
+    if command == "camtest" then
+        if not R.Broker.events.REFACTOR_CAMERA_TEST then
+            return { R.L.CMD_CAMERA_TEST_OFF }
+        end
+        R.Broker:Emit("REFACTOR_CAMERA_TEST")
+        return nil
+    end
     if command == "spelltest" then
         if not R.Broker.events.REFACTOR_SPELL_TEST then
             return { R.L.CMD_SPELL_TEST_OFF }
@@ -127,6 +134,6 @@ function Commands:Dispatch(input)
     end
     return { R.L.CMD_HELP_HEADER, R.L.CMD_HELP_OPEN, R.L.CMD_HELP_SEARCH, R.L.CMD_HELP_CHANGELOG,
         R.L.CMD_HELP_ERRORS, R.L.CMD_HELP_ERRORS_CLEAR, R.L.CMD_HELP_SAVED, R.L.CMD_HELP_BENCH,
-        R.L.CMD_HELP_LOOT_TEST, R.L.CMD_HELP_FARM_TEST, R.L.CMD_HELP_INVITE_TEST, R.L.CMD_HELP_SPELL_TEST,
-        R.L.CMD_HELP_UPDATE }
+        R.L.CMD_HELP_LOOT_TEST, R.L.CMD_HELP_FARM_TEST, R.L.CMD_HELP_INVITE_TEST, R.L.CMD_HELP_CAMERA_TEST,
+        R.L.CMD_HELP_SPELL_TEST, R.L.CMD_HELP_UPDATE }
 end

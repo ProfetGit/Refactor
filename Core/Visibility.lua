@@ -1,5 +1,5 @@
 --- @core visibility
---- Purpose: the shape of a UI visibility rule, the frame groups it applies to, the presets, and the resolver.
+--- Purpose: the frame groups UI visibility fades, the behaviours and setups that say how, and the resolver.
 --- Requires: none
 --- Events: none
 --- Hot: no
@@ -7,32 +7,34 @@ local _, R = ...
 local Visibility = {}
 R.Visibility = Visibility
 
-local MODES = { always = true, mouseover = true, hidden = true }
-Visibility.modes = { "always", "mouseover", "hidden" }
+-- What a behaviour can reveal or hide on, in the order the editor lists them. The instance
+-- kinds Conditions also tracks pick a setup instead, so they are not offered here.
+Visibility.conditions = { "combat", "casting", "hasTarget", "mounted", "resting", "inGroup", "inInstance",
+    "stealthed", "dead" }
 local CONDITIONS = {}
-for _, name in ipairs(R.Conditions.names) do
+for _, name in ipairs(Visibility.conditions) do
     CONDITIONS[name] = true
 end
 local FADE_MIN, FADE_MAX, FADE_STEP = 0, 2, 0.05
 local DEFAULT_FADE_IN, DEFAULT_FADE_OUT = 0.15, 0.4
-local MAX_GROUPS, RULE_FIELDS = 32, 8
--- How visible an element is when its rule says shown, and when it says hidden: a share of
--- the alpha the game gives the frame, so an Edit Mode opacity still counts. Shown never
--- goes below a tenth, or an element could be lost with no rule saying so.
-local SHOWN_MIN, HIDDEN_MIN, ALPHA_MAX, ALPHA_STEP = 0.1, 0, 1, 0.05
-local DEFAULT_SHOWN, DEFAULT_HIDDEN = 1, 0
+-- Opacities are a share of the alpha the game gives the frame, so an Edit Mode opacity
+-- still counts. Revealed never goes below a tenth, or an element could be lost with no rule
+-- saying so; resting may be zero, which is the whole point of most behaviours.
+local RESTING_MIN, REVEALED_MIN, ALPHA_MAX, ALPHA_STEP = 0, 0.1, 1, 0.05
+local MAX_BEHAVIOURS, MAX_ASSIGNED, MAX_NAME = 30, 64, 32
 Visibility.fadeRange = { minimum = FADE_MIN, maximum = FADE_MAX, step = FADE_STEP }
-Visibility.shownRange = { minimum = SHOWN_MIN, maximum = ALPHA_MAX, step = ALPHA_STEP }
-Visibility.hiddenRange = { minimum = HIDDEN_MIN, maximum = ALPHA_MAX, step = ALPHA_STEP }
+Visibility.restingRange = { minimum = RESTING_MIN, maximum = ALPHA_MAX, step = ALPHA_STEP }
+Visibility.revealedRange = { minimum = REVEALED_MIN, maximum = ALPHA_MAX, step = ALPHA_STEP }
+-- How an element with no behaviour comes back to the game's own alpha.
+Visibility.defaultFades = { fadeIn = DEFAULT_FADE_IN, fadeOut = DEFAULT_FADE_OUT }
 Visibility.option = "uiVisibility"
--- A zone is hovered while any element in it is, so the bars, the bags and the micro menu
--- along the bottom come and go as one. The names are where things usually sit; an
--- element can be put in any of them.
-Visibility.zones = { "none", "bottom", "top", "left", "right" }
-Visibility.noZone = "none"
-local ZONES = {}
-for _, zone in ipairs(Visibility.zones) do
-    ZONES[zone] = true
+-- Where a setup applies. World is everywhere else and always exists; the rest are optional,
+-- and a place without its own uses World's.
+Visibility.places = { "world", "city", "dungeon", "raid", "pvp" }
+Visibility.world = "world"
+local PLACES = {}
+for _, place in ipairs(Visibility.places) do
+    PLACES[place] = true
 end
 -- Opt-in extras a group may carry, each behind its own boolean option.
 Visibility.extraOptions = { uiVisibilityBlobs = true }
@@ -47,7 +49,7 @@ Visibility.extraOptions = { uiVisibilityBlobs = true }
 -- edit box has focus. Leaving is never an event: a watch checks the mouse while anything
 -- is hovered. reapply names what to
 -- hook when Blizzard writes an alpha of its own: a global function name, or a frame and
--- method. kind picks a preset's rule. Alpha multiplies down the frame tree, so a group
+-- method. kind is the heading the setup list files it under. Alpha multiplies down the frame tree, so a group
 -- whose frames sit inside another group's frames can never be more visible than its parent;
 -- noteKey says so on the panel.
 Visibility.groups = {
@@ -151,26 +153,15 @@ for index = 2, 10 do
         inputArtOptional[#inputArtOptional + 1] = name
     end
 end
-table.insert(Visibility.groups, 4, { id = "chat.inputArt", kind = "art", labelKey = "VIS_GROUP_CHAT_INPUT_ART",
+table.insert(Visibility.groups, 4, { id = "chat.inputArt", kind = "chat", labelKey = "VIS_GROUP_CHAT_INPUT_ART",
     frames = inputArt(1), optional = inputArtOptional, hover = {}, reapply = {}, noteKey = "VIS_NOTE_INPUT_ART" })
 local GROUP_BY_ID = {}
 for _, group in ipairs(Visibility.groups) do
     GROUP_BY_ID[group.id] = group
 end
 
--- Where each element usually sits, which is the zone a preset puts it in.
-local ZONE_DEFAULTS = {
-    ["chat.frames"] = "left", ["chat.tabs"] = "left", ["chat.buttons"] = "left", ["chat.inputArt"] = "left",
-    ["unit.player"] = "top", ["unit.target"] = "top", ["unit.party"] = "top", ["unit.raid"] = "top",
-    ["hud.status"] = "bottom", ["hud.microMenu"] = "bottom", ["hud.bags"] = "bottom",
-    ["hud.objectives"] = "right", ["hud.minimap"] = "right", ["hud.minimapButtons"] = "right",
-}
-for _, group in ipairs(Visibility.groups) do
-    if group.kind == "bars" then
-        ZONE_DEFAULTS[group.id] = "bottom"
-    end
-end
-Visibility.zoneDefaults = ZONE_DEFAULTS
+-- The headings of the setup list, in order.
+Visibility.kinds = { "chat", "bars", "unit", "hud" }
 
 -- Which Edit Mode system frame each group is tuned from: selecting that system in Edit
 -- Mode opens the group's settings beside Blizzard's own dialog. An element with no system
@@ -209,44 +200,6 @@ function Visibility:GroupsForSystem(systemFrame, into)
     return ids
 end
 
--- Ids of the other groups of the same kind, the ones "same for all" reaches.
-function Visibility:Siblings(id, into)
-    local group, siblings = GROUP_BY_ID[id], into or {}
-    for index = #siblings, 1, -1 do
-        siblings[index] = nil
-    end
-    for _, other in ipairs(self.groups) do
-        if group and other.kind == group.kind and other.id ~= id then
-            siblings[#siblings + 1] = other.id
-        end
-    end
-    return siblings
-end
-
-local function spec(mode, showWhen, hideWhen)
-    return { mode = mode, showWhen = showWhen or {}, hideWhen = hideWhen or {} }
-end
-
--- A preset writes a rule for every group: the rule for its kind, else the default. Fade
--- times are the player's and survive a preset.
-Visibility.presets = {
-    { id = "immersion", nameKey = "VIS_PRESET_IMMERSION", detailKey = "VIS_PRESET_IMMERSION_DETAIL",
-        rules = { default = spec("mouseover"), art = spec("hidden") } },
-    { id = "combatOnly", nameKey = "VIS_PRESET_COMBAT", detailKey = "VIS_PRESET_COMBAT_DETAIL",
-        rules = { default = spec("mouseover"), bars = spec("hidden", { combat = true }),
-            unit = spec("hidden", { combat = true }), art = spec("hidden") } },
-    { id = "mounted", nameKey = "VIS_PRESET_MOUNTED", detailKey = "VIS_PRESET_MOUNTED_DETAIL",
-        rules = { default = spec("always", nil, { mounted = true }) } },
-    { id = "off", nameKey = "VIS_PRESET_OFF", detailKey = "VIS_PRESET_OFF_DETAIL",
-        rules = { default = spec("always") } },
-}
-Visibility.customPreset = "custom"
-Visibility.defaultPreset = "off"
-local PRESET_BY_ID = {}
-for _, preset in ipairs(Visibility.presets) do
-    PRESET_BY_ID[preset.id] = preset
-end
-
 local function copySet(set)
     local result = {}
     for name in pairs(set or {}) do
@@ -255,15 +208,38 @@ local function copySet(set)
     return result
 end
 
-local function complete(stored)
-    stored = type(stored) == "table" and stored or {}
-    return {
-        mode = stored.mode or "always",
-        showWhen = copySet(stored.showWhen), hideWhen = copySet(stored.hideWhen),
-        fadeIn = stored.fadeIn or DEFAULT_FADE_IN, fadeOut = stored.fadeOut or DEFAULT_FADE_OUT,
-        shownAlpha = stored.shownAlpha or DEFAULT_SHOWN, hiddenAlpha = stored.hiddenAlpha or DEFAULT_HIDDEN,
-        zone = stored.zone or Visibility.noZone,
-    }
+local function behaviour(id, resting, mouseover, reveal, hide, together)
+    return { id = id, resting = resting, revealed = 1, mouseover = mouseover, reveal = reveal, hide = hide,
+        together = together, fadeIn = DEFAULT_FADE_IN, fadeOut = DEFAULT_FADE_OUT }
+end
+
+-- The starters stand in for the presets the first version had. They are ordinary behaviours
+-- once saved: the player can edit, copy or delete them. With no name of their own they are
+-- named by their locale key, so the names follow the client's language.
+Visibility.starters = {
+    behaviour("fadeAway", 0, true, {}, {}, true),
+    behaviour("combatHud", 0.2, true, { combat = true, hasTarget = true }, {}, false),
+    behaviour("cleanMounted", 1, true, {}, { mounted = true }, false),
+}
+
+local function copyBehaviour(source)
+    return { id = source.id, name = source.name, resting = source.resting, revealed = source.revealed,
+        mouseover = source.mouseover, reveal = copySet(source.reveal), hide = copySet(source.hide),
+        together = source.together, fadeIn = source.fadeIn, fadeOut = source.fadeOut }
+end
+
+local function starterCopies()
+    local list = {}
+    for index, starter in ipairs(Visibility.starters) do
+        list[index] = copyBehaviour(starter)
+    end
+    return list
+end
+
+-- A fresh install assigns nothing, so turning the feature on changes nothing on screen
+-- until the player gives an element a behaviour.
+function Visibility:Default()
+    return { behaviours = starterCopies(), setups = { world = {} } }
 end
 
 function Visibility:Group(id)
@@ -315,12 +291,12 @@ function Visibility:Contributions(groupId)
     return CONTRIBUTED[groupId] or NO_FRAMES
 end
 
-function Visibility:Preset(id)
-    return PRESET_BY_ID[id]
-end
-
-function Visibility:DefaultRule()
-    return complete(nil)
+-- How a behaviour is named on screen: the player's own name, else the starter's locale key.
+function Visibility:Name(entry)
+    if type(entry) ~= "table" then
+        return ""
+    end
+    return entry.name or (R.L and R.L["VIS_BEHAVIOUR_" .. entry.id]) or entry.id
 end
 
 local function validSet(set)
@@ -339,125 +315,516 @@ local function validNumber(value, minimum, maximum)
     return type(value) == "number" and value == value and value >= minimum and value <= maximum
 end
 
-function Visibility:ValidRule(rule)
-    if type(rule) ~= "table" then
-        return false
-    end
-    local count = 0
-    for _ in pairs(rule) do
-        count = count + 1
-    end
-    return count == RULE_FIELDS and MODES[rule.mode] == true and validSet(rule.showWhen) and validSet(rule.hideWhen)
-        and validNumber(rule.fadeIn, FADE_MIN, FADE_MAX) and validNumber(rule.fadeOut, FADE_MIN, FADE_MAX)
-        and validNumber(rule.shownAlpha, SHOWN_MIN, ALPHA_MAX) and validNumber(rule.hiddenAlpha, HIDDEN_MIN, ALPHA_MAX)
-        and ZONES[rule.zone] == true
+local function validName(name)
+    return type(name) == "string" and #name > 0 and #name <= MAX_NAME and not name:find("[%c]")
+        and not name:find("^%s") and not name:find("%s$")
 end
 
--- The whole saved option. Unknown group ids are kept: a group this build lacks may come back.
-function Visibility:ValidSettings(value)
-    if type(value) ~= "table" or type(value.groups) ~= "table" then
+local function validBehaviourId(id)
+    return type(id) == "string" and #id <= 24 and id:match("^%a%w*$") ~= nil
+end
+
+local BEHAVIOUR_FIELDS = { id = true, name = true, resting = true, revealed = true, mouseover = true,
+    reveal = true, hide = true, together = true, fadeIn = true, fadeOut = true }
+
+function Visibility:ValidBehaviour(entry)
+    if type(entry) ~= "table" then
         return false
     end
-    if value.preset ~= self.customPreset and not PRESET_BY_ID[value.preset] then
+    for key in pairs(entry) do
+        if not BEHAVIOUR_FIELDS[key] then
+            return false
+        end
+    end
+    if not validBehaviourId(entry.id) or (entry.name ~= nil and not validName(entry.name)) then
         return false
     end
-    local count = 0
-    for id, rule in pairs(value.groups) do
-        count = count + 1
-        if count > MAX_GROUPS or not R.Codec:ValidID(id) or not self:ValidRule(rule) then
+    if not validNumber(entry.resting, RESTING_MIN, ALPHA_MAX)
+        or not validNumber(entry.revealed, REVEALED_MIN, ALPHA_MAX)
+        or not validNumber(entry.fadeIn, FADE_MIN, FADE_MAX) or not validNumber(entry.fadeOut, FADE_MIN, FADE_MAX) then
+        return false
+    end
+    if type(entry.mouseover) ~= "boolean" or type(entry.together) ~= "boolean" then
+        return false
+    end
+    if not validSet(entry.reveal) or not validSet(entry.hide) then
+        return false
+    end
+    -- A condition does one thing: it reveals or it hides.
+    for name in pairs(entry.reveal) do
+        if entry.hide[name] then
             return false
         end
     end
     return true
 end
 
--- The pure decision, as the share of the frame's own alpha to show. hover only means
--- anything to a mouseover rule; a show condition beats a hide condition, so "hide when
--- mounted, but show in combat" reads the way it sounds.
-function Visibility:Resolve(rule, state, hovered)
-    local shown, hidden = rule.shownAlpha, rule.hiddenAlpha
-    if hovered and rule.mode == "mouseover" then
-        return shown
+-- Element ids to behaviour ids, every one of which must exist. Unknown element ids are
+-- kept: a group this build lacks may come back.
+local function validSetup(setup, ids)
+    if type(setup) ~= "table" then
+        return false
     end
-    for name in pairs(rule.showWhen) do
-        if state[name] then
-            return shown
+    local count = 0
+    for groupId, behaviourId in pairs(setup) do
+        count = count + 1
+        if count > MAX_ASSIGNED or not R.Codec:ValidID(groupId) or not ids[behaviourId] then
+            return false
         end
     end
-    for name in pairs(rule.hideWhen) do
-        if state[name] then
-            return hidden
-        end
-    end
-    return rule.mode == "always" and shown or hidden
+    return true
 end
 
--- A fresh copy of the saved option with every rule completed, so a caller can edit and hand
--- it back without touching the account table.
+function Visibility:ValidSettings(value)
+    if type(value) ~= "table" or type(value.behaviours) ~= "table" or type(value.setups) ~= "table" then
+        return false
+    end
+    for key in pairs(value) do
+        if key ~= "behaviours" and key ~= "setups" then
+            return false
+        end
+    end
+    local ids, count = {}, 0
+    for _ in pairs(value.behaviours) do
+        count = count + 1
+    end
+    if count > MAX_BEHAVIOURS then
+        return false
+    end
+    for index = 1, count do
+        local entry = value.behaviours[index]
+        if not self:ValidBehaviour(entry) or ids[entry.id] then
+            return false
+        end
+        ids[entry.id] = true
+    end
+    if type(value.setups.world) ~= "table" then
+        return false
+    end
+    for place, setup in pairs(value.setups) do
+        if not PLACES[place] or not validSetup(setup, ids) then
+            return false
+        end
+    end
+    return true
+end
+
+local function sortedNames(set)
+    local names = {}
+    for name in pairs(set) do
+        names[#names + 1] = name
+    end
+    table.sort(names)
+    return table.concat(names, ",")
+end
+
+-- The first version's rule for one element as a behaviour, or nil when the rule left the
+-- element as the game has it. Its show conditions beat its hide conditions, so a condition
+-- in both stays a reveal; a hide used to take the element to its hidden opacity and now
+-- takes it to 0.
+local function fromRule(rule)
+    if type(rule) ~= "table" then
+        return nil
+    end
+    local mode = rule.mode or "always"
+    local shown = validNumber(rule.shownAlpha, REVEALED_MIN, ALPHA_MAX) and rule.shownAlpha or 1
+    local hidden = validNumber(rule.hiddenAlpha, RESTING_MIN, ALPHA_MAX) and rule.hiddenAlpha or 0
+    local showWhen = validSet(rule.showWhen) and rule.showWhen or {}
+    local hideWhen = validSet(rule.hideWhen) and rule.hideWhen or {}
+    if mode ~= "always" and mode ~= "mouseover" and mode ~= "hidden" then
+        return nil
+    end
+    if mode == "always" and next(hideWhen) == nil and shown == 1 then
+        return nil
+    end
+    local entry = behaviour(nil, hidden, mode == "mouseover", copySet(showWhen), copySet(hideWhen),
+        type(rule.zone) == "string" and rule.zone ~= "none")
+    entry.revealed = shown
+    if mode == "always" then
+        entry.resting, entry.reveal = shown, {}
+    end
+    for name in pairs(entry.reveal) do
+        entry.hide[name] = nil
+    end
+    entry.fadeIn = validNumber(rule.fadeIn, FADE_MIN, FADE_MAX) and rule.fadeIn or DEFAULT_FADE_IN
+    entry.fadeOut = validNumber(rule.fadeOut, FADE_MIN, FADE_MAX) and rule.fadeOut or DEFAULT_FADE_OUT
+    return entry
+end
+
+-- Elements whose rules match share one behaviour. The zone is part of the match, so the
+-- elements of one zone keep coming back together and two zones never merge into one.
+local function ruleKey(entry, zone)
+    return string.format("%s|%s|%s|%s|%s|%s|%s|%s", tostring(entry.resting), tostring(entry.revealed),
+        tostring(entry.mouseover), sortedNames(entry.reveal), sortedNames(entry.hide), tostring(zone),
+        tostring(entry.fadeIn), tostring(entry.fadeOut))
+end
+
+local function upgrade(old)
+    local result = { behaviours = starterCopies(), setups = { world = {} } }
+    local order, unknown = {}, {}
+    for _, group in ipairs(Visibility.groups) do
+        if old.groups[group.id] ~= nil then
+            order[#order + 1] = group.id
+        end
+    end
+    for id in pairs(old.groups) do
+        if type(id) == "string" and not GROUP_BY_ID[id] then
+            unknown[#unknown + 1] = id
+        end
+    end
+    table.sort(unknown)
+    for _, id in ipairs(unknown) do
+        order[#order + 1] = id
+    end
+    local byKey, imported = {}, 0
+    local nameFormat = R.L and R.L.VIS_IMPORTED_NAME
+    for _, groupId in ipairs(order) do
+        local rule = old.groups[groupId]
+        local entry = R.Codec:ValidID(groupId) and fromRule(rule)
+        if entry then
+            local key = ruleKey(entry, rule.zone)
+            if not byKey[key] and #result.behaviours < MAX_BEHAVIOURS then
+                imported = imported + 1
+                entry.id = string.format("imported%d", imported)
+                entry.name = nameFormat and string.format(nameFormat, imported) or nil
+                result.behaviours[#result.behaviours + 1] = entry
+                byKey[key] = entry.id
+            end
+            result.setups.world[groupId] = byKey[key]
+        end
+    end
+    return result
+end
+
+-- Run at login before the saved option is checked. The first version's rules are converted,
+-- and a bad behaviour or assignment is dropped on its own rather than costing the player
+-- every other one, which the all-or-nothing check after it would.
+function Visibility:Clean(value)
+    if type(value) ~= "table" then
+        return nil
+    end
+    if value.behaviours == nil and type(value.groups) == "table" then
+        return upgrade(value)
+    end
+    local clean, ids = { behaviours = {}, setups = {} }, {}
+    for _, entry in ipairs(type(value.behaviours) == "table" and value.behaviours or {}) do
+        if #clean.behaviours < MAX_BEHAVIOURS and self:ValidBehaviour(entry) and not ids[entry.id] then
+            ids[entry.id] = true
+            clean.behaviours[#clean.behaviours + 1] = copyBehaviour(entry)
+        end
+    end
+    local setups = type(value.setups) == "table" and value.setups or {}
+    for _, place in ipairs(self.places) do
+        local setup = setups[place]
+        if type(setup) == "table" then
+            local kept, count = {}, 0
+            for groupId, behaviourId in pairs(setup) do
+                if count < MAX_ASSIGNED and R.Codec:ValidID(groupId) and ids[behaviourId] then
+                    kept[groupId], count = behaviourId, count + 1
+                end
+            end
+            clean.setups[place] = kept
+        end
+    end
+    clean.setups.world = clean.setups.world or {}
+    return clean
+end
+
+-- Before Settings has the account, GetOption answers with an empty table.
+local NOTHING = { behaviours = {}, setups = { world = {} } }
+
+local function live()
+    local value = R.Settings:GetOption(Visibility.option)
+    if type(value) ~= "table" or type(value.behaviours) ~= "table" or type(value.setups) ~= "table" then
+        return NOTHING
+    end
+    return value
+end
+
+-- A fresh copy of the saved option, so a caller can edit it and hand it back without touching
+-- the account table.
 function Visibility:Settings()
-    local stored = R.Settings:GetOption(self.option)
-    local groups, storedGroups = {}, type(stored) == "table" and stored.groups or nil
-    if type(storedGroups) == "table" then
-        for id, rule in pairs(storedGroups) do
-            groups[id] = complete(rule)
+    local value = live()
+    local result = { behaviours = {}, setups = {} }
+    for index, entry in ipairs(value.behaviours) do
+        result.behaviours[index] = copyBehaviour(entry)
+    end
+    for place, setup in pairs(value.setups) do
+        local map = {}
+        for groupId, behaviourId in pairs(setup) do
+            map[groupId] = behaviourId
+        end
+        result.setups[place] = map
+    end
+    result.setups.world = result.setups.world or {}
+    return result
+end
+
+local function find(list, id)
+    for index, entry in ipairs(list) do
+        if entry.id == id then
+            return entry, index
         end
     end
-    return { preset = type(stored) == "table" and stored.preset or self.defaultPreset, groups = groups }
+    return nil
 end
 
-function Visibility:Rule(groupId)
-    local stored = R.Settings:GetOption(self.option)
-    return complete(type(stored) == "table" and type(stored.groups) == "table" and stored.groups[groupId] or nil)
+-- The saved behaviours, in order. The live list: read it, never keep or edit it.
+function Visibility:Behaviours()
+    return live().behaviours
 end
 
-function Visibility:ApplyPreset(id)
-    local preset = PRESET_BY_ID[id]
-    if not preset then
+function Visibility:Behaviour(id)
+    return (find(live().behaviours, id))
+end
+
+-- How many elements have this behaviour in any setup.
+function Visibility:Uses(id)
+    local seen, count = {}, 0
+    for _, setup in pairs(live().setups) do
+        for groupId, behaviourId in pairs(setup) do
+            if behaviourId == id and not seen[groupId] then
+                seen[groupId], count = true, count + 1
+            end
+        end
+    end
+    return count
+end
+
+-- The kind of place the player is in. An instance first, because it says more about what
+-- the player needs to see than anything inside it, then a rest area, then World.
+function Visibility:PlaceOf(state)
+    if state.dungeon then
+        return "dungeon"
+    elseif state.raid then
+        return "raid"
+    elseif state.pvp then
+        return "pvp"
+    elseif state.resting then
+        return "city"
+    end
+    return self.world
+end
+
+function Visibility:HasOwnSetup(place)
+    return place == self.world or type(live().setups[place]) == "table"
+end
+
+-- The place whose setup is in use: where the player is when it has a setup of its own, else World.
+function Visibility:SetupPlace(state)
+    local place = self:PlaceOf(state)
+    return self:HasOwnSetup(place) and place or self.world
+end
+
+-- An element's behaviour in a place's setup, a place without its own following World's. nil
+-- leaves the element as the game has it. The live table: read it, never keep or edit it.
+function Visibility:BehaviourFor(groupId, place)
+    local value = live()
+    local setup = value.setups[place] or value.setups.world
+    local id = setup and setup[groupId]
+    return id and (find(value.behaviours, id)) or nil
+end
+
+-- The pure decision, as the share of the frame's own alpha to show. Mouseover beats
+-- everything, so an element can always be reached; a hide beats a reveal, so "hide when
+-- mounted" holds whatever else is true.
+function Visibility:Resolve(entry, state, hovered)
+    if hovered and entry.mouseover then
+        return entry.revealed
+    end
+    for name in pairs(entry.hide) do
+        if state[name] then
+            return 0
+        end
+    end
+    for name in pairs(entry.reveal) do
+        if state[name] then
+            return entry.revealed
+        end
+    end
+    return entry.resting
+end
+
+function Visibility:ConditionRole(entry, condition)
+    if entry.reveal[condition] then
+        return "reveal"
+    elseif entry.hide[condition] then
+        return "hide"
+    end
+    return nil
+end
+
+local function save(settings)
+    return R.Settings:SetOption(Visibility.option, settings)
+end
+
+-- reveal and hide are written through SetCondition, so a condition never lands in both.
+local EDITABLE = { resting = true, revealed = true, mouseover = true, together = true, fadeIn = true, fadeOut = true }
+
+function Visibility:UpdateBehaviour(id, patch)
+    if type(patch) ~= "table" then
         return false
     end
     local settings = self:Settings()
-    for _, group in ipairs(self.groups) do
-        local wanted = preset.rules[group.kind] or preset.rules.default
-        local rule = complete(settings.groups[group.id])
-        rule.mode, rule.showWhen, rule.hideWhen = wanted.mode, copySet(wanted.showWhen), copySet(wanted.hideWhen)
-        rule.zone = ZONE_DEFAULTS[group.id] or self.noZone
-        settings.groups[group.id] = rule
-    end
-    settings.preset = id
-    return R.Settings:SetOption(self.option, settings)
-end
-
--- The same patch onto several groups in one write, so listeners see it once. A hand edit
--- to the rule makes the selection "custom": a preset is a starting point, not a mode the
--- player is held to. Fade times and opacities are tuning and keep the preset's name.
-function Visibility:SetRules(groupIds, patch)
-    if type(groupIds) ~= "table" or type(patch) ~= "table" then
+    local entry = find(settings.behaviours, id)
+    if not entry then
         return false
     end
-    local settings, count = self:Settings(), 0
-    for _, id in ipairs(groupIds) do
-        if not GROUP_BY_ID[id] then
+    for key, value in pairs(patch) do
+        if not EDITABLE[key] then
             return false
         end
-        local rule = complete(settings.groups[id])
-        for key, value in pairs(patch) do
-            rule[key] = type(value) == "table" and copySet(value) or value
+        entry[key] = value
+    end
+    return self:ValidBehaviour(entry) and save(settings)
+end
+
+-- role is "reveal", "hide", or nil for neither.
+function Visibility:SetCondition(id, condition, role)
+    if not CONDITIONS[condition] or (role ~= nil and role ~= "reveal" and role ~= "hide") then
+        return false
+    end
+    local settings = self:Settings()
+    local entry = find(settings.behaviours, id)
+    if not entry then
+        return false
+    end
+    entry.reveal[condition], entry.hide[condition] = nil, nil
+    if role then
+        entry[role][condition] = true
+    end
+    return save(settings)
+end
+
+local function nameTaken(list, name, except)
+    local wanted = name:lower()
+    for _, entry in ipairs(list) do
+        if entry.id ~= except and Visibility:Name(entry):lower() == wanted then
+            return true
         end
-        if not self:ValidRule(rule) then
+    end
+    return false
+end
+
+-- Cut at a byte limit without leaving half a character behind.
+local function cut(text, limit)
+    if #text <= limit then
+        return text
+    end
+    return (text:sub(1, limit):gsub("[\192-\255][\128-\191]*$", ""))
+end
+
+function Visibility:RenameBehaviour(id, name)
+    if type(name) ~= "string" then
+        return false, "invalid_name"
+    end
+    name = name:match("^%s*(.-)%s*$")
+    local settings = self:Settings()
+    local entry = find(settings.behaviours, id)
+    if not entry then
+        return false, "missing"
+    elseif not validName(name) then
+        return false, "invalid_name"
+    elseif nameTaken(settings.behaviours, name, id) then
+        return false, "name_taken"
+    end
+    entry.name = name
+    return save(settings), nil
+end
+
+-- A copy placed right after its source, or with no source a plain new behaviour at the end.
+-- Named "<name> copy", then "<name> copy 2" and so on. Returns the new id.
+function Visibility:CopyBehaviour(id)
+    local settings = self:Settings()
+    if #settings.behaviours >= MAX_BEHAVIOURS then
+        return nil, "full"
+    end
+    local L = R.L or {}
+    local source, index = find(settings.behaviours, id)
+    local entry = source and copyBehaviour(source) or behaviour(nil, 0, true, {}, {}, false)
+    local number = 1
+    while find(settings.behaviours, string.format("b%d", number)) do
+        number = number + 1
+    end
+    entry.id = string.format("b%d", number)
+    local base = source and L.VIS_COPY_NAME and string.format(L.VIS_COPY_NAME, cut(self:Name(source), MAX_NAME - 8))
+        or L.VIS_BEHAVIOUR_NEW
+    entry.name = nil
+    if base then
+        local name, suffix = base, 2
+        while nameTaken(settings.behaviours, name) do
+            name = string.format(L.VIS_NAME_N, cut(base, MAX_NAME - 4), suffix)
+            suffix = suffix + 1
+        end
+        entry.name = name
+    end
+    table.insert(settings.behaviours, index and index + 1 or #settings.behaviours + 1, entry)
+    if not save(settings) then
+        return nil, "invalid"
+    end
+    return entry.id
+end
+
+-- Every element that had it goes back to the game's own look.
+function Visibility:DeleteBehaviour(id)
+    local settings = self:Settings()
+    local _, index = find(settings.behaviours, id)
+    if not index then
+        return false
+    end
+    table.remove(settings.behaviours, index)
+    for _, setup in pairs(settings.setups) do
+        for groupId, behaviourId in pairs(setup) do
+            if behaviourId == id then
+                setup[groupId] = nil
+            end
+        end
+    end
+    return save(settings)
+end
+
+-- Gives elements a behaviour in one place's setup, or none with a nil behaviourId. A place
+-- without a setup of its own has nothing to write to.
+function Visibility:Assign(groupIds, place, behaviourId)
+    if type(groupIds) ~= "table" or not PLACES[place] then
+        return false
+    end
+    local settings = self:Settings()
+    local setup = settings.setups[place]
+    if not setup or (behaviourId ~= nil and not find(settings.behaviours, behaviourId)) then
+        return false
+    end
+    local count = 0
+    for _, groupId in ipairs(groupIds) do
+        if not GROUP_BY_ID[groupId] then
             return false
         end
-        settings.groups[id] = rule
+        setup[groupId] = behaviourId
         count = count + 1
     end
-    if count == 0 then
-        return false
-    end
-    if patch.mode ~= nil or patch.showWhen ~= nil or patch.hideWhen ~= nil or patch.zone ~= nil then
-        settings.preset = self.customPreset
-    end
-    return R.Settings:SetOption(self.option, settings)
+    return count > 0 and save(settings)
 end
 
-function Visibility:SetRule(groupId, patch)
-    return self:SetRules({ groupId }, patch)
+-- A place's own setup starts as a copy of World's; giving it up goes back to World's.
+function Visibility:SetOwnSetup(place, own)
+    if not PLACES[place] or place == self.world then
+        return false
+    end
+    local settings = self:Settings()
+    if own then
+        if settings.setups[place] then
+            return true
+        end
+        local copy = {}
+        for groupId, behaviourId in pairs(settings.setups.world) do
+            copy[groupId] = behaviourId
+        end
+        settings.setups[place] = copy
+    else
+        if not settings.setups[place] then
+            return true
+        end
+        settings.setups[place] = nil
+    end
+    return save(settings)
 end

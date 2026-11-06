@@ -25,6 +25,7 @@ end
 local BOOLEAN_OPTIONS = {
     nameplateShowIcon = true,
     nameplateReduceAnimation = true, nameplateDimCompleted = true, nameplateShowMore = true,
+    nameplateShowGroup = true,
     minimapButton = true,
     toastShowPrice = true, toastGold = true, toastCurrency = true,
     toastShowSource = true, toastAggregate = true,
@@ -36,6 +37,9 @@ local BOOLEAN_OPTIONS = {
     resurrectPvp = true, resurrectInstance = true, resurrectWorld = true,
     uiVisibilityBlobs = true,
     tooltipClassBorder = true,
+    cameraLearnZoom = true,
+    bagUpgradeRightClick = true, bagUpgradePrompt = true, bagUpgradeCarry = true,
+    mailKeepCrafts = true, mailFillRecipient = true,
 }
 -- Which layer the window's feature checkboxes write to. "profile" is the profile assigned
 -- to this character: with one assigned, the account layer no longer reaches the character,
@@ -53,6 +57,9 @@ local OPTION_DEFAULTS = {
     -- Off: a second number beside the count reads as a party member's progress, not as
     -- more of the player's own objectives on the same mob.
     nameplateShowMore = false,
+    -- Off: party members' marks on every quest mob are noise to someone questing alone in a
+    -- dungeon group, and the plate reads the player's own progress first.
+    nameplateShowGroup = false,
     minimapButton = true,
     -- On: someone who turned the tooltip border on and hovers a player expects the colour
     -- the rest of the UI uses for that class.
@@ -92,10 +99,22 @@ local OPTION_DEFAULTS = {
     -- The active ActionCam profile: a built-in id or a custom name behind its prefix, and
     -- the custom profiles themselves, name to values. Their shape lives in CameraProfiles.
     cameraProfile = R.CameraProfiles.default, cameraProfiles = {},
-    -- UI visibility: the chosen preset and one rule per frame group. Their shape lives in Visibility.
-    uiVisibility = { preset = R.Visibility.defaultPreset, groups = {} },
+    -- On: a wheel turn inside a situation says where the player wants the camera there, and
+    -- having to repeat it on every mount is the camera ignoring them. Kept for the session.
+    cameraLearnZoom = true,
+    -- UI visibility: the behaviours and the setups that hand them to frame groups. Their shape
+    -- lives in Visibility.
+    uiVisibility = R.Visibility:Default(),
     -- Off: the minimap's quest areas are the client's until the player says otherwise.
     uiVisibilityBlobs = false,
+    -- All on: the bag upgrade does nothing until the player right-clicks a bag or presses Equip.
+    bagUpgradeRightClick = true, bagUpgradePrompt = true, bagUpgradeCarry = true,
+    -- Send to alts: no bank alt until the player picks one, and no gold row until a keep
+    -- amount is set. The roster fills itself as each character logs in.
+    mailBankAlt = "", mailRoutes = {}, mailItemRoutes = {}, mailLearning = {}, mailNeverIDs = {},
+    mailRoster = {}, mailKeepCrafts = true, mailFillRecipient = true, mailKeepGold = 0,
+    -- Crafts: on 4 November there is no auction data anywhere, and gold falls back to crafts without it.
+    plannerGoal = "crafts",
 }
 Settings.optionDefaults = OPTION_DEFAULTS
 
@@ -119,6 +138,60 @@ local function validLearned(value)
             if count > 2000 or not positiveInteger(id) or not positiveInteger(optionID) then
                 return false
             end
+        end
+    end
+    return true
+end
+
+-- A name as typed in the To field: no control characters and no escape sequences.
+local function validRecipient(value)
+    return type(value) == "string" and #value > 0 and #value <= 64 and not value:find("[%c|]")
+end
+
+-- Item ID to recipient, for the learned and the confirmed item routes.
+local function validItemRoutes(value)
+    if type(value) ~= "table" then
+        return false
+    end
+    local count = 0
+    for id, recipient in pairs(value) do
+        count = count + 1
+        if count > 1000 or not positiveInteger(id) or not validRecipient(recipient) then
+            return false
+        end
+    end
+    return true
+end
+
+-- Category key to a recipient, or false for a category the player keeps.
+local function validMailRoutes(value)
+    if type(value) ~= "table" then
+        return false
+    end
+    local count = 0
+    for category, recipient in pairs(value) do
+        count = count + 1
+        if count > 32 or type(category) ~= "string" or not category:match("^%l%a*$") or #category > 24
+            or recipient ~= false and not validRecipient(recipient) then
+            return false
+        end
+    end
+    return true
+end
+
+-- Character GUID to the name the client gave that character, and its realm.
+local function validRoster(value)
+    if type(value) ~= "table" then
+        return false
+    end
+    local count = 0
+    for guid, entry in pairs(value) do
+        count = count + 1
+        if count > 200 or type(guid) ~= "string" or #guid == 0 or #guid > 64 or guid:find("%c")
+            or type(entry) ~= "table" or not validRecipient(entry.name)
+            or entry.surname ~= nil and not validRecipient(entry.surname)
+            or type(entry.realm) ~= "string" or #entry.realm > 64 or entry.realm:find("%c") then
+            return false
         end
     end
     return true
@@ -183,7 +256,20 @@ local function validOption(key, value)
         return R.CameraProfiles:ValidCustom(value)
     elseif key == "uiVisibility" then
         return R.Visibility:ValidSettings(value)
-    elseif key == "neverSellIDs" then
+    elseif key == "mailBankAlt" then
+        return value == "" or validRecipient(value)
+    elseif key == "mailRoutes" then
+        return validMailRoutes(value)
+    elseif key == "mailItemRoutes" or key == "mailLearning" then
+        return validItemRoutes(value)
+    elseif key == "mailRoster" then
+        return validRoster(value)
+    elseif key == "plannerGoal" then
+        return value == "crafts" or value == "gold"
+    elseif key == "mailKeepGold" then
+        -- Whole gold, and zero means the gold button is off.
+        return type(value) == "number" and value >= 0 and value <= 1000000 and value % 1 == 0
+    elseif key == "neverSellIDs" or key == "mailNeverIDs" then
         if type(value) ~= "table" then
             return false
         end
@@ -235,6 +321,15 @@ function Settings:Init(account, character, guid)
     account.confirmed = nil
     account.firstRun = nil
     account.options = type(account.options) == "table" and account.options or {}
+    -- Custom camera profiles are upgraded and filtered one by one first: the all-or-nothing
+    -- check below would otherwise replace every one of them over a single old or bad record.
+    if account.options.cameraProfiles ~= nil then
+        account.options.cameraProfiles = R.CameraProfiles:CleanCustom(account.options.cameraProfiles)
+    end
+    -- The same for UI visibility, which also converts the first version's per-element rules.
+    if account.options.uiVisibility ~= nil then
+        account.options.uiVisibility = R.Visibility:Clean(account.options.uiVisibility)
+    end
     for key, default in pairs(OPTION_DEFAULTS) do
         if not validOption(key, account.options[key]) then
             account.options[key] = default

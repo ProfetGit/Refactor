@@ -32,9 +32,76 @@ local ownShort, ownFull
 -- Log objectives already counted in one resolve, so one objective read from two sections
 -- counts once. Emptied before Resolve returns.
 local claimed = {}
+-- The group as the module last read it: first names, the second value UnitName gave (a
+-- surname on Forever, a realm on Retail) or false, and class files or false. Owned by the
+-- module and rebuilt on GROUP_ROSTER_UPDATE; the player is never in it.
+local rosterNames, rosterSeconds, rosterClasses, rosterCount = nil, nil, nil, 0
+local trackGroup = false
+-- A raid is the most a tooltip can list.
+local MAX_MEMBERS = 40
+local SPACE, HYPHEN = 32, 45
+local find, byte = string.find, string.byte
 
 function Data:SetPlayerNames(short, full)
     ownShort, ownFull = short, full
+end
+
+function Data:SetRoster(names, seconds, classes, count)
+    rosterNames, rosterSeconds, rosterClasses = names, seconds, classes
+    rosterCount = names and count or 0
+end
+
+function Data:SetTrackGroup(enabled)
+    trackGroup = enabled == true
+end
+
+-- A group tooltip writes a member as "Name", "Name Surname" on Forever, or "Name-Realm" on
+-- Retail across realms. Matched in place, so a name is never built to look it up.
+local function memberIndex(text)
+    if type(text) ~= "string" then
+        return nil
+    end
+    local length = #text
+    for index = 1, rosterCount do
+        local name = rosterNames[index]
+        if text == name then
+            return index
+        end
+        local second, nameLength = rosterSeconds[index], #name
+        if second and length == nameLength + 1 + #second and find(text, name, 1, true) == 1 then
+            local separator = byte(text, nameLength + 1)
+            if (separator == SPACE or separator == HYPHEN)
+                and find(text, second, nameLength + 2, true) == nameLength + 2 then
+                return index
+            end
+        end
+    end
+    return nil
+end
+
+-- One slot per member this mob still counts for, holding their objective closest to done,
+-- ranked the way the player's own is. Finished objectives make no slot: a member with
+-- nothing left here is not shown.
+local function recordMember(out, member, fulfilled, required, completed)
+    if completed == true or fulfilled >= required then
+        return
+    end
+    local ratio, count, members = fulfilled / required, out.groupCount, out.groupMember
+    for slot = 1, count do
+        if members[slot] == member then
+            if ratio > out.groupRatio[slot] then
+                out.groupFulfilled[slot], out.groupRequired[slot], out.groupRatio[slot] = fulfilled, required, ratio
+            end
+            return
+        end
+    end
+    if count >= MAX_MEMBERS then
+        return
+    end
+    count = count + 1
+    out.groupCount = count
+    members[count], out.groupClass[count] = member, rosterClasses[member]
+    out.groupFulfilled[count], out.groupRequired[count], out.groupRatio[count] = fulfilled, required, ratio
 end
 
 local function lineTypes()
@@ -139,10 +206,20 @@ local function counts(own, section, onQuest)
     return section == SECTION_OWN or (section == SECTION_NONE and onQuest)
 end
 
--- Writes into `out` and returns it, so a resolve allocates nothing of its own.
+local function numbers(self, line)
+    local fulfilled, required = line.numFulfilled, line.numRequired
+    if type(fulfilled) ~= "number" or type(required) ~= "number" or required <= 0 then
+        fulfilled, required = self:ParseObjective(line.leftText)
+    end
+    return fulfilled, required
+end
+
+-- Writes into `out` and returns it, so a resolve allocates nothing of its own. Group slots
+-- are written only into an `out` that carries the group arrays.
 function Data:Resolve(unit, out)
     out.ok, out.fulfilled, out.required, out.plus = false, 0, 0, 0
     out.kind, out.complete, out.lastOne = KIND_OTHER, false, false
+    out.groupCount = 0
     if not C_QuestLog.UnitIsRelatedToActiveQuest(unit) then
         return out
     end
@@ -160,15 +237,16 @@ function Data:Resolve(unit, out)
     -- Solo, every line is the player's: the guard stays off so a bonus objective the log
     -- does not count as "on" can never be lost to it.
     local isOnQuest = IsInGroup() and C_QuestLog.IsOnQuest or nil
+    local collect = trackGroup and rosterCount > 0 and out.groupMember ~= nil
     local objectives, onQuest, section, objectiveIndex = nil, true, SECTION_NONE, 0
     local best, bestRatio, matches, bestFulfilled, bestRequired = nil, -1, 0, 0, 0
-    local bestObjectives, bestIndex = nil, 0
+    local bestObjectives, bestIndex, member = nil, 0, nil
     for index = 1, #tooltip.lines do
         local line = tooltip.lines[index]
         local kind = line and line.type
         if kind == titleType then
             local questID = line.id
-            section, objectiveIndex = SECTION_NONE, 0
+            section, objectiveIndex, member = SECTION_NONE, 0, nil
             objectives = questID and C_QuestLog.GetQuestObjectives(questID) or nil
             if type(objectives) ~= "table" then
                 objectives = nil
@@ -179,19 +257,22 @@ function Data:Resolve(unit, out)
             -- included, each list starting again from the first objective.
             local name = line.leftText
             if name ~= nil and (name == ownShort or name == ownFull) then
-                section = SECTION_OWN
+                section, member = SECTION_OWN, nil
             else
-                section = SECTION_OTHER
+                -- Only someone the roster knows: a name that matches no one, the player's
+                -- own written some way not foreseen included, is never shown as a member.
+                section, member = SECTION_OTHER, collect and memberIndex(name) or nil
             end
             objectiveIndex = 0
         elseif kind == objectiveType then
             objectiveIndex = objectiveIndex + 1
-            if counts(ownObjective(objectives, line.leftText), section, onQuest) then
-                local fulfilled, required = line.numFulfilled, line.numRequired
-                if type(fulfilled) ~= "number" or type(required) ~= "number" or required <= 0 then
-                    fulfilled, required = self:ParseObjective(line.leftText)
+            local mine = counts(ownObjective(objectives, line.leftText), section, onQuest)
+            if mine or member then
+                local fulfilled, required = numbers(self, line)
+                if member and fulfilled and required and required > 0 then
+                    recordMember(out, member, fulfilled, required, line.completed)
                 end
-                if fulfilled and required and required > 0 then
+                if mine and fulfilled and required and required > 0 then
                     -- Anything still open outranks everything finished: a mob that already
                     -- counted 8/8 for one objective and still drops for another must show the
                     -- other, or the plate reads complete and fades while work is left.

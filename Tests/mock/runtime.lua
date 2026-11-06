@@ -4,7 +4,16 @@ local Frame = {}
 Frame.__index = Frame
 
 function Frame:RegisterEvent(event) self.events[event] = true end
-function Frame:UnregisterEvent(event) self.events[event] = nil end
+-- The client filters a unit event before any script sees it; Fire does the same.
+function Frame:RegisterUnitEvent(event, unit)
+    self.events[event] = true
+    self.unitEvents = self.unitEvents or {}
+    self.unitEvents[event] = unit
+end
+function Frame:UnregisterEvent(event)
+    self.events[event] = nil
+    if self.unitEvents then self.unitEvents[event] = nil end
+end
 function Frame:UnregisterAllEvents() self.events = {} end
 function Frame:IsEventRegistered(event) return self.events[event] == true end
 function Frame:SetScript(name, callback) self.scripts[name] = callback end
@@ -63,7 +72,8 @@ function Runtime.new()
     end
     function env:Fire(event, ...)
         for _, frame in ipairs(self.frames) do
-            if frame.events[event] and frame.scripts.OnEvent then
+            local unit = frame.unitEvents and frame.unitEvents[event]
+            if frame.events[event] and frame.scripts.OnEvent and (unit == nil or unit == ...) then
                 frame.scripts.OnEvent(frame, event, ...)
             end
         end

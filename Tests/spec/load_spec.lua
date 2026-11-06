@@ -27,7 +27,7 @@ describe("the real load sequence", function()
             end
         end
         assert.is_table(env.LibStub)
-        assert.equal(31, #R.modules)
+        assert.equal(36, #R.modules)
         env:Fire("PLAYER_LOGIN")
         -- A first install says where the addon lives, once; the next login is quiet.
         assert.matches(R.L.CMD_WELCOME, table.concat(env.messages, "\n"), 1, true)

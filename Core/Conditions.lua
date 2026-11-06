@@ -1,18 +1,30 @@
 --- @core conditions
 --- Purpose: track player state as named flags and announce every change once, for any module that asks.
 --- Requires: InCombatLockdown, IsMounted, UnitOnTaxi, IsResting, UnitExists, IsInGroup, IsInInstance, IsStealthed,
----     UnitIsDeadOrGhost
+---     UnitIsDeadOrGhost, UnitCastingInfo, UnitChannelInfo
 --- Events: PLAYER_REGEN_DISABLED, PLAYER_REGEN_ENABLED, PLAYER_MOUNT_DISPLAY_CHANGED, PLAYER_CONTROL_LOST,
 ---     PLAYER_CONTROL_GAINED, PLAYER_UPDATE_RESTING, PLAYER_TARGET_CHANGED, GROUP_ROSTER_UPDATE, UPDATE_STEALTH,
----     PLAYER_DEAD, PLAYER_ALIVE, PLAYER_UNGHOST, PLAYER_ENTERING_WORLD, held only while a consumer is started
+---     PLAYER_DEAD, PLAYER_ALIVE, PLAYER_UNGHOST, PLAYER_ENTERING_WORLD; UNIT_SPELLCAST_START, _STOP, _CHANNEL_START,
+---     _CHANNEL_STOP, _EMPOWER_START and _EMPOWER_STOP for the player only. All held only while a consumer is started
 --- Hot: no
 local _, R = ...
 local Conditions = { flags = {}, supported = {}, readers = {}, owners = {}, count = 0 }
 R.Conditions = Conditions
 local unpack = unpack
 
--- The order the settings panel lists them in.
-Conditions.names = { "combat", "mounted", "resting", "hasTarget", "inGroup", "inInstance", "stealthed", "dead" }
+-- The last three say which kind of instance the player is in, the way ActionCam reads it:
+-- a delve is a scenario, an arena is pvp.
+Conditions.names = { "combat", "mounted", "resting", "hasTarget", "inGroup", "inInstance", "stealthed", "dead",
+    "casting", "dungeon", "raid", "pvp" }
+local INSTANCE_KINDS = {
+    dungeon = { party = true, scenario = true }, raid = { raid = true }, pvp = { pvp = true, arena = true },
+}
+local function instanceIs(kinds)
+    return function(inInstance)
+        local _, kind = inInstance()
+        return kinds[kind] == true
+    end
+end
 
 -- What each flag reads: the globals it needs, then the read over them. Everything is resolved
 -- by name when the first consumer starts, so a function this client lacks costs one flag,
@@ -29,6 +41,14 @@ local READERS = {
     inInstance = { "IsInInstance", function(inInstance) return (inInstance()) == true end },
     stealthed = { "IsStealthed", function(stealthed) return stealthed() == true end },
     dead = { "UnitIsDeadOrGhost", function(deadOrGhost) return deadOrGhost("player") == true end },
+    -- A cast bar spell, channel or empower. The returns are counted, never read: they can be
+    -- secret while casts are restricted, and a count touches none of them.
+    casting = { "UnitCastingInfo", "UnitChannelInfo", function(castingInfo, channelInfo)
+        return select("#", castingInfo("player")) > 0 or select("#", channelInfo("player")) > 0
+    end },
+    dungeon = { "IsInInstance", instanceIs(INSTANCE_KINDS.dungeon) },
+    raid = { "IsInInstance", instanceIs(INSTANCE_KINDS.raid) },
+    pvp = { "IsInInstance", instanceIs(INSTANCE_KINDS.pvp) },
 }
 
 local EVENTS = {
@@ -39,10 +59,23 @@ local EVENTS = {
     GROUP_ROSTER_UPDATE = { "inGroup" }, UPDATE_STEALTH = { "stealthed" },
     PLAYER_DEAD = { "dead" }, PLAYER_ALIVE = { "dead" }, PLAYER_UNGHOST = { "dead" },
     PLAYER_ENTERING_WORLD = Conditions.names,
+    UNIT_SPELLCAST_START = { "casting" }, UNIT_SPELLCAST_STOP = { "casting" },
+    UNIT_SPELLCAST_CHANNEL_START = { "casting" }, UNIT_SPELLCAST_CHANNEL_STOP = { "casting" },
+    UNIT_SPELLCAST_EMPOWER_START = { "casting" }, UNIT_SPELLCAST_EMPOWER_STOP = { "casting" },
+}
+-- Held for the player alone: a raid casts all the time, and none of that is the player's.
+local PLAYER_EVENTS = {
+    UNIT_SPELLCAST_START = true, UNIT_SPELLCAST_STOP = true, UNIT_SPELLCAST_CHANNEL_START = true,
+    UNIT_SPELLCAST_CHANNEL_STOP = true, UNIT_SPELLCAST_EMPOWER_START = true, UNIT_SPELLCAST_EMPOWER_STOP = true,
 }
 -- PLAYER_REGEN_DISABLED fires before combat lockdown begins, so InCombatLockdown still reads
 -- false inside it. The event is the answer, the way Blizzard's own combat watchers take it.
 local EVENT_VALUES = { PLAYER_REGEN_DISABLED = { combat = true }, PLAYER_REGEN_ENABLED = { combat = false } }
+-- A cast's start and end are the answer the same way, read from the event and never from a
+-- payload. One cast follows another as a stop and then a start, so the flag never sticks.
+for event in pairs(PLAYER_EVENTS) do
+    EVENT_VALUES[event] = { casting = event:find("_START$") ~= nil }
+end
 
 local function buildReader(spec)
     local functions, count = {}, #spec - 1
@@ -97,7 +130,11 @@ function Conditions:Start(owner)
             self.readers[name], self.supported[name] = reader, reader ~= nil
         end
         for event in pairs(EVENTS) do
-            R.Broker:Subscribe(event, self.OnEvent, self)
+            if PLAYER_EVENTS[event] then
+                R.Broker:SubscribeUnit(event, "player", self.OnEvent, self)
+            else
+                R.Broker:Subscribe(event, self.OnEvent, self)
+            end
         end
         refresh(self, self.names)
     end

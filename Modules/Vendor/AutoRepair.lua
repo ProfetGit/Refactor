@@ -13,9 +13,12 @@ local AutoRepair = R:RegisterModule({
         "GetRepairAllCost", "GetMoney", "RepairAllItems" },
     risk = "safe", defaultEnabled = true,
 })
+-- MERCHANT_SHOW can arrive before Blizzard shows MerchantFrame (see vendor.autoSell), so the
+-- window is polled for briefly instead of read once.
+local WINDOW_POLL, WINDOW_WAIT = 0.05, 40
 
 function AutoRepair:Stop()
-    self.pending = nil
+    self.pending, self.waits = nil, 0
     R:CancelTimers(self)
     R.Broker:Unsubscribe("MERCHANT_CLOSED", self)
     R.Broker:Unsubscribe("PLAYER_MONEY", self)
@@ -34,9 +37,22 @@ function AutoRepair:Confirm()
     end
 end
 
-function AutoRepair:OnMerchantShow()
-    self:Stop()
-    if InCombatLockdown() or R:Paused() or not MerchantFrame:IsShown() or not CanMerchantRepair() then
+function AutoRepair:Attempt()
+    if InCombatLockdown() or R:Paused() then
+        self:Stop()
+        return
+    end
+    if not MerchantFrame:IsShown() then
+        self.waits = self.waits + 1
+        if self.waits <= WINDOW_WAIT then
+            R:After(self, WINDOW_POLL, self.Attempt)
+        else
+            self:Stop()
+        end
+        return
+    end
+    if not CanMerchantRepair() then
+        self:Stop()
         return
     end
     local cap = R.Settings.account.options.repairCapGold
@@ -44,16 +60,16 @@ function AutoRepair:OnMerchantShow()
         cap = 100
     end
     if type(cap) ~= "number" or cap ~= cap or cap < 0 or cap > 1000000 then
+        self:Stop()
         return
     end
     local cost, canRepair = GetRepairAllCost()
     local money = GetMoney()
     if not canRepair or not cost or cost <= 0 or cost > cap * 10000 or cost > money then
+        self:Stop()
         return
     end
     self.pending = { cost = cost, money = money }
-    R.Broker:Subscribe("MERCHANT_CLOSED", self.Stop, self)
-    R.Broker:Subscribe("PLAYER_REGEN_DISABLED", self.Stop, self)
     R.Broker:Subscribe("PLAYER_MONEY", self.Confirm, self)
     R.Broker:Subscribe("UPDATE_INVENTORY_DURABILITY", self.Confirm, self)
     RepairAllItems(false)
@@ -61,6 +77,16 @@ function AutoRepair:OnMerchantShow()
     if self.pending then
         R:After(self, 3, self.Stop)
     end
+end
+
+function AutoRepair:OnMerchantShow()
+    self:Stop()
+    if InCombatLockdown() or R:Paused() then
+        return
+    end
+    R.Broker:Subscribe("MERCHANT_CLOSED", self.Stop, self)
+    R.Broker:Subscribe("PLAYER_REGEN_DISABLED", self.Stop, self)
+    self:Attempt()
 end
 
 function AutoRepair:OnEnable()
