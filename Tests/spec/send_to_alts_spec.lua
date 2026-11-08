@@ -160,6 +160,7 @@ local function world(options)
     end
 
     function env:OpenMailbox()
+        self.MailFrame:Show()
         self:Fire("MAIL_SHOW")
         self:Advance(0.5)
     end

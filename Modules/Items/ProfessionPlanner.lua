@@ -8,10 +8,13 @@
 ---     C_TradeSkillUI.IsRecipeInSkillLine, C_TradeSkillUI.GetCraftableCount, C_TradeSkillUI.GetRecipeSourceText,
 ---     C_TradeSkillUI.GetRecipeLink, C_TradeSkillUI.OpenRecipe, C_TradeSkillUI.IsTradeSkillReady,
 ---     C_TradeSkillUI.IsTradeSkillLinked, C_TradeSkillUI.IsTradeSkillGuild, C_TradeSkillUI.IsNPCCrafting,
----     C_Item.GetItemCount, C_Item.GetItemInfo, C_Item.GetItemIconByID, C_Item.GetItemNameByID, GetBuildInfo,
+---     GetMerchantNumItems, GetMerchantItemID, C_MerchantFrame.GetItemInfo, C_Item.GetItemCount,
+---     C_Item.GetItemInfo, C_Item.GetItemIconByID, C_Item.GetItemNameByID, C_CurrencyInfo.GetCoinTextureString,
+---     GetBuildInfo,
 ---     Enum.TradeskillRelativeDifficulty, Enum.CraftingReagentType, ChatEdit_InsertLink, IsShiftKeyDown,
 ---     GameTooltip
---- Events: TRADE_SKILL_SHOW; TRADE_SKILL_CLOSE, TRADE_SKILL_LIST_UPDATE, TRADE_SKILL_DATA_SOURCE_CHANGED,
+--- Events: MERCHANT_SHOW, MERCHANT_UPDATE (always, to learn what vendors sell); TRADE_SKILL_SHOW;
+---     TRADE_SKILL_CLOSE, TRADE_SKILL_LIST_UPDATE, TRADE_SKILL_DATA_SOURCE_CHANGED,
 ---     SKILL_LINES_CHANGED, NEW_RECIPE_LEARNED, BAG_UPDATE_DELAYED, REFACTOR_SETTINGS_CHANGED (contextual, while
 ---     the profession window is open)
 --- Hot: no
@@ -27,7 +30,8 @@ local Planner = R:RegisterModule({
         "C_TradeSkillUI.GetCraftableCount", "C_TradeSkillUI.GetRecipeSourceText", "C_TradeSkillUI.GetRecipeLink",
         "C_TradeSkillUI.OpenRecipe", "C_TradeSkillUI.IsTradeSkillReady", "C_TradeSkillUI.IsTradeSkillLinked",
         "C_TradeSkillUI.IsTradeSkillGuild", "C_TradeSkillUI.IsNPCCrafting", "C_Item.GetItemCount",
-        "C_Item.GetItemInfo", "C_Item.GetItemIconByID", "C_Item.GetItemNameByID", "GetBuildInfo",
+        "GetMerchantNumItems", "GetMerchantItemID", "C_MerchantFrame.GetItemInfo", "C_Item.GetItemInfo",
+        "C_Item.GetItemIconByID", "C_Item.GetItemNameByID", "C_CurrencyInfo.GetCoinTextureString", "GetBuildInfo",
         "Enum.TradeskillRelativeDifficulty", "Enum.CraftingReagentType", "ChatEdit_InsertLink", "IsShiftKeyDown",
         "GameTooltip" },
     risk = "visible", defaultEnabled = true,
@@ -370,6 +374,42 @@ function Planner:GoldAvailable()
     return top ~= nil and top ~= "vendor"
 end
 
+local MAX_VENDOR = 3000
+local SOURCE_ORDER = { vendor = 1, auction = 2, other = 3 }
+
+-- What a vendor sells for good is learned at the merchant window: an item in unlimited stock for plain money
+-- is a vendor reagent from then on, at its price for one. No call lists vendor stock from anywhere else.
+-- Kept in RefactorDB.professionVendor, itemID to copper, and added to, never expired.
+local function cleanVendor(stored)
+    local items, count = {}, 0
+    if type(stored) == "table" then
+        for id, price in pairs(stored) do
+            if count < MAX_VENDOR and type(id) == "number" and id > 0 and id % 1 == 0 and type(price) == "number"
+                and price > 0 then
+                items[id], count = price, count + 1
+            end
+        end
+    end
+    return items, count
+end
+Planner.CleanVendor = cleanVendor
+
+function Planner:OnMerchant()
+    local learned = false
+    for index = 1, GetMerchantNumItems() do
+        local info, itemID = C_MerchantFrame.GetItemInfo(index), GetMerchantItemID(index)
+        if type(info) == "table" and type(itemID) == "number" and info.numAvailable == -1
+            and not info.hasExtendedCost and type(info.price) == "number" and info.price > 0 then
+            local unit = math.max(1, math.floor(info.price / math.max(1, info.stackCount or 1)))
+            if self.vendor[itemID] ~= unit and (self.vendor[itemID] or self.vendorCount < MAX_VENDOR) then
+                if not self.vendor[itemID] then self.vendorCount = self.vendorCount + 1 end
+                self.vendor[itemID], learned = unit, true
+            end
+        end
+    end
+    if learned then self:QueueRefresh() end
+end
+
 -- Auction prices only. A vendor price is what a merchant pays for the reagent, not what it costs to buy.
 local function auctionPrice(itemID, quantity)
     local _, link = C_Item.GetItemInfo(itemID)
@@ -400,7 +440,9 @@ function Planner:Cost(entry, goal)
     if goal ~= "gold" then return ready and 1 - HELD_BONUS or 1 end
     local total = 0
     for _, reagent in ipairs(reagents) do
-        local value = auctionPrice(reagent.itemID, reagent.quantity)
+        local value, vendor = auctionPrice(reagent.itemID, reagent.quantity), self.vendor[reagent.itemID]
+        vendor = vendor and vendor * reagent.quantity
+        value = value and vendor and math.min(value, vendor) or value or vendor
         if not value then return nil end
         total = total + value
     end
@@ -450,12 +492,24 @@ function Planner:ShoppingList(plan)
     end
     local list = {}
     for _, itemID in ipairs(order) do
-        list[#list + 1] = { itemID = itemID, need = need[itemID], have = self:Held(itemID),
+        local have, unit = self:Held(itemID), self.vendor[itemID]
+        local auction = auctionPrice(itemID, 1)
+        -- Where the rest comes from: a vendor when one is known to sell it, unless the auction house is
+        -- cheaper, otherwise the auction house, otherwise nothing Refactor knows of.
+        local source = "other"
+        if unit and (not auction or unit <= auction) then
+            source = "vendor"
+        elseif auction then
+            source, unit = "auction", auction
+        end
+        if source == "other" then unit = nil end
+        list[#list + 1] = { itemID = itemID, need = need[itemID], have = have, source = source, unit = unit,
             name = C_Item.GetItemNameByID(itemID) or "", icon = C_Item.GetItemIconByID(itemID) }
     end
     table.sort(list, function(a, b)
-        local shortA, shortB = math.max(0, a.need - a.have), math.max(0, b.need - b.have)
-        if shortA ~= shortB then return shortA > shortB end
+        local doneA, doneB = a.have >= a.need, b.have >= b.need
+        if doneA ~= doneB then return doneB end
+        if a.source ~= b.source then return SOURCE_ORDER[a.source] < SOURCE_ORDER[b.source] end
         return a.itemID < b.itemID
     end)
     return list
@@ -632,6 +686,8 @@ function Planner:OnEnable()
     local account, character = R.Settings.account, R.Settings.character
     account.professionSeen = cleanSeen(account.professionSeen, buildKey())
     self.seen = account.professionSeen
+    self.vendor, self.vendorCount = cleanVendor(account.professionVendor)
+    account.professionVendor = self.vendor
     if type(character.professionPlannerCollapsed) ~= "boolean" then character.professionPlannerCollapsed = false end
     local enum = Enum.TradeskillRelativeDifficulty
     self.colourOf = { [enum.Optimal] = ORANGE, [enum.Medium] = YELLOW, [enum.Easy] = GREEN, [enum.Trivial] = GREY }
@@ -647,9 +703,12 @@ function Planner:OnEnable()
             ready = function(recipeID) return self:Ready(recipeID) end,
             sourceText = function(recipeID) return self:SourceText(recipeID) end,
             goldAvailable = function() return self:GoldAvailable() end,
+            coins = function(amount) return C_CurrencyInfo.GetCoinTextureString(amount) end,
         })
     end
     R.Broker:Subscribe("TRADE_SKILL_SHOW", self.OnShow, self)
+    R.Broker:Subscribe("MERCHANT_SHOW", self.OnMerchant, self)
+    R.Broker:Subscribe("MERCHANT_UPDATE", self.OnMerchant, self, REFRESH_DELAY)
     local window = R.Capabilities:Resolve("ProfessionsFrame")
     if type(window) == "table" and type(window.IsShown) == "function" and window:IsShown() then self:OnShow() end
 end

@@ -1791,8 +1791,10 @@ end
 local MINIMAP_ICON_NUDGE_X, MINIMAP_ICON_NUDGE_Y = 0, 0
 
 -- Refactor's own button, parented to the minimap but never altering it.
-function Theme:MinimapButton(parent, size, inset)
-    local button = CreateFrame("Button", nil, parent)
+-- The frame needs a global name: collectors such as MinimapButtonButton skip unnamed frames and
+-- recognise ours by "MinimapButton" in the name.
+function Theme:MinimapButton(parent, size, inset, name)
+    local button = CreateFrame("Button", name, parent)
     button:SetSize(size, size)
     button:SetFrameStrata("MEDIUM")
     button:SetFrameLevel(parent:GetFrameLevel() + 8)

@@ -260,6 +260,16 @@ describe("window chrome", function()
         assert.is_true(UI.panels.Diagnostics:IsShown())
     end)
 
+    it("names the minimap button so collectors like MinimapButtonButton can find it", function()
+        local env, R = loaded()
+        env.Minimap = env.CreateFrame("Frame", "Minimap", env.UIParent)
+        local button = R.UI:CreateMinimapButton()
+        assert.is_not_nil(button)
+        assert.matches("MinimapButton", button.name)
+        assert.is_nil(button.name:match("%d$"))
+        assert.equal(button, env[button.name])
+    end)
+
     it("reports only warning states in the meta slot, never Active or a category", function()
         local _, R = loaded()
         local UI = R.UI

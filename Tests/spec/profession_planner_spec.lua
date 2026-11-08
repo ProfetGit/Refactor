@@ -121,6 +121,11 @@ local function world(options)
     }
     -- A window whose right edge is at 700. Its children are whatever a test puts in env.edgeFrames.
     env.edgeFrames = {}
+    env.merchant = {}
+    env.GetMerchantNumItems = function() return #env.merchant end
+    env.GetMerchantItemID = function(index) return env.merchant[index].id end
+    env.C_MerchantFrame = { GetItemInfo = function(index) return env.merchant[index].info end }
+    env.C_CurrencyInfo = { GetCoinTextureString = function(amount) return amount .. "c" end }
     env.ProfessionsFrame = {
         shown = false,
         GetFrameLevel = function() return 10 end, GetFrameStrata = function() return "HIGH" end,
@@ -510,6 +515,43 @@ describe("profession planner", function()
             assert.equal("x24  Bolt", module.ui.steps[1].name:GetText():gsub("|c%x+", ""):gsub("|r", ""))
         end)
 
+        it("learns what a vendor sells and tags each reagent vendor, auction or other", function()
+            local env, module = world()
+            local prices = { ["item:202"] = 90 }
+            env.R.Price:RegisterProvider("tsm", 100, function(item) return prices[item] end)
+            env.R.Price:SetEnabled("tsm", true)
+            env.OpenWindow(env)
+            local function source(id)
+                for _, reagent in ipairs(module.view.plan.reagents) do
+                    if reagent.itemID == id then return reagent.source, reagent.unit end
+                end
+            end
+            assert.equal("other", source(201))
+            assert.equal("auction", source(202))
+            env.merchant = {
+                { id = 201, info = { numAvailable = -1, price = 50, stackCount = 5, hasExtendedCost = false } },
+                { id = 202, info = { numAvailable = -1, price = 40, stackCount = 1, hasExtendedCost = false } },
+                { id = 203, info = { numAvailable = 3, price = 10, stackCount = 1 } },
+                { id = 204, info = { numAvailable = -1, price = 10, stackCount = 1, hasExtendedCost = true } },
+            }
+            env:Fire("MERCHANT_SHOW")
+            env:Advance(0.5)
+            assert.same({ [201] = 10, [202] = 40 }, env.R.Settings.account.professionVendor)
+            assert.same({ "vendor", 10 }, { source(201) })
+            assert.same({ "vendor", 40 }, { source(202) })
+            prices["item:202"] = 20
+            env.R.Price:Invalidate()
+            env:Fire("BAG_UPDATE_DELAYED")
+            env:Advance(0.5)
+            assert.same({ "auction", 20 }, { source(202) })
+        end)
+
+        it("drops malformed vendor entries", function()
+            local items, count = Planner.CleanVendor({ [1] = 5, [2] = -1, x = 4, [3] = "a" })
+            assert.same({ [1] = 5 }, items)
+            assert.equal(1, count)
+        end)
+
         it("names the colours and their source in the step tooltip", function()
             local env, module = world()
             env:OpenWindow()
@@ -541,7 +583,10 @@ describe("profession planner", function()
             assert.equal(0, env:ActiveTimers())
             for event, entries in pairs(env.R.Broker.events) do
                 for _, each in ipairs(entries) do
-                    if each.owner == module then assert.equal("TRADE_SKILL_SHOW", event) end
+                    if each.owner == module then
+                        local always = event == "TRADE_SKILL_SHOW" or event:find("^MERCHANT")
+                        assert.is_truthy(always, event)
+                    end
                 end
             end
         end)

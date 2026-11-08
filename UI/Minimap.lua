@@ -88,7 +88,7 @@ function UI:CreateMinimapButton()
     if self.minimapButton or not Minimap then
         return self.minimapButton
     end
-    local button = Theme:MinimapButton(Minimap, BUTTON_SIZE, ICON_INSET)
+    local button = Theme:MinimapButton(Minimap, BUTTON_SIZE, ICON_INSET, "RefactorMinimapButton")
     self.minimapButton = button
     button:SetScript("OnClick", function(_, mouseButton) self:LauncherClick(mouseButton) end)
     button:SetScript("OnDragStart", function(widget)

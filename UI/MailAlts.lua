@@ -139,7 +139,10 @@ end
 function R.UI:CreateMailAltsPanel(owner)
     if owner.refactorMailPanel then return owner.refactorMailPanel end
     local inner = WIDTH - PADDING * 2
-    local panel = CreateFrame("Frame", nil, UIParent)
+    -- A child of the mail window, so it goes when the window does. SendMailFrame:IsShown() stays
+    -- true after the mailbox closes (it reports its own flag, not its parent's), so nothing that
+    -- only watches the send tab can be trusted to take this down.
+    local panel = CreateFrame("Frame", nil, MailFrame)
     panel:SetSize(WIDTH, HEIGHT)
     panel:SetPoint("TOPLEFT", MailFrame, "TOPRIGHT", 2, 0)
     panel:EnableMouse(true)

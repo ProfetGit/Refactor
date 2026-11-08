@@ -665,11 +665,16 @@ local function plannerWorld(skill)
         GetRecipeLink = function() return nil end, OpenRecipe = function() end,
     }
     env.C_Item.GetItemCount = function(id) return bags[id] or 0 end
+    env.GetMerchantNumItems = function() return 0 end
+    env.GetMerchantItemID = function() return nil end
+    env.C_MerchantFrame = { GetItemInfo = function() return nil end }
+    env.C_CurrencyInfo = { GetCoinTextureString = function(amount) return amount .. "c" end }
     env.C_Item.GetItemInfo = function(id) return items[id], nil end
     env.C_Item.GetItemNameByID = function(id) return items[id] end
     -- On by default, so boot already settled it to enabled without its capabilities: enable it for real now
     -- that they are stubbed.
     local module = R.moduleByID["items.professionPlanner"]
+    R.Settings.account.professionVendor = { [2589] = 4, [2320] = 20 }
     R.Registry:Disable(module)
     R.Registry:Enable("items.professionPlanner")
     if module.state ~= "enabled" then

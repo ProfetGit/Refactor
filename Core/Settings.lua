@@ -93,6 +93,9 @@ local OPTION_DEFAULTS = {
     -- The client's own ceiling for cameraDistanceMaxZoomFactor, which is what the feature
     -- set flat out before the slider existed. Its own default is 1.9.
     cameraMaxZoom = 2.6,
+    -- Each one starts at the engine's ceiling for its CVar, the way cameraMaxZoom does.
+    -- The game's own defaults are 16, 70 and 70.
+    groundEffectDensity = 256, groundEffectDist = 500, groundEffectFade = 370,
     -- Blizzard's window is two by five. Three by six nearly doubles the page and stays
     -- inside the left panel area at the default UI scale.
     vendorColumns = 3, vendorRows = 6,
@@ -241,6 +244,12 @@ local function validOption(key, value)
         -- Below the client's own 1.9 is a closer camera, which is a choice; above 2.6 the
         -- client clamps it anyway.
         return type(value) == "number" and value >= 1 and value <= 2.6
+    elseif key == "groundEffectDensity" then
+        return type(value) == "number" and value >= 0 and value <= 256 and value % 1 == 0
+    elseif key == "groundEffectDist" then
+        return type(value) == "number" and value >= 10 and value <= 500 and value % 1 == 0
+    elseif key == "groundEffectFade" then
+        return type(value) == "number" and value >= 10 and value <= 370 and value % 1 == 0
     elseif key == "vendorColumns" then
         -- One column would leave the page buttons and repair row overlapping.
         return type(value) == "number" and value >= 2 and value <= 5 and value % 1 == 0

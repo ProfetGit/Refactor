@@ -1538,6 +1538,40 @@ describe("M4 interface, mail, vendor", function()
         noResidue(env, camera)
     end)
 
+    it("ground effects write all three CVars, follow each slider and reapply on a loading screen", function()
+        local env = cameraEnv()
+        local ground = enable(env, "Modules/Interface/GroundEffects.lua", "interface.groundEffects")
+        assert.equal("256", env.cvars.groundEffectDensity)
+        assert.equal("500", env.cvars.groundEffectDist)
+        assert.equal("370", env.cvars.groundEffectFade)
+        assert.is_true(env.R.Settings:SetOption("groundEffectDist", 300))
+        assert.equal("300", env.cvars.groundEffectDist)
+        assert.is_false(env.R.Settings:SetOption("groundEffectDensity", 257))
+        assert.is_false(env.R.Settings:SetOption("groundEffectFade", 5.5))
+        assert.equal("256", env.cvars.groundEffectDensity)
+        -- Only the slider that moved is written, and an unrelated setting writes nothing.
+        local writes = {}
+        local set = env.C_CVar.SetCVar
+        env.C_CVar.SetCVar = function(name, value) writes[#writes + 1] = name; set(name, value) end
+        assert.is_true(env.R.Settings:SetOption("groundEffectFade", 200))
+        assert.same({ "groundEffectFade" }, writes)
+        writes = {}
+        assert.is_true(env.R.Settings:SetOption("farmOpacity", 0.5))
+        assert.equal(0, #writes)
+        env.C_CVar.SetCVar = set
+        -- The graphics quality setting writes over the CVars; the next loading screen puts them back.
+        env.cvars.groundEffectDensity, env.cvars.groundEffectDist = "16", "70"
+        env:Fire("PLAYER_ENTERING_WORLD")
+        assert.equal("256", env.cvars.groundEffectDensity)
+        assert.equal("300", env.cvars.groundEffectDist)
+        assert.equal("200", env.cvars.groundEffectFade)
+        env.R.Registry:Disable(ground)
+        assert.equal("0", env.cvars.groundEffectDensity)
+        assert.is_true(env.R.Settings:SetOption("groundEffectDist", 120))
+        assert.equal("0", env.cvars.groundEffectDist)
+        noResidue(env, ground)
+    end)
+
     it("ActionCam applies Immersive, follows the situation, gives the wheel back, reverts", function()
         local env = cameraEnv()
         local action = enable(env, "Modules/Interface/ActionCam.lua", "interface.actionCam")

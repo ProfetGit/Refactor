@@ -592,7 +592,7 @@ end
 function SendToAlts:Render()
     local panel = self.panel
     if not panel then return end
-    if self:IsActive() and SendMailFrame:IsShown() and self:HasRecipients() then
+    if self:IsActive() and MailFrame:IsShown() and SendMailFrame:IsShown() and self:HasRecipients() then
         panel:Render(self)
     else
         panel:Hide()

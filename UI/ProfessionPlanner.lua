@@ -14,7 +14,7 @@ local BORDER_OUTSET = 2
 local REAGENT_HEIGHT, REAGENT_ICON = 20, 16
 local LINE_HEIGHT, SECTION_GAP, STEP_BAR = 18, 10, 2
 local STEP_POOL, CANDIDATE_POOL, REAGENT_POOL = 8, 3, 8
-local READY_GAP, HAVE_WIDTH = 8, 70
+local READY_GAP, HAVE_WIDTH, TAG_WIDTH = 8, 52, 56
 local PANEL_LEVEL = 5
 local UNLEARNED_ALPHA = 0.55
 local SHOWN_RATE = 1.05
@@ -103,8 +103,27 @@ local function newStepRow(ui)
     return row
 end
 
+local SOURCE_TEXT = { vendor = "PLANNER_SRC_VENDOR", auction = "PLANNER_SRC_AUCTION", other = "PLANNER_SRC_OTHER" }
+local SOURCE_TOKEN = { vendor = "TEXT_TITLE", auction = "TEXT_ACTIVE", other = "TEXT_MUTED" }
+
+local function reagentTip(row)
+    local reagent = row.reagent
+    if not reagent then return end
+    GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(reagent.name)
+    if reagent.source == "other" then
+        GameTooltip:AddLine(line(L.PLANNER_TIP_OTHER, "TEXT_MUTED"), nil, nil, nil, true)
+    else
+        local key = reagent.source == "vendor" and "PLANNER_TIP_VENDOR" or "PLANNER_TIP_AUCTION"
+        GameTooltip:AddLine(line(L[key], "TEXT_BODY"), nil, nil, nil, true)
+        GameTooltip:AddLine(line(string.format(L.PLANNER_TIP_EACH, row.ui.handlers.coins(reagent.unit)), "TEXT_MUTED"))
+    end
+    GameTooltip:Show()
+end
+
 local function newReagentRow(ui)
     local row = CreateFrame("Frame", nil, ui.panel)
+    row.ui = ui
     row:SetSize(INNER, REAGENT_HEIGHT)
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(REAGENT_ICON, REAGENT_ICON)
@@ -116,8 +135,15 @@ local function newReagentRow(ui)
     row.have:SetPoint("RIGHT", -ROW_PAD, 0)
     row.name = Theme:Text(row, "", "small", "TEXT_BODY")
     row.name:SetWordWrap(false)
-    row.name:SetWidth(INNER - ROW_PAD * 2 - 2 - REAGENT_ICON - 6 - HAVE_WIDTH - 4)
+    row.tag = Theme:Text(row, "", "small", "TEXT_MUTED")
+    row.tag:SetWidth(TAG_WIDTH)
+    row.tag:SetJustifyH("RIGHT")
+    row.tag:SetPoint("RIGHT", row.have, "LEFT", -6, 0)
+    row.name:SetWidth(INNER - ROW_PAD * 2 - 2 - REAGENT_ICON - 6 - HAVE_WIDTH - TAG_WIDTH - 12)
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", reagentTip)
+    row:SetScript("OnLeave", function(widget) hideTip(widget) end)
     row:Hide()
     return row
 end
@@ -197,6 +223,10 @@ local function fillCandidate(row, entry)
 end
 
 local function fillReagent(row, reagent)
+    row.reagent = reagent
+    local done = reagent.have >= reagent.need
+    row.tag:SetText(done and "" or L[SOURCE_TEXT[reagent.source]])
+    Theme:Color(row.tag, SOURCE_TOKEN[reagent.source], true)
     setIcon(row.icon, reagent.icon)
     row.name:SetText(reagent.name)
     Theme:Color(row.have, reagent.have >= reagent.need and "PLAN_READY" or "TEXT_WARNING", true)

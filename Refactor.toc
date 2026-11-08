@@ -98,6 +98,7 @@ Modules/Chat/AcceptInvites.lua
 Modules/Chat/QuickInvite.lua
 Modules/Chat/UpdateNotice.lua
 Modules/Interface/CameraDistance.lua
+Modules/Interface/GroundEffects.lua
 Modules/Interface/ActionCam.lua
 Modules/Interface/ScreenshotLevelUp.lua
 Modules/Interface/PlaceNewSpells.lua

@@ -103,6 +103,17 @@ local VENDOR_COLUMNS = { key = "vendorColumns", minimum = 2, maximum = 5, step =
     labelKey = "UI_VENDOR_COLUMNS", formatter = columnsText }
 local VENDOR_ROWS = { key = "vendorRows", minimum = 2, maximum = 8, step = 1,
     labelKey = "UI_VENDOR_ROWS", formatter = vendorRowsText }
+-- The ranges Settings validates, which are the engine's ceilings for the three CVars.
+local function groundEffectText(value)
+    return string.format(L.UI_GROUND_EFFECT_VALUE, value)
+end
+
+local GROUND_DENSITY = { key = "groundEffectDensity", minimum = 0, maximum = 256, step = 8,
+    labelKey = "UI_GROUND_EFFECT_DENSITY", formatter = groundEffectText }
+local GROUND_DIST = { key = "groundEffectDist", minimum = 10, maximum = 500, step = 10,
+    labelKey = "UI_GROUND_EFFECT_DIST", formatter = groundEffectText }
+local GROUND_FADE = { key = "groundEffectFade", minimum = 10, maximum = 370, step = 10,
+    labelKey = "UI_GROUND_EFFECT_FADE", formatter = groundEffectText }
 -- Zero is off. A thousand gold kept back is past what a levelling character carries.
 local MAIL_KEEP_GOLD = { key = "mailKeepGold", minimum = 0, maximum = 1000, step = 10,
     labelKey = "UI_MAIL_ALTS_KEEP_GOLD", formatter = keepGoldText }
@@ -304,6 +315,15 @@ function UI:BuildVendorListSettings(parent)
     self.vendorRowsSlider = self:OptionSlider(block, VENDOR_ROWS)
     block:Finish()
     self:RegisterModuleSettings("vendor.extendedUI", block)
+end
+
+function UI:BuildGroundEffectSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_GROUND_EFFECTS_HELP)
+    self.groundDensitySlider = self:OptionSlider(block, GROUND_DENSITY)
+    self.groundDistSlider = self:OptionSlider(block, GROUND_DIST)
+    self.groundFadeSlider = self:OptionSlider(block, GROUND_FADE)
+    block:Finish()
+    self:RegisterModuleSettings("interface.groundEffects", block)
 end
 
 function UI:BuildQuestSettings(parent)

@@ -601,8 +601,14 @@ which the window's category list avoids.
   first planned at. Under the title, the crafts left in all, with the gold when planning by gold.
   No rank bar: the profession window shows the rank itself (owner's call, 6 Nov 2026).
 - **Shopping list.** Every reagent the rest of the plan needs, against what the bags, bank and
-  reagent bank hold, shortest first. It updates as the bags change. Reagents the player could
-  craft themselves are listed like any other.
+  reagent bank hold. Each one still to get is tagged Vendor, Auction or Other, vendor first.
+  Vendor means a merchant sells it in unlimited stock for plain money and it is not dearer than
+  the auction house; Auction means an auction provider prices it; Other is a gather or a drop.
+  No call lists vendor stock, so vendors are learned: each merchant window records its unlimited
+  plain-money items with their price for one in `RefactorDB.professionVendor`, at most 3,000,
+  added to and never expired. Until a vendor has been visited its items read Auction or Other, and
+  the tooltip says so. Planning by gold counts the cheaper of the vendor and the auction price. It
+  updates as the bags change.
 - **Recipes not yet learned** are not planned: the client does not say what skill a trainer asks
   before it teaches one. Where nothing known gives skill any more, the panel says so and names
   up to three unlearned recipes that would carry on, nearest first, with `GetRecipeSourceText`

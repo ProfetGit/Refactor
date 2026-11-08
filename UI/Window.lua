@@ -1085,6 +1085,7 @@ function UI:Initialize()
     self:BuildTooltipBorderSettings(self.scroll.child)
     self:BuildCameraSettings(self.scroll.child)
     self:BuildCameraDistanceSettings(self.scroll.child)
+    self:BuildGroundEffectSettings(self.scroll.child)
     self:BuildVisibilitySettings(self.scroll.child)
     self.panels = {}
     self:BuildProfiles(frame)
