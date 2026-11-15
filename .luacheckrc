@@ -24,8 +24,10 @@ read_globals = {
     "Settings",
     -- Core client API
     "C_AddOns", "C_CVar", "C_Container", "C_GossipInfo", "C_Item", "C_Mail", "C_NamePlate", "C_QuestLog",
-    "C_Texture", "C_Timer", "C_TooltipInfo",
-    "Enum", "GetBuildInfo", "GetTime", "UnitGUID", "debugstack",
+    "C_Texture", "C_Timer", "C_TooltipInfo", "C_EncounterJournal", "C_AreaPoiInfo", "C_TaxiMap",
+    "Enum", "GetBuildInfo", "GetTime", "UnitGUID", "UnitFactionGroup", "debugstack",
+    -- Whether a global was set by Blizzard's code: the minimap collector leaves those frames alone
+    "issecurevariable",
     -- Retail 12's secret values: a nameplate's GUID while unit identity is restricted
     "issecretvalue",
     -- Input and combat state
@@ -60,7 +62,7 @@ read_globals = {
     -- Class coloured tooltip border
     "UnitClassBase", "UnitClass", "C_ClassColor",
     -- Placing a newly learned ability: the spellbook queries, the cursor and the action slots
-    "C_Spell", "C_SpellBook", "C_ActionBar", "GetCursorInfo", "ClearCursor",
+    "C_Spell", "C_SpellBook", "C_ActionBar", "GetCursorInfo", "ClearCursor", "GetActionInfo",
     -- ActionCam profiles: situation queries and the two camera zoom calls
     "IsIndoors", "IsResting", "IsMounted", "UnitOnTaxi", "UnitInVehicle", "IsPlayerInWorld",
     "CameraZoomIn", "CameraZoomOut", "GetCameraZoom", "GetShapeshiftFormID",
@@ -73,6 +75,12 @@ read_globals = {
     "ATTACHMENTS_MAX_SEND", "HasSendMailItem", "GetSendMailItem", "GetSendMailItemLink", "GetSendMailPrice",
     "ClickSendMailItemButton", "MoneyInputFrame_SetCopper", "SendMailMoney", "GetRealmName",
     "GetProfessions", "GetProfessionInfo", "C_TradeSkillUI",
+    -- Quest progress banner: Blizzard's error text, its quest message types and formats, and their sounds
+    "UIErrorsFrame", "GetGameMessageInfo", "PlaySound", "C_Sound",
+    "LE_GAME_ERR_QUEST_ADD_KILL_SII", "LE_GAME_ERR_QUEST_ADD_PLAYER_KILL_SII", "LE_GAME_ERR_QUEST_ADD_ITEM_SII",
+    "LE_GAME_ERR_QUEST_ADD_FOUND_SII", "LE_GAME_ERR_QUEST_OBJECTIVE_COMPLETE_S", "LE_GAME_ERR_QUEST_UNKNOWN_COMPLETE",
+    "LE_GAME_ERR_QUEST_COMPLETE_S", "ERR_QUEST_ADD_KILL_SII", "ERR_QUEST_ADD_PLAYER_KILL_SII", "ERR_QUEST_ADD_ITEM_SII",
+    "ERR_QUEST_ADD_FOUND_SII", "ERR_QUEST_OBJECTIVE_COMPLETE_S", "ERR_QUEST_UNKNOWN_COMPLETE", "ERR_QUEST_COMPLETE_S",
 }
 
 files["Tests/"] = { std = "+busted" }

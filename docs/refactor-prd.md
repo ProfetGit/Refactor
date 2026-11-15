@@ -96,7 +96,7 @@ Three axes where Refactor can be better:
 | Axis | Incumbent behaviour | Refactor |
 |---|---|---|
 | Configuration | Long scrolling lists of checkboxes | Searchable, categorised, sensible defaults, with per-setting explanations |
-| Alt handling | Per-character or one global profile | Three-state inheritance: account default, per-character override, explicit off |
+| Alt handling | Per-character or one global profile | One profile per character, shared by default, copied when one should differ |
 | Neighbours | Overlaps silently, user resolves conflicts | Detects neighbours, defers, and says so in the UI |
 
 The "one addon" pitch stays honest because the six things Refactor excludes are exactly the six that people install deliberately.
@@ -137,23 +137,37 @@ This is the main performance argument for an all-in-one addon and it should be m
 
 ### 5.3 Settings and profiles
 
-Three-state model per setting:
+Decided 11 Nov 2026, replacing the layered model 0.1.0 shipped with (character override, then
+assigned profile, then account value, then module default, with an Editing switch choosing which
+layer a click wrote). Players could not tell which layer they were in, a click on the account layer
+changed nothing on a character with a profile, and options were account-wide whatever the switch
+said. The model now is the one players know from other addons:
 
-| State | Meaning |
-|---|---|
-| Inherit | Use the account-wide value. Default for every setting on a new character. |
-| On | Force on for this character regardless of the account value. |
-| Off | Force off for this character regardless of the account value. |
+- **Every character uses exactly one profile.** A character with no assignment uses Default, which
+  always exists and cannot be deleted.
+- **A profile holds everything:** every feature switch and every option inside a feature. What the
+  window shows is what the character runs, and every click writes the profile in use.
+- **A character that should differ gets its own profile:** New profile copies the one in use,
+  settings included, and switches the character to it.
+- **Account data is not a preference and stays one per account,** whichever profile is in use: the
+  never-sell list, the mail roster, routes and bank alt, taught gossip choices, moved map exits, the
+  library of custom camera profiles, and the pause key (5.6).
 
 Storage:
 
-- `SavedVariables` holds the account profile plus every named profile.
-- `SavedVariablesPerCharacter` holds only the overrides map and the first-run completion flag. It stays tiny.
+- `SavedVariables` holds every profile, the GUID to profile assignments and the account data.
+- `SavedVariablesPerCharacter` holds only frame positions and view state. It stays tiny.
 - Character identity key for anything account-side (profile assignment, per-character lists) is `UnitGUID("player")`, not Name-Realm. Forever reportedly has no realms and uses two-part names across four rulesets. Verified on beta day one (13, Q12).
 
-Named profiles exist on top of this (for example "Levelling", "Raiding", "Bank alt") and can be assigned per character. A character's effective value resolves in order: character override, then assigned profile, then account default, then module default.
+A switch resolves as the profile's own value, then the module default. Switching a character's
+profile announces every option the two profiles disagree on, by its key, so each feature re-applies
+what it reads without knowing profiles exist.
 
-Import and export as a base64 string so users can share configs, which is also the cheapest possible support tool: "paste your config string" beats twenty questions.
+Migration from 0.1.0: the account layer becomes Default, each named profile becomes a whole one
+(its switches over the account's), and a character that had switches of its own gets a profile
+named after it. Every character resolves exactly what it did before.
+
+Import and export as a base64 string so users can share configs, which is also the cheapest possible support tool: "paste your config string" beats twenty questions. The string carries switches and settings, never account data, and every value is validated again on import. Strings from 0.1.0 still import, with default settings.
 
 ### 5.4 Neighbour detection and deference
 
@@ -243,6 +257,27 @@ Risk column: **S** safe, **V** visible (changes the screen), **A** automation (a
 | Quest progress in unit tooltip | Cheaper alternative to nameplates, same data | Full | V |
 | Quest item button | Floating button for the active zone's quest items | Full | V |
 | Show quest level in the log | Full | V |
+| Quest progress banner | Refactor's own banner in place of the yellow progress, objective complete and hand-in lines. On by default | Full | V |
+
+Quest progress banner, decided 11 Nov 2026 at the owner's request. The client prints quest
+progress ("Durotar Tiger Fur: 2/4"), a finished objective and a hand-in as plain yellow lines in
+Blizzard's error text. `quest.progressBanner` switches exactly those message types off with
+Blizzard's own `UIErrorsFrame:SetMessageTypeEnabled` and turns each back on at disable; every
+other info and error line keeps printing. In their place, under the error text:
+
+- A row per objective: the quest's name small in gold, the objective with the type icon the
+  nameplates use and its count, and a thin bar that grows to the new count. A finished objective
+  turns green with a check. One objective updates its own row; at most three rows, newest on top.
+- When that objective finishes the quest, the row becomes a banner: the quest's name in the large
+  font, "Ready to turn in" with a check, and a copper rule that opens from the middle.
+- A hand-in gets the same banner with "Quest complete".
+- The sound the client gives each line still plays. A line that does not parse is shown as it came.
+- For 7.5 s after a level up the banner steps down under Blizzard's level-up toast and the
+  new-abilities strip, since a hand-in that levels you lands in exactly that moment.
+
+Lines are read back with patterns built from the client's own format strings, so other locales
+work. `QUEST_LOG_UPDATE` is held only for a few seconds after an objective finishes. Quest
+accepted lines are left to Blizzard; they are the obvious next candidate if the banner lands well.
 
 ### 7.2 Loot
 
@@ -286,10 +321,11 @@ Risk column: **S** safe, **V** visible (changes the screen), **A** automation (a
 | Hide boss banner and zone text | Individually toggleable | Full | V |
 | UI element visibility | Alpha only. Named behaviours given to frame groups, one setup per kind of place, see 7.4.1 | Full | V |
 | Screenshot on level up | Full | V |
-| Place new abilities | A newly learned ability goes on the first empty slot of a bar that is on screen. Never overwrites a slot, never fills a hidden bar, waits out combat. Retail pushes new spells to bars itself through the AutoPushSpellToActionBar CVar; Forever does not, which is why this exists | Manual | A |
+| Place new abilities | A newly learned ability goes on the first empty slot of a bar that is on screen. Never overwrites a slot, never fills a hidden bar, waits out combat. Retail pushes new spells to bars itself through the AutoPushSpellToActionBar CVar; Forever does not, which is why this exists. A newly learned rank instead replaces the highest older rank of the same spell in every player slot (pages 1 to 10 and 13 to 15), on by default under the `placeSpellsRanks` option: lower ranks kept on purpose and macros are left alone, and two older ranks that neither the rank text nor the teaching level orders are both left alone | Manual | A |
 | Zone levels on the map | The hovered zone's level range beside its name on the world map, in the quest difficulty colour. Retail draws this itself; Forever draws the name alone and returns no level data, so the ranges come from a table keyed by zone name and the module stands down wherever the client answers | Full | V |
 | Reveal the map | Unexplored areas drawn dimmed under the client's explored overlays, from Blizzard's overlay tables for the installed build, generated by a script; unavailable on a client the data was not made for | Full | V |
 | Every class spell in the spellbook | A Refactor side panel on the spellbook's right lists every class spell with its unlock level, unlearned ones in grey and trainable ones marked, with search and learned or not filters, switched by a button in the book. Retail lists future spells itself; Forever lists learned spells only and no API has the rest, so the class trainer's list is recorded per class on each visit, and spells appear once a trainer has been seen | Full | V |
+| Minimap button collector | Added 11 Nov 2026 at the owner's request, to retire MinimapButtonButton. Addon buttons on the minimap (LibDBIcon's by name, the rest by MinimapButtonButton's name rules) move into a drawer behind one LibDBIcon-style button, drawn on Blizzard's dropdown menu panel. The button rides the minimap's rim or, with that option off, sits anywhere it is dragged. Never a Blizzard frame, a secure global or a protected frame, nothing is taken in combat, and every button goes back on disable. Stands down while MinimapButtonButton is loaded | Full | V |
 | Auto stand when looting or mounting | Minimal | S |
 | Auto dismount for actions | Minimal | S |
 
@@ -302,8 +338,8 @@ in Edit Mode, and setting up a whole screen was a chore.
 An element follows a **behaviour**: a named set of rules made once and given to any number of
 elements. A behaviour carries a resting opacity, a revealed opacity (never under a tenth),
 whether mouseover reveals it, the conditions that reveal it, the conditions that hide it,
-whether its elements reveal together, and a fade time each way. Each condition is listed once,
-with a Reveal and a Hide column, so it does one or the other and never both. Opacities are a
+whether its elements reveal together, and a fade time each way. Each condition is one choice of
+no effect, shows it or hides it, so it does one or the other and never both. Opacities are a
 share of the frame's own alpha, so an Edit Mode opacity still counts. Resolution is one pure
 function: mouseover reveals when the behaviour has it on and beats everything, so a hidden
 element can always be reached; then a hide condition takes the element to 0; then a reveal
@@ -324,16 +360,21 @@ spell with a cast bar, a channel or an empower; it comes from the player's own s
 events, registered for the player alone so a raid's casts never reach Lua, and the flag is
 read from which event fired, never from a payload that can be secret.
 
-Behaviours and setups are made in Refactor's window: the setup picker listing every element
-with its behaviour comes first, because that is what a player does most, then the behaviour
-editor. Selecting a system in Edit Mode attaches
+Behaviours and setups are made in Refactor's window, reworked 11 Nov 2026 at the owner's request.
+The setup picker comes first, its World setup named Everywhere on screen, then one row per kind
+(chat, action bars, unit frames, HUD) whose picker sets every element of the kind at once and reads
+Mixed when they differ. A chevron opens the kind's elements, and a search for an element opens the
+kind holding it. The behaviour editor follows the last choice made in any picker, opens on the
+behaviour most elements have until the player picks one, names the elements a change reaches
+(a whole kind by its kind), and marks behaviours no element has. Selecting a system in Edit Mode attaches
 Blizzard's settings dialog to it, and a small Refactor-owned companion opens beside that
 dialog with the groups the system stands for, each with one behaviour picker that writes to
 the setup in use, and a button to the window. Nothing is added to or changed in Blizzard's
 dialog, whose setting widgets all write into Blizzard's own layout data. While Edit Mode is
 open every element shows as the game has it. Starter behaviours (Fade away, Combat HUD, Clean
 when mounted) replace the presets; they are ordinary behaviours the player can edit, copy or
-delete, and a fresh install assigns none, so turning the feature on changes nothing until an
+delete. Fade away rests at 30 percent, since a bar faded to nothing reads as a bar that is gone. A
+fresh install assigns none, so turning the feature on changes nothing until an
 element is given one. Rules saved by the first version are converted at login: each distinct
 rule and zone becomes a behaviour named Imported 1, 2 and so on, the elements of one zone keep
 revealing together, and a condition that hid an element now takes it to 0. Groups:
@@ -686,8 +727,10 @@ Single resizable window, movable, position saved per character.
 Rules:
 
 - **Search is global.** Typing filters across every category and shows the category as a breadcrumb on each result. This is the single most important interaction in the addon.
+- **One category per page** (11 Nov 2026). The sidebar picks a page and the list shows that category alone; a search reaches every category. Categories are cut by what the player is doing (Quest, Levelling, Map, Loot, Vendor, Items, Interface, Camera, Chat and social), and none holds more than seven features: Interface had grown to thirteen as a catch-all.
+- **Undo is quiet.** A feature that differs from Refactor's default shows its undo only under the pointer or with its settings open, since differing from the default is the normal case.
 - **Every row has a one-line description.** No setting is a bare label. If a setting cannot be explained in one line, it is two settings.
-- **The toggle is three-state** on a character with an account profile: Inherit, On, Off. Inherit shows the resolved value greyed beside it.
+- **The toggle is on or off** and shows what this character runs. The profile in use is named at the top of the list, where it can be changed (5.3).
 - **The ⓘ opens detail**, including what the setting does mechanically, what it conflicts with, and what to do if it misbehaves.
 - **Automation is visually distinct.** Warning-coloured category icon, an explanatory header on the page, and the confirmation dialog on first enable of each member.
 - Styling follows the visual style in 8.3.
@@ -868,7 +911,7 @@ Refactor/
 │   ├── Namespace.lua       -- single global, everything else local
 │   ├── Registry.lua        -- module registration, error boundaries, capabilities
 │   ├── Broker.lua          -- event dispatch, throttling, subscription lifecycle
-│   ├── Settings.lua        -- three-state resolution, profiles, import/export
+│   ├── Settings.lua        -- profiles, migration, import/export
 │   ├── Capabilities.lua    -- API symbol probing (5.1)
 │   └── Pools.lua           -- frame and table pools
 ├── Libs/
@@ -947,7 +990,7 @@ Headless Lua 5.1 with `busted`, against a mocked WoW API in `Tests/mock`. The mo
 
 What gets tested:
 
-- Settings inheritance resolution, every combination of account, profile, character override, and module default
+- Settings resolution and the 0.1.0 migration, every combination of the old account, profile, override and module default
 - Price provider chain fallback, including all providers absent
 - Sell list matching: never-sell beats always-sell beats quality rule
 - Enable, disable, enable leaves no residue, for every module
@@ -1001,7 +1044,7 @@ On tag: packager publishes to CurseForge, Wago, and a GitHub release. Changelog 
 | Sessions with zero caught module errors | > 99 percent |
 | Memory reported in the addon list, Standard preset | < 1.0 MB |
 | Performance budgets in 9.2 met at release | 100 percent, release gate |
-| Users with at least one per-character override after 30 days | > 25 percent (proves the profile system is understood) |
+| Users with a second profile after 30 days | > 25 percent (proves the profile system is understood) |
 | Median time from install to first setting change | < 3 minutes |
 | Support threads that are actually neighbour conflicts | < 10 percent (proves the conflict panel works) |
 

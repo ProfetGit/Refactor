@@ -3,25 +3,27 @@
 --- Requires: IsTradeskillTrainer, GetTrainerServiceTypeFilter, SetTrainerServiceTypeFilter,
 ---     GetNumTrainerServices, GetTrainerServiceInfo, GetTrainerServiceSkillLine, GetTrainerServiceItemLink,
 ---     C_TooltipInfo.GetTrainerService, C_Trainer.GetTrainerType, Enum.TrainerType, Enum.SpellBookItemType,
----     Enum.SpellBookSpellBank, UnitClass, UnitLevel, C_Spell.GetSpellTexture, C_Spell.GetSpellName,
----     C_Spell.GetSpellSubtext, C_SpellBook.GetNumSpellBookSkillLines, C_SpellBook.GetSpellBookSkillLineInfo,
----     C_SpellBook.GetSpellBookItemInfo, C_SpellBook.GetSpellBookItemLevelLearned, C_SpellBook.IsSpellKnown,
----     C_AddOns.IsAddOnLoaded
+---     Enum.SpellBookSpellBank, UnitClass, UnitFactionGroup, UnitLevel, C_Spell.GetSpellTexture,
+---     C_Spell.GetSpellName, C_Spell.GetSpellSubtext, C_SpellBook.GetNumSpellBookSkillLines,
+---     C_SpellBook.GetSpellBookSkillLineInfo, C_SpellBook.GetSpellBookItemInfo,
+---     C_SpellBook.GetSpellBookItemLevelLearned, C_SpellBook.IsSpellKnown, C_AddOns.IsAddOnLoaded
 --- Events: TRAINER_SHOW, TRAINER_CLOSED, TRAINER_UPDATE (only while a trainer is open), ADDON_LOADED (only
 ---     until the spellbook has loaded), SPELLS_CHANGED and LEARNED_SPELL_IN_SKILL_LINE (only while the panel
----     is shown). The unlearned spells are recorded at the class trainer, because no call lists them.
+---     is shown). The unlearned spells are recorded at the class trainer, because no call lists them; until
+---     then Data/ClassSpells.lua stands in.
 --- Hot: no
 -- luacheck: read globals IsTradeskillTrainer GetTrainerServiceTypeFilter SetTrainerServiceTypeFilter
 -- luacheck: read globals GetNumTrainerServices GetTrainerServiceInfo GetTrainerServiceSkillLine
 -- luacheck: read globals GetTrainerServiceItemLink C_Trainer
 local _, R = ...
 local AllSpells = R:RegisterModule({
-    id = "interface.allSpells", category = "Interface", nameKey = "ALL_SPELLS_NAME",
+    id = "interface.allSpells", category = "Levelling", nameKey = "ALL_SPELLS_NAME",
     descriptionKey = "ALL_SPELLS_DESC", detailKey = "ALL_SPELLS_DETAIL",
     requires = { "IsTradeskillTrainer", "GetTrainerServiceTypeFilter", "SetTrainerServiceTypeFilter",
         "GetNumTrainerServices", "GetTrainerServiceInfo", "GetTrainerServiceSkillLine",
         "GetTrainerServiceItemLink", "C_TooltipInfo.GetTrainerService", "C_Trainer.GetTrainerType",
-        "Enum.TrainerType", "Enum.SpellBookItemType", "Enum.SpellBookSpellBank", "UnitClass", "UnitLevel",
+        "Enum.TrainerType", "Enum.SpellBookItemType", "Enum.SpellBookSpellBank", "UnitClass", "UnitFactionGroup",
+        "UnitLevel",
         "C_Spell.GetSpellTexture", "C_Spell.GetSpellName", "C_Spell.GetSpellSubtext",
         "C_SpellBook.GetNumSpellBookSkillLines", "C_SpellBook.GetSpellBookSkillLineInfo",
         "C_SpellBook.GetSpellBookItemInfo", "C_SpellBook.GetSpellBookItemLevelLearned",
@@ -134,6 +136,15 @@ function AllSpells:Capture(mayChangeFilters)
     if not ok or type(classFile) ~= "string" or read.count == 0 then
         return false
     end
+    -- Weapon masters list skills with no level at all; only a window that teaches by level is the
+    -- class trainer's, and the one worth keeping.
+    local levelled = false
+    for _, entry in pairs(read.spells) do
+        levelled = levelled or entry.level >= 1
+    end
+    if not levelled then
+        return false
+    end
     R.Settings.account.classSpells[classFile] = read.spells
     return true
 end
@@ -203,7 +214,7 @@ function AllSpells:BuildList()
         end
         return found
     end
-    local recorded = R.Settings.account.classSpells[select(2, UnitClass("player"))] or {}
+    local recorded = R:ClassSpellList(select(2, UnitClass("player")), UnitFactionGroup("player"))
     local playerLevel = UnitLevel("player") or 1
     local bank, types = Enum.SpellBookSpellBank.Player, Enum.SpellBookItemType
     for index = 1, C_SpellBook.GetNumSpellBookSkillLines() or 0 do

@@ -5,7 +5,7 @@
 --- Hot: no, the default anchor is requested once per tooltip shown
 local _, R = ...
 local Anchor = R:RegisterModule({
-    id = "tooltips.anchor", category = "Tooltips", nameKey = "TOOLTIP_ANCHOR_NAME",
+    id = "tooltips.anchor", category = "Interface", nameKey = "TOOLTIP_ANCHOR_NAME",
     descriptionKey = "TOOLTIP_ANCHOR_DESC", detailKey = "TOOLTIP_ANCHOR_DETAIL",
     requires = { "hooksecurefunc", "GameTooltip_SetDefaultAnchor", "UIParent" },
     risk = "visible", defaultEnabled = false,

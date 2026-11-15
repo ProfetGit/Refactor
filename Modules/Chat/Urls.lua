@@ -6,7 +6,7 @@
 --- Hot: no, filters run per chat line
 local _, R = ...
 local Urls = R:RegisterModule({
-    id = "chat.urls", category = "Chat", nameKey = "CHAT_URLS_NAME",
+    id = "chat.urls", category = "Social", nameKey = "CHAT_URLS_NAME",
     descriptionKey = "CHAT_URLS_DESC", detailKey = "CHAT_URLS_DETAIL",
     requires = { "ChatFrameUtil.AddMessageEventFilter", "ChatFrameUtil.RemoveMessageEventFilter",
         "hooksecurefunc", "SetItemRef" },

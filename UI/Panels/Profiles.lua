@@ -8,8 +8,6 @@ local MAX_ROWS = 8
 local CONTROL_WIDTH, ROW_HEIGHT, ROW_BUTTON, NAME_WIDTH = 380, 30, 84, 220
 local INPUT_WIDTH, SAVE_WIDTH, SHARE_WIDTH, SHARE_HEIGHT, STATUS_HEIGHT = 260, 104, 380, 54, 14
 local DROPDOWN_GAP = 6
--- The assignment dropdown's entry for following the account, which is no profile at all.
-local NO_PROFILE = ""
 
 local function panelFrame(parent)
     local layout = UI.layout
@@ -19,34 +17,16 @@ local function panelFrame(parent)
     return panel
 end
 
-local function profileNames()
-    local names = {}
-    for name in pairs(Settings.account and Settings.account.profiles or {}) do names[#names + 1] = name end
-    table.sort(names)
-    return names
-end
-
--- How many of the registered features a profile switches on, as the row's summary.
+-- How many of the registered features a profile switches on, as the row's summary: a
+-- feature the profile does not mention follows Refactor's own default.
 local function onCount(profile)
     local on = 0
     for _, module in ipairs(R.modules) do
-        if profile[module.id] then on = on + 1 end
+        local value = profile.modules[module.id]
+        if value == nil then value = Settings.defaults[module.id] end
+        if value then on = on + 1 end
     end
     return on
-end
-
--- Assigning a profile also points the Editing switch at it, since from now on that is the
--- layer this character's clicks should change; leaving one puts the switch back.
-function UI:AssignProfile(name)
-    Settings:AssignProfile(name)
-    if name then
-        if Settings:SetScope("profile") then self.mode = "profile" end
-    elseif self.mode == "profile" then
-        Settings:SetScope("account")
-        self.mode = "account"
-    end
-    self.pendingDelete = nil
-    self:Refresh()
 end
 
 function UI:BuildProfileRow(panel, index)
@@ -68,8 +48,9 @@ function UI:BuildProfileRow(panel, index)
             return
         end
         self.pendingDelete = nil
-        Settings:DeleteProfile(row.profileName)
-        self.profileStatus:SetText(string.format(L.UI_PROFILE_DELETED, row.profileName))
+        local name = row.profileName
+        Settings:DeleteProfile(name)
+        self.profileStatus:SetText(string.format(L.UI_PROFILE_DELETED, name))
         self:Refresh()
     end)
     row.delete:SetPoint("RIGHT", -8, 0)
@@ -97,16 +78,16 @@ function UI:BuildProfiles(parent)
     self.profilePanel = panel
 
     self.profileAssign = Theme:Dropdown(panel, CONTROL_WIDTH, {},
-        function(value) return (Settings:AssignedProfile() or NO_PROFILE) == value end,
-        function(value) self:AssignProfile(value ~= NO_PROFILE and value or nil) end)
+        function(value) return Settings:ActiveProfile() == value end,
+        function(value)
+            self.pendingDelete = nil
+            Settings:AssignProfile(value)
+            self:Refresh()
+        end)
     panel:Place(self.profileAssign, Theme.dropdownRowHeight, DROPDOWN_GAP)
     self.profileAssign:SetLabel(L.UI_PROFILE_USES)
-    self.profileAssigned = panel:Note(nil, L.UI_PROFILE_UNASSIGNED,
-        string.format(L.UI_PROFILE_ASSIGNED, string.rep("W", 24)))
 
     panel:Group(L.UI_PROFILE_SAVED)
-    self.profileEmpty = Theme:Text(panel, L.UI_PROFILE_NONE, "small", "TEXT_MUTED")
-    self.profileEmpty:SetPoint("TOPLEFT", 8, panel.cursor - 8)
     self.profileRowsTop = panel.cursor
     self.profileRows = {}
     for index = 1, MAX_ROWS do self:BuildProfileRow(panel, index) end
@@ -122,10 +103,10 @@ function UI:BuildProfiles(parent)
     self.profileName = self.Widgets:Input(lower, INPUT_WIDTH)
     lower:Place(self.profileName, self.Widgets.INPUT_HEIGHT, self.Widgets.NOTE_GAP)
     local create = Theme:Button(lower, SAVE_WIDTH, L.UI_PROFILE_CREATE, function()
-        self:CreateProfileFromCharacter()
+        self:CreateProfileFromActive()
     end)
     create:SetPoint("LEFT", self.profileName, "RIGHT", 8, 0)
-    self.profileName:SetScript("OnEnterPressed", function() self:CreateProfileFromCharacter() end)
+    self.profileName:SetScript("OnEnterPressed", function() self:CreateProfileFromActive() end)
     lower:Note(L.UI_PROFILE_NEW_HELP)
 
     lower:Group(L.UI_PROFILE_SHARE)
@@ -143,6 +124,7 @@ function UI:BuildProfiles(parent)
         end
     end)
     import:SetPoint("TOPLEFT", self.profileString, "TOPRIGHT", 8, 0)
+    self.profileImport = import
 
     self.profileStatus = Theme:Text(lower, "", "small", "TEXT_TITLE")
     lower:Place(self.profileStatus, STATUS_HEIGHT)
@@ -152,20 +134,17 @@ function UI:BuildProfiles(parent)
     self:RegisterPanel("Profiles", panel)
 end
 
--- A new profile starts from what this character resolves to today, which is what the player
--- is looking at when they press the button.
-function UI:CreateProfileFromCharacter()
+-- A new profile starts as a copy of the one this character uses, settings included, and the
+-- character switches to it: the player pressed Create to change something for this character.
+function UI:CreateProfileFromActive()
     self.pendingDelete = nil
-    local values = {}
-    for _, module in ipairs(R.modules) do
-        values[module.id] = Settings:Get(module.id)
-    end
     local name = self.profileName:GetText()
     if name == "" then
         self.profileStatus:SetText(L.UI_PROFILE_NAME_MISSING)
         return
     end
-    local ok, err = Settings:CreateProfile(name, values)
+    local ok, err = Settings:CreateProfile(name, Settings:ActiveProfile())
+    if ok then Settings:AssignProfile(name) end
     self.profileStatus:SetText(ok and string.format(L.UI_PROFILE_CREATED, name)
         or L["UI_PROFILE_ERR_" .. tostring(err)] or L.UI_PROFILE_INVALID)
     if ok then
@@ -179,31 +158,29 @@ function UI:LoadProfiles()
     if not self.profileRows then
         return
     end
-    local names = profileNames()
-    local assigned = Settings:AssignedProfile()
-    local entries = { { value = NO_PROFILE, text = L.UI_ACCOUNT } }
-    for _, name in ipairs(names) do entries[#entries + 1] = { value = name, text = name } end
+    local names = Settings:ProfileNames()
+    local active = Settings:ActiveProfile()
+    local entries = {}
+    for _, name in ipairs(names) do entries[#entries + 1] = { value = name, text = self:ProfileLabel(name) } end
     self.profileAssign:SetEntries(entries)
-    self.profileAssign:SetValueText(assigned or L.UI_ACCOUNT)
-    self.profileAssigned:SetText(assigned and string.format(L.UI_PROFILE_ASSIGNED, assigned)
-        or L.UI_PROFILE_UNASSIGNED)
+    self.profileAssign:SetValueText(self:ProfileLabel(active))
     local total = #R.modules
     for index, row in ipairs(self.profileRows) do
         local name = names[index]
         row.profileName = name
         row:SetShown(name ~= nil)
         if name then
-            row.name:SetText(name)
-            Theme:Color(row.name, name == assigned and "TEXT_TITLE" or "TEXT_BODY", true)
+            row.name:SetText(self:ProfileLabel(name))
+            Theme:Color(row.name, name == active and "TEXT_TITLE" or "TEXT_BODY", true)
             local summary = string.format(L.UI_PROFILE_SUMMARY, onCount(Settings.account.profiles[name]), total)
-            row.summary:SetText(name == assigned and (summary .. L.UI_PROFILE_IN_USE) or summary)
+            row.summary:SetText(name == active and (summary .. L.UI_PROFILE_IN_USE) or summary)
             local arming = self.pendingDelete == name
             row.delete.label:SetText(arming and L.UI_PROFILE_CONFIRM or L.UI_PROFILE_DELETE)
+            row.delete:SetEnabled(name ~= Settings.DEFAULT_PROFILE)
         end
     end
-    self.profileEmpty:SetShown(#names == 0)
     local shown = math.min(#names, MAX_ROWS)
-    local bottom = self.profileRowsTop - math.max(1, shown) * ROW_HEIGHT
+    local bottom = self.profileRowsTop - shown * ROW_HEIGHT
     self.profileMore:SetShown(#names > MAX_ROWS)
     if #names > MAX_ROWS then
         self.profileMore:SetText(string.format(L.UI_PROFILE_MORE, #names - MAX_ROWS))

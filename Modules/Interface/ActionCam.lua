@@ -17,7 +17,7 @@
 local _, R = ...
 local Profiles = R.CameraProfiles
 local ActionCam = R:RegisterModule({
-    id = "interface.actionCam", category = "Interface", nameKey = "ACTIONCAM_NAME",
+    id = "interface.actionCam", category = "Camera", nameKey = "ACTIONCAM_NAME",
     descriptionKey = "ACTIONCAM_DESC", detailKey = "ACTIONCAM_DETAIL",
     requires = { "ConsoleExec", "C_CVar.SetCVar", "C_CVar.GetCVar", "C_CVar.GetCVarBool",
         "C_CVar.GetCVarDefault", "StaticPopup_Hide", "CameraZoomIn", "CameraZoomOut", "GetCameraZoom",

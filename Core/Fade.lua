@@ -35,7 +35,13 @@ local function step(_, elapsed)
         local progress = min(1, record.elapsed / record.duration)
         local apply = record.apply
         if apply then
-            local eased = progress * progress * (3 - 2 * progress)
+            local eased
+            if record.ease == "out" then
+                local rest = 1 - progress
+                eased = 1 - rest * rest * rest
+            else
+                eased = progress * progress * (3 - 2 * progress)
+            end
             local value = record.from + (record.to - record.from) * eased
             record.value = value
             -- An error in the caller's write ends this tween rather than leaving the driver
@@ -77,10 +83,11 @@ end
 -- A number that is not a frame's alpha, a camera CVar say. apply(key, value) writes it, and
 -- key is the caller's own table, so a second call for the same key retargets the tween from
 -- the value last written. A fresh tween writes from before returning, so a reset of the same
--- value earlier in the frame never reaches the screen. Eased at both ends: a camera that
--- starts and stops on a straight line reads as a jolt. Without a from, a zero duration, or
--- nowhere to go, the value is written once and no record is kept.
-function Fade:Value(key, to, seconds, apply, from)
+-- value earlier in the frame never reaches the screen. Eased at both ends by default: a camera
+-- that starts and stops on a straight line reads as a jolt. ease "out" starts at full speed and
+-- settles instead, for UI that answers an event and must not seem to wait before it moves. Without
+-- a from, a zero duration, or nowhere to go, the value is written once and no record is kept.
+function Fade:Value(key, to, seconds, apply, from, ease)
     local record = self.records[key]
     local current = record and record.value or from
     if current == nil or not seconds or seconds <= 0 or current == to then
@@ -98,7 +105,7 @@ function Fade:Value(key, to, seconds, apply, from)
         R:SafeCall(key, apply, "fade", current)
     end
     record.from, record.to, record.duration, record.elapsed = current, to, seconds, 0
-    record.apply, record.value = apply, current
+    record.apply, record.value, record.ease = apply, current, ease
 end
 
 function Fade:Snap(frame, alpha)

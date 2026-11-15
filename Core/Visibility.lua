@@ -88,6 +88,11 @@ Visibility.groups = {
         optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     { id = "bars.stance", kind = "bars", labelKey = "VIS_GROUP_STANCE_BAR", frames = { "StanceBar" },
         optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
+    -- Forever's shaman totem bar is a frame of its own under UIParent and an Edit Mode system;
+    -- Retail has none, so there the group reads as missing. The totem timers sit inside the
+    -- player frame and already follow it.
+    { id = "bars.totem", kind = "bars", labelKey = "VIS_GROUP_TOTEM_BAR", frames = { "MultiCastActionBarFrame" },
+        optional = {}, hover = { tooltip = true, frames = true }, reapply = {} },
     -- Unit frames are secure buttons, so no script of theirs is hooked: hover rides their tooltip.
     -- Edit Mode has an opacity setting for them and writes it through this method; what it
     -- writes is the frame's new resting alpha, so the hook takes it as the baseline.
@@ -174,6 +179,7 @@ Visibility.systems = {
     ["bars.bottomRight"] = { "MultiBarBottomRight" }, ["bars.right"] = { "MultiBarRight" },
     ["bars.left"] = { "MultiBarLeft" }, ["bars.five"] = { "MultiBar5" }, ["bars.six"] = { "MultiBar6" },
     ["bars.seven"] = { "MultiBar7" }, ["bars.pet"] = { "PetActionBar" }, ["bars.stance"] = { "StanceBar" },
+    ["bars.totem"] = { "MultiCastActionBarFrame" },
     ["unit.player"] = { "PlayerFrame" }, ["unit.target"] = { "TargetFrame" },
     ["unit.party"] = { "PartyFrame" }, ["unit.raid"] = { "CompactRaidFrameContainer" },
     ["hud.status"] = STATUS, ["hud.microMenu"] = { "MicroMenuContainer" }, ["hud.bags"] = { "BagsBar" },
@@ -217,7 +223,8 @@ end
 -- once saved: the player can edit, copy or delete them. With no name of their own they are
 -- named by their locale key, so the names follow the client's language.
 Visibility.starters = {
-    behaviour("fadeAway", 0, true, {}, {}, true),
+    -- A third, not nothing: a bar that fades to nothing reads as a bar that is gone.
+    behaviour("fadeAway", 0.3, true, {}, {}, true),
     behaviour("combatHud", 0.2, true, { combat = true, hasTarget = true }, {}, false),
     behaviour("cleanMounted", 1, true, {}, { mounted = true }, false),
 }
@@ -589,6 +596,25 @@ function Visibility:Uses(id)
         end
     end
     return count
+end
+
+-- The elements that have this behaviour in any setup, in the catalogue's order, which is the
+-- order the panel lists them in.
+function Visibility:UsedBy(id)
+    local used, list = {}, {}
+    for _, setup in pairs(live().setups) do
+        for groupId, behaviourId in pairs(setup) do
+            if behaviourId == id then
+                used[groupId] = true
+            end
+        end
+    end
+    for _, group in ipairs(self.groups) do
+        if used[group.id] then
+            list[#list + 1] = group.id
+        end
+    end
+    return list
 end
 
 -- The kind of place the player is in. An instance first, because it says more about what

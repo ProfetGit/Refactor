@@ -101,7 +101,14 @@ html, body { margin: 0; background: #0b0d10; color: #ccc; font-family: "DejaVu S
 .file-ui-coppericon { background: radial-gradient(circle, #f0a05a 0 45%, #8c4a1d 50% 70%, transparent 72%); }
 .file-commonmaskcircle { background: var(--tint, #fff); border-radius: 50%; }
 .file-616343 { background: radial-gradient(circle, #f2d27a 0 60%, transparent 62%); }
-.file-136430 { border: 3px solid #b39a58; border-radius: 50%; box-sizing: border-box; }
+/* MiniMap-TrackingBorder draws its ring in the top left of the texture: laid 50 px square over
+   a 31 px button, as LibDBIcon lays it, the ring is about the button itself. */
+.file-136430 { background: radial-gradient(circle at 15.6px 15.6px, transparent 0 12.8px, #b39a58 13.2px 15.6px,
+  transparent 16px); }
+/* Blizzard's dropdown menu panel. The atlas carries its own margin, so the panel itself sits
+   inside the texture's box: about the menu's own rect, a little deeper at the shadowed bottom. */
+.a-common-dropdown-bg::after { content: ""; position: absolute; inset: 3px 10px 6px; background: rgba(18,15,12,0.95);
+  border: 1px solid #5c5248; border-radius: 6px; box-shadow: 0 3px 8px rgba(0,0,0,0.6); }
 .file-136467 { background: radial-gradient(circle, #1b1b1b 0 60%, transparent 62%); }
 .file-ui-chatim-sizegrabber-up, .file-ui-chatim-sizegrabber-down { background: linear-gradient(135deg, transparent 50%, #9c8f7c 50% 58%, transparent 58% 70%, #9c8f7c 70% 78%, transparent 78%); }
 .file-ui-emptyslot-white { background: radial-gradient(circle, rgba(60,55,50,0.9) 0 38%, rgba(20,18,16,0.9) 40% 55%, transparent 58%); }

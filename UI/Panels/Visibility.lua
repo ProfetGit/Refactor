@@ -6,9 +6,11 @@ local CONTROL_WIDTH, DROPDOWN_GAP, SLIDER_GAP, CHECKBOX_GAP, ROW_GAP = 380, 6, 6
 -- The button beside the behaviour picker and beside its name, the name box, a small label
 -- over a list, and the line that reports what the last press did.
 local ACTION_WIDTH, NAME_HEIGHT, LABEL_HEIGHT, STATUS_HEIGHT = 104, 26, 16, 14
--- One line per condition: its name, then a Reveal and a Hide box in two columns, so each
--- condition is listed once and can only do one of the two.
-local REVEAL_X, HIDE_X, COLUMN_BOX = 240, 320, 40
+-- A kind's elements sit one chevron in under it, their pickers ending where the kind's does.
+local CHEVRON, CHEVRON_GAP, ELEMENT_INDENT = 12, 6, 18
+-- Past this many names the editor counts the rest: a sentence that lists twenty elements is
+-- read as a wall, and the kinds above already show them all.
+local MAX_NAMES = 4
 local MODULE_ID = "interface.visibility"
 -- A picker's value for "no behaviour". A behaviour id starts with a letter, so it can never be this.
 local NONE = ""
@@ -42,6 +44,11 @@ local function setBoxEnabled(box, enabled)
     Theme:Color(box.label, enabled and "TEXT_BODY" or "TEXT_MUTED", true)
 end
 
+local function setDropdownEnabled(row, enabled)
+    row.button:SetEnabled(enabled)
+    Theme:Color(row.label, enabled and "TEXT_BODY" or "TEXT_MUTED", true)
+end
+
 local function errorText(err)
     return L["UI_VIS_ERR_" .. tostring(err)] or ""
 end
@@ -57,17 +64,30 @@ local function setupNote(place, own, now)
     return text
 end
 
-local function usesText(entry)
-    if not entry then
-        return L.UI_VIS_NONE_YET
+-- A list read as a sentence: "a", "a and b", "a, b and c", and past MAX_NAMES "a, b, c, d and
+-- 3 more".
+local function sentence(names)
+    if #names == 1 then
+        return names[1]
+    elseif #names <= MAX_NAMES then
+        return string.format(L.UI_VIS_LIST_AND, table.concat(names, L.UI_LIST_SEPARATOR, 1, #names - 1),
+            names[#names])
     end
-    local uses = Rules:Uses(entry.id)
-    if uses == 0 then
-        return L.UI_VIS_USES_NONE
-    elseif uses == 1 then
-        return L.UI_VIS_USES_ONE
+    return string.format(L.UI_VIS_LIST_MORE, table.concat(names, L.UI_LIST_SEPARATOR, 1, MAX_NAMES),
+        #names - MAX_NAMES)
+end
+
+-- The behaviour a picker opens on when none is chosen yet: the one most elements have, which
+-- is the one a player who opens this panel has come to tune.
+local function mostUsed(behaviours)
+    local best, count = nil, -1
+    for _, entry in ipairs(behaviours) do
+        local uses = Rules:Uses(entry.id)
+        if uses > count then
+            best, count = entry.id, uses
+        end
     end
-    return string.format(L.UI_VIS_USES, uses)
+    return best
 end
 
 function UI:VisSetupInUse()
@@ -80,6 +100,177 @@ function UI:VisAssigned(groupId)
     return behaviour and behaviour.id or NONE
 end
 
+-- The behaviour every element of a kind has in the setup shown, NONE when none of them has
+-- one, nil when they differ.
+function UI:VisKindValue(kind)
+    local common
+    for index, groupId in ipairs(self.visKindGroups[kind]) do
+        local value = self:VisAssigned(groupId)
+        if index == 1 then
+            common = value
+        elseif value ~= common then
+            return nil
+        end
+    end
+    return common
+end
+
+function UI:VisBehaviourText(value)
+    if value == nil then
+        return L.UI_VIS_MIXED
+    end
+    local entry = value ~= NONE and Rules:Behaviour(value)
+    return entry and Rules:Name(entry) or L.VIS_BEHAVIOUR_NONE
+end
+
+-- Giving elements a behaviour also opens it in the editor: the next thing a player does after
+-- choosing a look is usually to tune it.
+function UI:VisChoose(groupIds, value)
+    Rules:Assign(groupIds, self.visPlace, value ~= NONE and value or nil)
+    if value ~= NONE then
+        self.visBehaviour, self.visPicked = value, true
+    end
+    self:LoadVisibility()
+end
+
+-- Who a change to this behaviour reaches, by name. A kind every element of which has it is
+-- named once, as a kind.
+function UI:VisUsedBy(entry)
+    if not entry then
+        return L.UI_VIS_NONE_YET
+    end
+    local used = Rules:UsedBy(entry.id)
+    if #used == 0 then
+        return L.UI_VIS_USES_NONE
+    end
+    local has = {}
+    for _, groupId in ipairs(used) do
+        has[groupId] = true
+    end
+    local names, named = {}, {}
+    for _, groupId in ipairs(used) do
+        local group = Rules:Group(groupId)
+        if not named[group.kind] then
+            local whole = true
+            for _, id in ipairs(self.visKindGroups[group.kind]) do
+                if not has[id] then
+                    whole = false
+                    break
+                end
+            end
+            if whole then
+                named[group.kind] = true
+                names[#names + 1] = L["VIS_KIND_ALL_" .. group.kind]
+            else
+                names[#names + 1] = L[group.labelKey]
+            end
+        end
+    end
+    return string.format(#used == 1 and L.UI_VIS_USED_BY_ONE or L.UI_VIS_USED_BY, sentence(names))
+end
+
+-- Every widget below the help text, in order, so the block can be laid out again when a kind
+-- opens or closes. shown, when given, says whether the widget takes its place on this pass;
+-- stretch reaches the widget across to the block's right edge.
+function UI:VisItem(widget, height, gap, options)
+    options = options or {}
+    local items = self.visItems
+    items[#items + 1] = { widget = widget, height = height, gap = gap, x = options.x, shown = options.shown,
+        stretch = options.stretch }
+    return widget
+end
+
+function UI:VisSkip(height)
+    self.visItems[#self.visItems + 1] = { skip = height }
+end
+
+function UI:VisGroup(text)
+    local block = self.visBlock
+    if #self.visItems > 0 then
+        self:VisSkip(self.Widgets.GROUP_GAP)
+    end
+    local label = Theme:Text(block, text, "body", "TEXT_TITLE")
+    block:Index(text)
+    return self:VisItem(label, self.Widgets.GROUP_LABEL - self.Widgets.CONTROL_GAP, nil, { stretch = true })
+end
+
+-- A muted paragraph measured against the longest text it may show, the way Note keeps room.
+function UI:VisNote(text, ...)
+    local block = self.visBlock
+    local note = Theme:Text(block, text or "", "small", "TEXT_MUTED")
+    note:SetJustifyV("TOP")
+    note:SetWordWrap(true)
+    local height = self.Widgets:TextHeight(note, block.width, text, ...)
+    note:SetHeight(math.max(1, height))
+    if text then
+        block:Index(text)
+    end
+    return self:VisItem(note, height, self.Widgets.NOTE_GAP)
+end
+
+function UI:VisKindOpen(kind)
+    return self.visOpen[kind] == true or self.visQueryOpen[kind] == true
+end
+
+function UI:VisLayout()
+    local block = self.visBlock
+    block.cursor = block.top
+    for _, item in ipairs(self.visItems) do
+        if item.skip then
+            block:Skip(item.skip)
+        else
+            local shown = item.shown == nil or item.shown()
+            item.widget:SetShown(shown)
+            if shown then
+                block:Place(item.widget, item.height, item.gap, item.x)
+                if item.stretch then
+                    item.widget:SetPoint("RIGHT")
+                end
+            end
+        end
+    end
+    for _, row in ipairs(self.visKinds) do
+        Theme:ApplyAsset(row.toggle.art, self:VisKindOpen(row.kind) and "scrollUp" or "scrollDown")
+        Theme:Color(row.toggle.art, "ACCENT_COPPER")
+    end
+    block:Finish()
+end
+
+function UI:VisToggleKind(kind)
+    local open = not self:VisKindOpen(kind)
+    self.visOpen[kind] = open
+    if not open then
+        self.visQueryOpen[kind] = nil
+    end
+    self:VisLayout()
+    self:Refresh()
+end
+
+-- The window asks on every pass while the block is open, before it reads the block's height.
+-- A search for one element opens the kind holding it; clearing the search closes what only it
+-- opened. Nothing moves when the answer is the same, so a slider drag is never interrupted.
+function UI:VisApplyQuery(query)
+    local wanted, changed = {}, false
+    if query ~= "" then
+        for _, kind in ipairs(Rules.kinds) do
+            local hit = self:MatchesText(L["VIS_KIND_" .. kind], query)
+            for _, groupId in ipairs(self.visKindGroups[kind]) do
+                hit = hit or self:MatchesText(L[Rules:Group(groupId).labelKey], query)
+            end
+            wanted[kind] = hit or nil
+        end
+    end
+    for _, kind in ipairs(Rules.kinds) do
+        if wanted[kind] ~= self.visQueryOpen[kind] then
+            changed = true
+        end
+    end
+    self.visQueryOpen = wanted
+    if changed then
+        self:VisLayout()
+    end
+end
+
 -- A slider over one field of the behaviour being edited. A refused write puts the slider
 -- back where the saved value is.
 function UI:VisSlider(block, labelKey, field, range, formatter)
@@ -89,7 +280,7 @@ function UI:VisSlider(block, labelKey, field, range, formatter)
             self:LoadVisibility()
         end
     end)
-    block:Place(slider, Theme.sliderRowHeight, SLIDER_GAP)
+    self:VisItem(slider, Theme.sliderRowHeight, SLIDER_GAP)
     slider:SetLabel(L[labelKey], formatter)
     slider.field, slider.range = field, range
     block:Index(L[labelKey])
@@ -104,11 +295,16 @@ function UI:VisCheckbox(block, labelKey, field)
             self:LoadVisibility()
         end
     end)
-    block:Place(box, Theme.checkboxSize, CHECKBOX_GAP)
+    self:VisItem(box, Theme.checkboxSize, CHECKBOX_GAP)
     box.field = field
     block:Index(L[labelKey])
     self.visBoxes[#self.visBoxes + 1] = box
     return box
+end
+
+function UI:VisRole(condition)
+    local entry = self.visBehaviour and Rules:Behaviour(self.visBehaviour)
+    return entry and Rules:ConditionRole(entry, condition) or NONE
 end
 
 function UI:VisCondition(condition, role)
@@ -118,32 +314,26 @@ function UI:VisCondition(condition, role)
     self:LoadVisibility()
 end
 
+-- One choice per condition: it does nothing, shows the element, or hides it, and can never
+-- do two of those at once.
 function UI:VisConditionRows(block)
-    local header = CreateFrame("Frame", nil, block)
-    header:SetSize(CONTROL_WIDTH, LABEL_HEIGHT)
-    local when = Theme:Text(header, L.UI_VIS_CONDITIONS, "small", "TEXT_MUTED")
-    when:SetPoint("LEFT")
-    for _, column in ipairs({ { L.UI_VIS_REVEAL, REVEAL_X }, { L.UI_VIS_HIDE, HIDE_X } }) do
-        local label = Theme:Text(header, column[1], "small", "TEXT_MUTED")
-        label:SetPoint("CENTER", header, "LEFT", column[2] + Theme.checkboxSize / 2, 0)
-    end
-    block:Place(header, LABEL_HEIGHT, ROW_GAP)
-    block:Index(L.UI_VIS_REVEAL, L.UI_VIS_HIDE)
+    local header = Theme:Text(block, L.UI_VIS_CONDITIONS, "small", "TEXT_MUTED")
+    self:VisItem(header, LABEL_HEIGHT, ROW_GAP)
+    block:Index(L.UI_VIS_CONDITIONS)
+    self.visRoleEntries = {
+        { value = NONE, text = L.UI_VIS_COND_NONE },
+        { value = "reveal", text = L.UI_VIS_COND_SHOW },
+        { value = "hide", text = L.UI_VIS_COND_HIDE },
+    }
+    self.visRoleText = { [NONE] = L.UI_VIS_COND_NONE, reveal = L.UI_VIS_COND_SHOW, hide = L.UI_VIS_COND_HIDE }
+    block:Index(L.UI_VIS_COND_NONE, L.UI_VIS_COND_SHOW, L.UI_VIS_COND_HIDE)
     for _, condition in ipairs(Rules.conditions) do
-        local row = CreateFrame("Frame", nil, block)
-        row:SetSize(CONTROL_WIDTH, Theme.checkboxSize)
-        row.label = Theme:Text(row, L["VIS_COND_" .. condition], "body", "TEXT_BODY")
-        row.label:SetPoint("LEFT")
-        row.reveal = Theme:Checkbox(row, COLUMN_BOX, "", function(widget)
-            self:VisCondition(condition, widget:GetChecked() and "reveal" or nil)
-        end)
-        row.reveal:SetPoint("LEFT", REVEAL_X, 0)
-        row.hide = Theme:Checkbox(row, COLUMN_BOX, "", function(widget)
-            self:VisCondition(condition, widget:GetChecked() and "hide" or nil)
-        end)
-        row.hide:SetPoint("LEFT", HIDE_X, 0)
+        local row = Theme:Dropdown(block, CONTROL_WIDTH, self.visRoleEntries,
+            function(value) return self:VisRole(condition) == value end,
+            function(value) self:VisCondition(condition, value ~= NONE and value or nil) end)
+        row:SetLabel(L["VIS_COND_" .. condition])
         row.condition = condition
-        block:Place(row, Theme.checkboxSize, ROW_GAP)
+        self:VisItem(row, Theme.dropdownRowHeight, ROW_GAP)
         block:Index(L["VIS_COND_" .. condition])
         self.visConditions[#self.visConditions + 1] = row
     end
@@ -167,89 +357,120 @@ function UI:VisRename()
     end
 end
 
-function UI:VisSetupRows(block)
-    for index, kind in ipairs(Rules.kinds) do
-        if index > 1 then
-            block:Skip(DROPDOWN_GAP)
-        end
-        local header = Theme:Text(block, L["VIS_KIND_" .. kind], "small", "TEXT_MUTED")
-        block:Place(header, LABEL_HEIGHT, ROW_GAP)
-        for _, group in ipairs(Rules.groups) do
-            if group.kind == kind then
-                local row = Theme:Dropdown(block, CONTROL_WIDTH, {},
-                    function(value) return self:VisAssigned(group.id) == value end,
-                    function(value)
-                        Rules:Assign({ group.id }, self.visPlace, value ~= NONE and value or nil)
-                        self:LoadVisibility()
-                    end)
-                block:Place(row, Theme.dropdownRowHeight, ROW_GAP)
-                row:SetLabel(L[group.labelKey])
-                row.groupId = group.id
-                block:Index(L[group.labelKey])
-                self.visRows[#self.visRows + 1] = row
-            end
-        end
+-- A kind is one row that sets all of its elements at once, with a chevron that lists them.
+function UI:VisKindRow(block, kind)
+    local row = Theme:Dropdown(block, CONTROL_WIDTH, {},
+        function(value) return self:VisKindValue(kind) == value end,
+        function(value) self:VisChoose(self.visKindGroups[kind], value) end)
+    row:SetLabel(L["VIS_KIND_" .. kind])
+    row.label:ClearAllPoints()
+    row.label:SetPoint("LEFT", row, "LEFT", CHEVRON + CHEVRON_GAP, 0)
+    -- The chevron and the name both open the kind, the way a feature's row opens its block.
+    row.toggle = CreateFrame("Button", nil, row)
+    row.toggle:SetPoint("TOPLEFT")
+    row.toggle:SetPoint("BOTTOMRIGHT", row.button, "BOTTOMLEFT", -8, 0)
+    row.toggle.art = Theme:Texture(row.toggle, "scrollDown", "OVERLAY")
+    row.toggle.art:SetSize(CHEVRON, CHEVRON)
+    row.toggle.art:SetPoint("LEFT")
+    row.toggle:SetScript("OnClick", function() self:VisToggleKind(kind) end)
+    row.kind = kind
+    self:VisItem(row, Theme.dropdownRowHeight, ROW_GAP)
+    block:Index(L["VIS_KIND_" .. kind])
+    self.visKinds[#self.visKinds + 1] = row
+    for _, groupId in ipairs(self.visKindGroups[kind]) do
+        local group = Rules:Group(groupId)
+        local element = Theme:Dropdown(block, CONTROL_WIDTH - ELEMENT_INDENT, {},
+            function(value) return self:VisAssigned(group.id) == value end,
+            function(value) self:VisChoose({ group.id }, value) end)
+        element:SetLabel(L[group.labelKey])
+        element.groupId = group.id
+        self:VisItem(element, Theme.dropdownRowHeight, ROW_GAP,
+            { x = ELEMENT_INDENT, shown = function() return self:VisKindOpen(kind) end })
+        block:Index(L[group.labelKey])
+        self.visRows[#self.visRows + 1] = element
     end
 end
 
--- The settings block behind the UI visibility row. Setups first, because giving an element
--- a behaviour is what a player does most; then the behaviours themselves.
+-- The settings block behind the UI visibility row. Elements first, because giving them a
+-- behaviour is what a player does first; then the editor for the behaviour last chosen.
 function UI:BuildVisibilitySettings(parent)
     local block = self.Widgets:SettingsBlock(parent, L.UI_VIS_HELP)
+    self.visBlock, self.visItems = block, {}
     self.visPlace, self.visBehaviour = Rules.world, nil
-    self.visRows, self.visSliders, self.visBoxes, self.visConditions = {}, {}, {}, {}
+    self.visRows, self.visKinds, self.visSliders, self.visBoxes, self.visConditions = {}, {}, {}, {}, {}
+    self.visOpen, self.visQueryOpen, self.visKindGroups = {}, {}, {}
+    for _, kind in ipairs(Rules.kinds) do
+        self.visKindGroups[kind] = {}
+    end
+    for _, group in ipairs(Rules.groups) do
+        local list = self.visKindGroups[group.kind]
+        list[#list + 1] = group.id
+    end
     for _, starter in ipairs(Rules.starters) do
         block:Index(Rules:Name(starter))
     end
 
-    block:Group(L.UI_VIS_SETUPS)
+    self:VisGroup(L.UI_VIS_SETUPS)
     self.visSetupDropdown = Theme:Dropdown(block, CONTROL_WIDTH, {},
         function(value) return self.visPlace == value end,
         function(value)
             self.visPlace = value
             self:LoadVisibility()
+            self:VisLayout()
+            self:Refresh()
         end)
-    block:Place(self.visSetupDropdown, Theme.dropdownRowHeight, DROPDOWN_GAP)
+    self:VisItem(self.visSetupDropdown, Theme.dropdownRowHeight, DROPDOWN_GAP)
     self.visSetupDropdown:SetLabel(L.UI_VIS_SETUP)
+    -- Everywhere is always a setup of its own, so the tick is only there for the other places.
     self.visOwnSetup = Theme:Checkbox(block, CONTROL_WIDTH, L.UI_VIS_OWN_SETUP, function(widget)
         Rules:SetOwnSetup(self.visPlace, widget:GetChecked() == true)
         self:LoadVisibility()
     end)
-    block:Place(self.visOwnSetup, Theme.checkboxSize, CHECKBOX_GAP)
+    self:VisItem(self.visOwnSetup, Theme.checkboxSize, CHECKBOX_GAP,
+        { shown = function() return self.visPlace ~= Rules.world end })
     local notes = {}
     for _, place in ipairs(Rules.places) do
         block:Index(L["VIS_PLACE_" .. place])
         notes[#notes + 1] = setupNote(place, false, "pvp")
         notes[#notes + 1] = setupNote(place, true, "pvp")
     end
-    self.visSetupNote = block:Note(nil, unpack(notes))
-    self:VisSetupRows(block)
+    self.visSetupNote = self:VisNote(nil, unpack(notes))
+    for _, kind in ipairs(Rules.kinds) do
+        self:VisKindRow(block, kind)
+    end
 
-    block:Group(L.UI_VIS_BEHAVIOURS)
+    self:VisGroup(L.UI_VIS_BEHAVIOURS)
     self.visBehaviourDropdown = Theme:Dropdown(block, CONTROL_WIDTH, {},
         function(value) return self.visBehaviour == value end,
         function(value)
-            self.visBehaviour = value
+            self.visBehaviour, self.visPicked = value, true
             self:LoadVisibility()
         end)
-    block:Place(self.visBehaviourDropdown, Theme.dropdownRowHeight, DROPDOWN_GAP)
+    self:VisItem(self.visBehaviourDropdown, Theme.dropdownRowHeight, DROPDOWN_GAP)
     self.visBehaviourDropdown:SetLabel(L.UI_VIS_BEHAVIOUR)
     self.visCopy = Theme:Button(block, ACTION_WIDTH, L.UI_VIS_COPY, function()
         local id, err = Rules:CopyBehaviour(self.visBehaviour)
         if id then
-            self.visBehaviour = id
+            self.visBehaviour, self.visPicked = id, true
         end
         self:LoadVisibility()
         self.visStatus:SetText(id and L.UI_VIS_COPIED or errorText(err))
     end)
     self.visCopy:SetPoint("LEFT", self.visBehaviourDropdown, "RIGHT", 8, 0)
-    self.visUses = block:Note(nil, L.UI_VIS_NONE_YET, L.UI_VIS_USES_NONE, L.UI_VIS_USES_ONE,
-        string.format(L.UI_VIS_USES, #Rules.groups))
+    -- Room for the longest sentence it can say: the four longest names and a count.
+    local longest = {}
+    for _, group in ipairs(Rules.groups) do
+        longest[#longest + 1] = L[group.labelKey]
+    end
+    table.sort(longest, function(a, b) return #a > #b end)
+    local widest = string.format(L.UI_VIS_USED_BY, string.format(L.UI_VIS_LIST_MORE,
+        table.concat(longest, L.UI_LIST_SEPARATOR, 1, MAX_NAMES), #Rules.groups))
+    self.visUses = self:VisNote(nil, L.UI_VIS_NONE_YET, L.UI_VIS_USES_NONE, widest)
 
     local nameLabel = Theme:Text(block, L.UI_VIS_NAME, "small", "TEXT_MUTED")
-    block:Place(nameLabel, LABEL_HEIGHT, ROW_GAP)
+    self:VisItem(nameLabel, LABEL_HEIGHT, ROW_GAP)
     self.visName = self.Widgets:Input(block, CONTROL_WIDTH, NAME_HEIGHT)
-    block:Place(self.visName, NAME_HEIGHT, DROPDOWN_GAP)
+    self:VisItem(self.visName, NAME_HEIGHT, DROPDOWN_GAP)
     self.visName:SetScript("OnEnterPressed", function(widget)
         self:VisRename()
         widget:ClearFocus()
@@ -257,26 +478,26 @@ function UI:BuildVisibilitySettings(parent)
     self.visName:SetScript("OnEditFocusLost", function() self:VisRename() end)
     self.visDelete = Theme:Button(block, ACTION_WIDTH, L.UI_VIS_DELETE, function()
         if self.visBehaviour and Rules:DeleteBehaviour(self.visBehaviour) then
-            self.visBehaviour = nil
+            self.visBehaviour, self.visPicked = nil, false
             self:LoadVisibility()
             self.visStatus:SetText(L.UI_VIS_DELETED)
         end
     end)
     self.visDelete:SetPoint("LEFT", self.visName, "RIGHT", 8, 0)
     self.visStatus = Theme:Text(block, "", "small", "TEXT_TITLE")
-    block:Place(self.visStatus, STATUS_HEIGHT, DROPDOWN_GAP)
-    self.visStatus:SetPoint("RIGHT")
+    self:VisItem(self.visStatus, STATUS_HEIGHT, DROPDOWN_GAP, { stretch = true })
 
     self:VisSlider(block, "UI_VIS_RESTING", "resting", Rules.restingRange, percentText)
     self:VisSlider(block, "UI_VIS_REVEALED", "revealed", Rules.revealedRange, percentText)
     self:VisCheckbox(block, "UI_VIS_MOUSEOVER", "mouseover")
     self:VisCheckbox(block, "UI_VIS_TOGETHER", "together")
     self:VisConditionRows(block)
-    block:Skip(DROPDOWN_GAP)
-    block:Note(L.UI_VIS_ORDER)
+    self:VisSkip(DROPDOWN_GAP)
+    self:VisNote(L.UI_VIS_ORDER)
     self:VisSlider(block, "UI_VIS_FADE_IN", "fadeIn", Rules.fadeRange, secondsText)
     self:VisSlider(block, "UI_VIS_FADE_OUT", "fadeOut", Rules.fadeRange, secondsText)
-    block:Finish()
+    function block.OnQuery(_, query) self:VisApplyQuery(query) end
+    self:VisLayout()
     self:RegisterModuleSettings(MODULE_ID, block)
 end
 
@@ -289,23 +510,25 @@ function UI:LoadVisibilitySetups(entries)
     end
     self.visSetupDropdown:SetEntries(places)
     self.visSetupDropdown:SetValueText(L["VIS_PLACE_" .. self.visPlace])
-    local world, own = self.visPlace == Rules.world, Rules:HasOwnSetup(self.visPlace)
+    local own = Rules:HasOwnSetup(self.visPlace)
     self.visOwnSetup:SetChecked(own)
-    setBoxEnabled(self.visOwnSetup, not world)
     self.visSetupNote:SetText(setupNote(self.visPlace, own, self:VisSetupInUse()))
-    -- A place following World's setup shows World's choices, greyed out, until it has its own.
+    -- A place following Everywhere's setup shows its choices, greyed out, until it has its own.
+    for _, row in ipairs(self.visKinds) do
+        row:SetEntries(entries)
+        row:SetValueText(self:VisBehaviourText(self:VisKindValue(row.kind)))
+        setDropdownEnabled(row, own)
+    end
     for _, row in ipairs(self.visRows) do
         row:SetEntries(entries)
-        local assigned = Rules:BehaviourFor(row.groupId, self.visPlace)
-        row:SetValueText(assigned and Rules:Name(assigned) or L.VIS_BEHAVIOUR_NONE)
-        row.button:SetEnabled(own)
-        Theme:Color(row.label, own and "TEXT_BODY" or "TEXT_MUTED", true)
+        row:SetValueText(self:VisBehaviourText(self:VisAssigned(row.groupId)))
+        setDropdownEnabled(row, own)
     end
 end
 
 function UI:LoadVisibilityBehaviour(entry)
     self.visCopy.label:SetText(entry and L.UI_VIS_COPY or L.UI_VIS_NEW)
-    self.visUses:SetText(usesText(entry))
+    self.visUses:SetText(self:VisUsedBy(entry))
     -- Never under the player's fingers: a refresh while they type would undo the typing.
     if not self.visName:HasFocus() then
         self.visName:SetText(entry and Rules:Name(entry) or "")
@@ -321,13 +544,9 @@ function UI:LoadVisibilityBehaviour(entry)
         setBoxEnabled(box, entry ~= nil)
     end
     for _, row in ipairs(self.visConditions) do
-        local role = entry and Rules:ConditionRole(entry, row.condition)
-        local enabled = entry ~= nil and Conditions:Supported(row.condition)
-        row.reveal:SetChecked(role == "reveal")
-        row.hide:SetChecked(role == "hide")
-        row.reveal:SetEnabled(enabled)
-        row.hide:SetEnabled(enabled)
-        Theme:Color(row.label, enabled and "TEXT_BODY" or "TEXT_MUTED", true)
+        local role = entry and Rules:ConditionRole(entry, row.condition) or NONE
+        row:SetValueText(self.visRoleText[role])
+        setDropdownEnabled(row, entry ~= nil and Conditions:Supported(row.condition))
     end
 end
 
@@ -336,13 +555,17 @@ function UI:LoadVisibility()
         return
     end
     local behaviours = Rules:Behaviours()
-    if not (self.visBehaviour and Rules:Behaviour(self.visBehaviour)) then
-        self.visBehaviour = behaviours[1] and behaviours[1].id or nil
+    -- Until the player picks one, the editor keeps to the behaviour most elements have.
+    if not (self.visPicked and self.visBehaviour and Rules:Behaviour(self.visBehaviour)) then
+        self.visBehaviour, self.visPicked = mostUsed(behaviours), false
     end
     local entries, names = { { value = NONE, text = L.VIS_BEHAVIOUR_NONE } }, {}
     for _, behaviour in ipairs(behaviours) do
-        entries[#entries + 1] = { value = behaviour.id, text = Rules:Name(behaviour) }
-        names[#names + 1] = { value = behaviour.id, text = Rules:Name(behaviour) }
+        local name = Rules:Name(behaviour)
+        entries[#entries + 1] = { value = behaviour.id, text = name }
+        -- An unused behaviour says so in the editor's list, so leftovers stand out to delete.
+        names[#names + 1] = { value = behaviour.id,
+            text = Rules:Uses(behaviour.id) == 0 and string.format(L.UI_VIS_NOT_USED, name) or name }
     end
     self:LoadVisibilitySetups(entries)
     local entry = self.visBehaviour and Rules:Behaviour(self.visBehaviour)

@@ -9,7 +9,7 @@
 --- Hot: no
 local _, R = ...
 local Copy = R:RegisterModule({
-    id = "chat.copy", category = "Chat", nameKey = "CHAT_COPY_NAME",
+    id = "chat.copy", category = "Social", nameKey = "CHAT_COPY_NAME",
     descriptionKey = "CHAT_COPY_DESC", detailKey = "CHAT_COPY_DETAIL",
     requires = { "ChatFrame1" },
     risk = "visible", defaultEnabled = true,

@@ -301,15 +301,28 @@ function Widgets:ModuleRow(parent, module)
     row:SetHeight(Widgets.ROW_HEIGHT)
     row.module = module
     row.hover = Theme:RowHighlight(row)
+    -- Undo comes out only under the pointer or with the feature's settings open. A feature
+    -- that differs from Refactor's default is the normal case, and an arrow on every one of
+    -- them was the loudest thing in the list.
+    function row:UpdateUndo()
+        self.undo:SetShown(self.modified == true and (self.hovered == true or self.openSettings == true))
+    end
     -- Every child of the row that takes a mouse of its own would otherwise read as leaving
     -- it: the pointer crossing into the checkbox must not drop the highlight or the detail.
     local function enterRow()
+        row.hovered = true
         row.hover:To(1)
+        row:UpdateUndo()
         R.UI:ShowDetails(module, row)
     end
+    -- Checked a pixel inside the row's edges. Rows touch, and on the shared edge the row being
+    -- left still counted the pointer as over it, so a quick pass across the list could leave a
+    -- highlight behind.
     local function leaveRow()
-        if row:IsMouseOver() then return end
+        if row:IsMouseOver(-1, 1, 1, -1) then return end
+        row.hovered = false
         row.hover:To(0)
+        row:UpdateUndo()
         R.UI:HideDetails()
     end
     row.toggle = Theme:Checkbox(row, CHECK_SIZE, "", function(widget)

@@ -48,7 +48,7 @@ end
 
 local function enableAll(R)
     for _, module in ipairs(R.modules) do
-        R.Settings:SetAccount(module.id, true)
+        R.Settings:Set(module.id, true)
     end
 end
 
@@ -80,7 +80,6 @@ describe("automation gate", function()
             risk = "automation",
             name = "Auto turn in", description = "Hands quests in for you.", detail = "Hands quests in.",
         })
-        R.UI.mode = "account"
         return env, R, module
     end
 
@@ -115,6 +114,7 @@ describe("conflict panel", function()
         assert.is_true(R.Settings:Get(row.moduleID))
         row.resolve:GetScript("OnClick")(row.resolve)
         assert.is_false(R.Settings:Get(row.moduleID))
+        assert.is_false(R.Settings:Stored(row.moduleID))
     end)
 
     it("says so on the feature's own row and in its detail while both are on", function()
@@ -128,7 +128,7 @@ describe("conflict panel", function()
         end
         -- Fast loot is unavailable in this environment, and that warning wins the slot.
         R.moduleByID["loot.fastLoot"].state = "enabled"
-        UI:Refresh()
+        UI:SelectCategory("Loot")
         assert.equal(string.format(R.L.UI_OVERLAP_SHORT, R.L.NEIGHBOUR_LEATRIX), row.meta:GetText())
         local _, body = UI:DetailText(row.module)
         assert.is_truthy(body:find(string.format(R.L.UI_OVERLAP, R.L.NEIGHBOUR_LEATRIX), 1, true))

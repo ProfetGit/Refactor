@@ -109,6 +109,20 @@ function Commands:Dispatch(input)
         R.Broker:Emit("REFACTOR_SPELL_TEST")
         return nil
     end
+    if command == "leveluptest" then
+        if not R.Broker.events.REFACTOR_LEVELUP_TEST then
+            return { R.L.CMD_LEVELUP_TEST_OFF }
+        end
+        R.Broker:Emit("REFACTOR_LEVELUP_TEST")
+        return nil
+    end
+    if command == "questtest" then
+        if not R.Broker.events.REFACTOR_QUEST_BANNER_TEST then
+            return { R.L.CMD_QUEST_TEST_OFF }
+        end
+        R.Broker:Emit("REFACTOR_QUEST_BANNER_TEST")
+        return nil
+    end
     if command == "changelog" then
         if R.UI and R.UI.OpenPanel then
             R.UI:OpenPanel("Changelog")
@@ -121,6 +135,9 @@ function Commands:Dispatch(input)
         end
         R.Broker:Emit("REFACTOR_UPDATE_REPORT")
         return nil
+    end
+    if command == "mapdump" then
+        return R.MapData:DumpOpenMap() or { R.L.CMD_MAPDUMP_NONE }
     end
     if command == "bench" and R.Bench then
         R.Bench:Start(function(line) R:Print(line) end)
@@ -135,5 +152,6 @@ function Commands:Dispatch(input)
     return { R.L.CMD_HELP_HEADER, R.L.CMD_HELP_OPEN, R.L.CMD_HELP_SEARCH, R.L.CMD_HELP_CHANGELOG,
         R.L.CMD_HELP_ERRORS, R.L.CMD_HELP_ERRORS_CLEAR, R.L.CMD_HELP_SAVED, R.L.CMD_HELP_BENCH,
         R.L.CMD_HELP_LOOT_TEST, R.L.CMD_HELP_FARM_TEST, R.L.CMD_HELP_INVITE_TEST, R.L.CMD_HELP_CAMERA_TEST,
-        R.L.CMD_HELP_SPELL_TEST, R.L.CMD_HELP_UPDATE }
+        R.L.CMD_HELP_SPELL_TEST, R.L.CMD_HELP_LEVELUP_TEST, R.L.CMD_HELP_QUEST_TEST, R.L.CMD_HELP_UPDATE,
+        R.L.CMD_HELP_MAPDUMP }
 end

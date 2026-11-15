@@ -30,6 +30,8 @@ Beta is reported capped at level 30. Anything that needs a live client must be v
 - M3 closed 18 Sep 2026 with one exit criterion still open: the conflict panel has not
   been seen detecting Leatrix Plus or Questie on a live client. Headless spec only.
 - Gear Refactor track: **not started** (starts after Refactor M3)
+- 11 Nov 2026, after the 0.1.0 launch: the settings model was reopened (M3, PRD 5.3) and is now one
+  profile per character holding switches and options. The layered model and the Editing switch are gone.
 
 ### Retail-first re-scope (17 Sep 2026)
 
@@ -544,6 +546,14 @@ native ones listed. Manual checklist for the in-game pass, none of it done yet:
   passive: nothing happens. If nothing is ever placed, `/refactor spelltest` separates the causes,
   and a BLOCKED verdict with an entry in `/refactor errors` means the client refuses the call from
   addon code, which ends the feature on that client
+- New ranks on the bars: put rank 1 of a spell on bar 1 and on a second main bar page (and, as a
+  druid, the cat form bar), and rank 1 of another spell on bar 2. Train rank 2 of the first: every
+  rank 1 slot of it now shows rank 2, one chat line names the rank, no extra copy lands in a free
+  slot, and the other spell is untouched. With rank 2 and rank 1 both on bars, train rank 3: only
+  rank 2 is replaced. A macro casting the old rank is unchanged. Train one in combat: it swaps when
+  the fight ends. Switch the option off and train a rank: nothing moves. Unknown on the client:
+  whether a new rank fires `LEARNED_SPELL_IN_SKILL_LINE` and carries "Rank N" in its subtext;
+  `/refactor spelltest` names the last verdict either way
 - Zone levels on the map: on Forever at a low level, open the map, go up to Kalimdor and hover
   Durotar: "(1-10)" beside the name, yellow. Hover Ashenvale: red. Hover Orgrimmar and a subzone on
   the Durotar map: nothing. Level up with the map open on the same zone: the colour changes without
@@ -636,6 +646,7 @@ Exit criteria:
 | Send to alts (`items.sendToAlts`) at the owner's request, 6 Nov 2026: a mailbox panel suggests what to mail to your other characters and attaches it on a click (PRD 7.6.2) |
 | Confirm replacing enchants (`items.replaceEnchant`) at the owner's request, 6 Nov 2026: answers Yes on the replace-enchant dialog, off by default (PRD 7.6) |
 | Profession levelling planner (`items.professionPlanner`) at the owner's request, 6 Nov 2026: a panel beside the profession window plans the path to the rank's cap from a generated threshold table, falls back to observed colours, and replans on every change (PRD 7.9.1) |
+| New ranks on the bars, part of `interface.placeNewSpells` at the owner's request, 12 Nov 2026: a newly learned rank replaces the highest older rank of the same spell in every player slot, behind the `placeSpellsRanks` option, on by default (PRD 7.4) |
 
 ---
 

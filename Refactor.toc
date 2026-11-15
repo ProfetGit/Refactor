@@ -22,7 +22,9 @@ Core/CameraProfiles.lua
 Core/Conditions.lua
 Core/Visibility.lua
 Core/Settings.lua
+Core/ClassSpellList.lua
 Core/Pools.lua
+Core/MapData.lua
 Core/Fade.lua
 Core/Safety.lua
 
@@ -54,6 +56,7 @@ UI/Panels/Diagnostics.lua
 UI/Panels/Changelog.lua
 UI/Panels/NeverSell.lua
 UI/Minimap.lua
+UI/MinimapButtons.lua
 UI/LootFeed.lua
 UI/UpgradePrompt.lua
 UI/MailAlts.lua
@@ -66,7 +69,10 @@ UI/MerchantFilter.lua
 UI/UrlCopy.lua
 UI/ChatCopy.lua
 UI/MapReveal.lua
+UI/MapPins.lua
 UI/AllSpells.lua
+UI/LevelUpSpells.lua
+UI/QuestBanner.lua
 UI/Panels/Display.lua
 UI/Panels/Tooltips.lua
 UI/Panels/Camera.lua
@@ -83,6 +89,9 @@ Modules/Items/BagUpgrade.lua
 Modules/Items/SendToAlts.lua
 Modules/Items/ReplaceEnchant.lua
 Data/ProfessionThresholds.lua
+Data/TravelRoutes.lua
+Data/DungeonEntrances.lua
+Data/ClassSpells.lua
 Modules/Items/ProfessionPlanner.lua
 Modules/Vendor/ExtendedUI.lua
 Modules/Vendor/ItemCosts.lua
@@ -90,6 +99,7 @@ Modules/Vendor/Filter.lua
 Modules/Quest/AutoAccept.lua
 Modules/Quest/AutoTurnIn.lua
 Modules/Quest/AutoGossip.lua
+Modules/Quest/ProgressBanner.lua
 Modules/Chat/Urls.lua
 Modules/Chat/Copy.lua
 Modules/Chat/DeclineDuels.lua
@@ -98,11 +108,15 @@ Modules/Chat/AcceptInvites.lua
 Modules/Chat/QuickInvite.lua
 Modules/Chat/UpdateNotice.lua
 Modules/Interface/CameraDistance.lua
+Modules/Interface/MapDungeons.lua
+Modules/Interface/MapTravel.lua
 Modules/Interface/GroundEffects.lua
+Modules/Interface/MinimapButtons.lua
 Modules/Interface/ActionCam.lua
 Modules/Interface/ScreenshotLevelUp.lua
 Modules/Interface/PlaceNewSpells.lua
 Modules/Interface/AllSpells.lua
+Modules/Interface/LevelUpSpells.lua
 Modules/Interface/MapZoneLevels.lua
 Data/MapOverlays.lua
 Modules/Interface/MapReveal.lua

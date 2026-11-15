@@ -1160,7 +1160,7 @@ describe("M4 quest automation", function()
         env.options = { env.option(1, VENDOR) }
         env.visit()
         assert.equal("quest.autoGossip", module.id)
-        env.R.Settings:SetOverride("quest.autoGossip", false)
+        env.R.Settings:Set("quest.autoGossip", false)
         env.R.Registry:Reconcile(module)
         assert.equal("disabled", module.state)
         assert.equal("quest.autoGossip", module.id)
@@ -3051,15 +3051,22 @@ describe("M4 price providers and bench", function()
 end)
 
 describe("M4 new ability placement", function()
-    local function spellEnv(layout)
+    local function spellEnv(layout, levels)
         local env = base()
         env:Load("Locales/Visibility.enUS.lua")
-        env.slots, env.cursor, env.placed = {}, nil, {}
+        env.slots, env.kinds, env.cursor, env.placed = {}, {}, nil, {}
         env.spells = {
             [1001] = { name = "Frostbolt" },
             [1002] = { name = "Ice Barrier" },
             [1003] = { name = "Permafrost", passive = true },
             [1004] = { name = "Frostbolt Rank 2", base = 1001 },
+            -- Ranks as Forever has them: a spell id each, one name, the rank in the subtext.
+            [2001] = { name = "Fireball", sub = "Rank 1" },
+            [2002] = { name = "Fireball", sub = "Rank 2" },
+            [2003] = { name = "Fireball", sub = "Rank 3" },
+            -- Ranks whose subtext the client left empty.
+            [3001] = { name = "Heal" }, [3002] = { name = "Heal" }, [3003] = { name = "Heal" },
+            [4001] = { name = "Renew" }, [4002] = { name = "Renew" }, [4003] = { name = "Renew" },
         }
         env.C_Spell = {
             PickupSpell = function(spellID)
@@ -3067,7 +3074,14 @@ describe("M4 new ability placement", function()
             end,
             IsSpellPassive = function(spellID) return (env.spells[spellID] or {}).passive == true end,
             GetSpellName = function(spellID) return (env.spells[spellID] or {}).name end,
+            GetSpellSubtext = function(spellID) return (env.spells[spellID] or {}).sub or "" end,
         }
+        env.UnitClass = function() return "Mage", "MAGE", 8 end
+        env.R.ClassSpells = { spells = { MAGE = levels or {} } }
+        env.GetActionInfo = function(slot)
+            if env.slots[slot] == nil then return nil end
+            return env.kinds[slot] or "spell", env.slots[slot]
+        end
         env.C_SpellBook = {
             FindBaseSpellByID = function(spellID) return (env.spells[spellID] or {}).base or spellID end,
         }
@@ -3079,11 +3093,13 @@ describe("M4 new ability placement", function()
                 end
                 return false
             end,
+            -- As the client does: whatever the slot held goes to the cursor.
             PutActionInSlot = function(slot)
                 if env.refusePlace or not env.cursor then return end
-                env.slots[slot] = env.cursor
+                local held = env.slots[slot]
+                env.slots[slot], env.kinds[slot] = env.cursor, nil
                 env.placed[#env.placed + 1] = { slot = slot, spell = env.cursor }
-                env.cursor = nil
+                env.cursor = held
             end,
         }
         env.GetCursorInfo = function()
@@ -3234,6 +3250,82 @@ describe("M4 new ability placement", function()
         assert.equal("Frostbolt went on Action bar 1 (main).", env.messages[#env.messages])
         assert.equal(1001, env.slots[1])
         noResidue(env, module)
+    end)
+
+    it("swaps a new rank in for the highest older rank on every slot it sits on", function()
+        local env, module = spellEnv()
+        -- Rank 2 on the main bar and on the cat form bar, rank 1 kept for its mana cost, a macro
+        -- that casts rank 2, and rank 2 left on the override bar by a vehicle.
+        env.slots[1], env.slots[75], env.slots[3], env.slots[130] = 2002, 2002, 2001, 2002
+        env.slots[4], env.kinds[4] = 7, "macro"
+        env:Learn(2003)
+        assert.equal(2003, env.slots[1])
+        assert.equal(2003, env.slots[75])
+        assert.equal(2001, env.slots[3])
+        assert.equal(7, env.slots[4])
+        assert.equal("macro", env.kinds[4])
+        assert.equal(2002, env.slots[130])
+        -- Swapped, not placed again: the free slot 2 stays empty.
+        assert.is_nil(env.slots[2])
+        assert.is_nil(env.cursor)
+        assert.equal("UPGRADED", module.report.verdict)
+        assert.equal("Fireball on your bars is now Rank 3.", env.messages[#env.messages])
+        env.R.Broker:Emit("REFACTOR_SPELL_TEST")
+        assert.equal("Last one: Fireball. Swapped in for the older rank on your bars.", env.messages[#env.messages])
+        noResidue(env, module)
+    end)
+
+    it("orders ranks by teaching level when the subtext is empty, and swaps nothing it cannot order", function()
+        local env, module = spellEnv(nil, { [3001] = 10, [3002] = 20, [3003] = 30 })
+        env.slots[1], env.slots[2] = 3001, 3002
+        env:Learn(3003)
+        assert.equal(3001, env.slots[1])
+        assert.equal(3003, env.slots[2])
+        assert.equal("Heal on your bars is now the new rank.", env.messages[#env.messages])
+        -- Two older ranks with no rank text and no level: which one is played is unknown.
+        env.slots[5], env.slots[6] = 4001, 4002
+        local before = #env.placed
+        env:Learn(4003)
+        assert.equal(4001, env.slots[5])
+        assert.equal(4002, env.slots[6])
+        assert.equal(before, #env.placed)
+        assert.equal("UNSURE", module.report.verdict)
+        noResidue(env, module)
+    end)
+
+    it("leaves every rank alone with the swap off, and a learned lower rank never replaces a higher one", function()
+        local env, module = spellEnv()
+        env.R.Settings:SetOption("placeSpellsRanks", false)
+        env.slots[1] = 2001
+        env:Learn(2002)
+        assert.equal(2001, env.slots[1])
+        assert.is_nil(env.slots[2])
+        assert.equal("ONBAR", module.report.verdict)
+        env.R.Settings:SetOption("placeSpellsRanks", true)
+        env.slots[1] = 2003
+        env:Learn(2001)
+        assert.equal(2003, env.slots[1])
+        assert.is_nil(env.slots[2])
+        assert.equal("ONBAR", module.report.verdict)
+    end)
+
+    it("swaps a rank once the fight ends, and keeps the old rank when the client refuses", function()
+        local env, module = spellEnv()
+        env.slots[1] = 2001
+        env.combat = true
+        env:Learn(2002)
+        assert.equal(2001, env.slots[1])
+        assert.equal("COMBAT", module.report.verdict)
+        env.combat = false
+        env:Fire("PLAYER_REGEN_ENABLED")
+        env:Advance(1)
+        assert.equal(2002, env.slots[1])
+        env.refusePlace = true
+        env:Learn(2003)
+        assert.equal(2002, env.slots[1])
+        assert.is_nil(env.cursor)
+        assert.equal("BLOCKED", module.report.verdict)
+        assert.equal(0, env:ActiveTimers())
     end)
 
     it("reports nothing learned yet, and the command says when the module is off", function()

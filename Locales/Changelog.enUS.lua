@@ -40,6 +40,8 @@ L.CHANGELOG = {
                 .. "need them, tuned element by element in Edit Mode.", bullet = true },
             { "New abilities go straight onto a free action bar slot, and a "
                 .. "screenshot is taken when you level up.", bullet = true },
+            { "Under the level-up banner, a strip lists the abilities that level "
+                .. "unlocks, and which of them you can train now.", bullet = true },
             { "Chat and social", gap = true, heading = true },
             { "Web addresses in chat become links you can copy, and every chat "
                 .. "window gets a Copy button.", bullet = true },

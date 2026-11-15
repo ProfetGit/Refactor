@@ -498,6 +498,10 @@
     "needle": "name=\"GeneralDockManager\"",
     "path": "Interface/AddOns/Blizzard_ChatFrameBase/Mainline/FloatingChatFrame.xml"
   },
+  "GetActionInfo": {
+    "needle": "local actionType, id = GetActionInfo(self.action);",
+    "path": "Interface/AddOns/Blizzard_ActionBar/Shared/ActionButton.lua"
+  },
   "GetAvailableQuestInfo": {
     "needle": "= GetAvailableQuestInfo(i - numActiveQuests);",
     "path": "Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua"
@@ -807,6 +811,10 @@
     "needle": "name=\"PetActionBar\"",
     "path": "Interface/AddOns/Blizzard_ActionBar/Mainline/PetActionBar.xml"
   },
+  "PlaySound": {
+    "needle": "PlaySound(soundKitID);",
+    "path": "Interface/AddOns/Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.lua"
+  },
   "PlayerFrame": {
     "needle": "name=\"PlayerFrame\"",
     "path": "Interface/AddOns/Blizzard_UnitFrame/Mainline/PlayerFrame.xml"
@@ -973,6 +981,18 @@
   "UIDropDownMenu_Initialize": {
     "needle": "function UIDropDownMenu_Initialize(frame, initFunction, displayMode, level, menuList)",
     "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+  },
+  "UIErrorsFrame": {
+    "needle": "name=\"UIErrorsFrame\"",
+    "path": "Interface/AddOns/Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.xml"
+  },
+  "UIErrorsFrame.GetMessagesSuppressed": {
+    "needle": "function UIErrorsMixin:GetMessagesSuppressed(",
+    "path": "Interface/AddOns/Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.lua"
+  },
+  "UIErrorsFrame.SetMessageTypeEnabled": {
+    "needle": "function UIErrorsMixin:SetMessageTypeEnabled(",
+    "path": "Interface/AddOns/Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.lua"
   },
   "UIParent": {
     "needle": "parent=\"UIParent\"",

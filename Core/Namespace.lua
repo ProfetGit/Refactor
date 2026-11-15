@@ -146,7 +146,7 @@ function R:SetBlizzardTunable(name, value)
 end
 
 -- SavedVariables and slash registration are the required Blizzard global exceptions.
-function R:InitSavedVariables(guid)
+function R:InitSavedVariables(guid, name)
     local probe = self.loadProbe
     probe.atLogin = shapeOf(_G.RefactorDB)
     probe.atLoginChar = shapeOf(_G.RefactorCharDB)
@@ -159,7 +159,7 @@ function R:InitSavedVariables(guid)
     end
     local account, character = _G.RefactorDB, _G.RefactorCharDB
     account.loadProbe = probe
-    self.Settings:Init(account, character, guid)
+    self.Settings:Init(account, character, guid, name)
 end
 
 function R:RegisterSlash(handler)

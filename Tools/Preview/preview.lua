@@ -242,15 +242,16 @@ end)
 scenario("window-profiles-filled", function()
     local env, R = boot()
     R.UI:Toggle()
-    local values = {}
-    for index, module in ipairs(R.modules) do values[module.id] = index % 3 ~= 0 end
-    R.Settings:CreateProfile("Levelling alts", values)
-    R.Settings:CreateProfile("Gatherer", {})
-    R.UI:AssignProfile("Levelling alts")
+    R.Settings:CreateProfile("Gatherer", "Default")
+    R.Settings:CreateProfile("Levelling alts", "Default")
+    R.Settings:AssignProfile("Levelling alts")
+    for index, module in ipairs(R.modules) do
+        if index % 3 == 0 then R.Settings:Set(module.id, index % 2 == 0) end
+    end
     R.UI:SelectCategory("Profiles")
     write("panel-Profiles-filled", env, R)
     R.UI:SelectCategory("Quest")
-    write("window-profile-scope", env, R)
+    write("window-profile-active", env, R)
 end)
 
 -- The feed and the HUD through their own test commands, so the rows are the real path's.
@@ -275,7 +276,7 @@ end
 scenario("lootfeed", function()
     local env, R = boot()
     gameplay(env)
-    R.Settings:SetAccount("toasts.loot", true)
+    R.Settings:Set("toasts.loot", true)
     env.SlashCmdList.REFACTOR("loottest")
     -- No animation plays here, so the upgrade prompt's fade in is put where the client ends it.
     R.moduleByID["toasts.loot"].prompt.fader:Snap(1)
@@ -362,7 +363,7 @@ end)
 scenario("farmhud", function()
     local env, R = boot()
     gameplay(env)
-    R.Settings:SetAccount("loot.farmSession", true)
+    R.Settings:Set("loot.farmSession", true)
     env.SlashCmdList.REFACTOR("farmtest")
     reportErrors("farmhud", R)
     write("farmhud", env, R)
@@ -540,7 +541,7 @@ local function allSpellsWorld(withTrainer)
         for id, spell in pairs(byID) do recorded[id] = { level = spell.level, line = spell.line } end
     end
     R.Settings.account.classSpells = { MAGE = recorded }
-    R.Settings:SetAccount("interface.allSpells", true)
+    R.Settings:Set("interface.allSpells", true)
     R.Registry:ReconcileAll()
     local module = R.moduleByID["interface.allSpells"]
     reportErrors("allspells", R)
@@ -568,6 +569,105 @@ scenario("allspells", function()
     row.scripts.OnEnter(row)
     write("allspells-hover", env, R, { hovered = row })
     reportErrors("allspells", R)
+end)
+
+-- The banner is Blizzard's and not on disk: a stand-in with its size and anchor and its two text lines,
+-- so the strip hangs where it would in the client.
+scenario("levelup", function()
+    local env, R = allSpellsWorld(true)
+    env.PlayerSpellsFrame:Hide()
+    local banner = env.CreateFrame("Frame", "LevelUpDisplay", env.UIParent)
+    banner:SetSize(418, 72)
+    banner:SetPoint("TOP", env.UIParent, "TOP", 0, -190)
+    local reached = banner:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    reached:SetPoint("TOP", banner, "TOP", 0, -8)
+    reached:SetText("You've Reached")
+    local level = banner:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    level:SetPoint("BOTTOM", banner, "BOTTOM", 0, 5)
+    level:SetText("Level 8")
+    banner:Show()
+    env.UnitLevel = function() return 8 end
+    -- boot() already marked it enabled without running OnEnable, so it is put back and enabled for real.
+    local module = R.moduleByID["interface.levelUpSpells"]
+    module.state = "disabled"
+    R.Registry:Enable("interface.levelUpSpells")
+    env.SlashCmdList.REFACTOR("leveluptest")
+    module.ui.fader:Snap(1)
+    for _, cell in ipairs(module.ui.cells) do cell:SetAlpha(1) end
+    reportErrors("levelup", R)
+    write("levelup", env, R)
+end)
+
+-- Blizzard's error text is a stand-in with its size, anchor and one red line, so the banner can be
+-- judged against what still prints there: a ready banner on top of two objective rows.
+scenario("questbanner", function()
+    local env, R = boot()
+    local errors = env.CreateFrame("Frame", "UIErrorsFrame", env.UIParent)
+    errors:SetSize(512, 60)
+    errors:SetPoint("TOP", env.UIParent, "TOP", 0, -122)
+    local line = errors:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    line:SetPoint("TOP", errors, "TOP", 0, 0)
+    line:SetTextColor(1, 0.1, 0.1, 1)
+    line:SetText("Not enough rage")
+    errors:Show()
+    errors.SetMessageTypeEnabled = function() end
+    errors.GetMessagesSuppressed = function() return false end
+    local types = { "ADD_KILL_SII", "ADD_PLAYER_KILL_SII", "ADD_ITEM_SII", "ADD_FOUND_SII", "OBJECTIVE_COMPLETE_S",
+        "UNKNOWN_COMPLETE", "COMPLETE_S" }
+    local formats = { "%s slain: %d/%d", "Players slain: %d/%d", "%s: %d/%d", "%s: %d/%d", "%s (Complete)",
+        "Objective Complete.", "%s completed." }
+    for index, suffix in ipairs(types) do
+        env["LE_GAME_ERR_QUEST_" .. suffix] = 300 + index
+        env["ERR_QUEST_" .. suffix] = formats[index]
+    end
+    env.GetGameMessageInfo = function() return nil end
+    env.PlaySound = function() end
+    env.C_Sound = { PlayVocalErrorSound = function() end }
+    local log = {
+        { questID = 10, title = "Tiger Hunt", objectives = { { text = "3/4 Durotar Tiger Fur", numRequired = 4 } } },
+        { questID = 11, title = "Vile Familiars", objectives = { { text = "7/12 Vile Familiar slain",
+            numRequired = 12 } } },
+        { questID = 12, title = "Sarkoth", objectives = { { text = "1/1 Sarkoth's Mangled Claw", numRequired = 1 } } },
+    }
+    env.C_QuestLog = {
+        GetNumQuestLogEntries = function() return #log end,
+        GetInfo = function(index) return log[index] and { questID = log[index].questID, title = log[index].title } end,
+        GetQuestObjectives = function(questID)
+            for _, quest in ipairs(log) do if quest.questID == questID then return quest.objectives end end
+            return {}
+        end,
+        IsComplete = function(questID) return questID == 12 end,
+        GetTitleForQuestID = function() return nil end,
+    }
+    local module = R.moduleByID["quest.progressBanner"]
+    module.state = "disabled"
+    R.Registry:Enable("quest.progressBanner")
+    env:Fire("UI_INFO_MESSAGE", 303, "Durotar Tiger Fur: 3/4")
+    env:Fire("UI_INFO_MESSAGE", 301, "Vile Familiar slain: 7/12")
+    env:Fire("UI_INFO_MESSAGE", 303, "Sarkoth's Mangled Claw: 1/1")
+    env:Advance(0.9)
+    -- The bar and the rule are tweened by Core/Fade's driver, which only frames ticking would run:
+    -- run it to the end so the picture shows where each lands.
+    local function settle()
+        local driver = R.Fade.driver
+        for _ = 1, 40 do
+            local step = driver.scripts and driver.scripts.OnUpdate
+            if not step then break end
+            step(driver, 0.05)
+        end
+        for _, row in ipairs(module.ui.active) do
+            row.fader:Snap(1)
+        end
+    end
+    settle()
+    reportErrors("questbanner", R)
+    write("questbanner", env, R)
+    write("questbanner-snow", env, R, { snow = true })
+    R.UI:QuestBannerHide(module.ui)
+    env:Fire("UI_INFO_MESSAGE", 307, "Tiger Hunt completed.")
+    env:Fire("UI_INFO_MESSAGE", 303, "Sarkoth's Mangled Claw: 0/1")
+    settle()
+    write("questbanner-turnin", env, R)
 end)
 
 scenario("allspells-empty", function()
@@ -705,12 +805,100 @@ scenario("planner-cap", function()
     write("planner-cap", env, R)
 end)
 
-scenario("window-account", function()
+-- A minimap with the addon buttons this install has around it: before the collector, with it
+-- closed, open on the rim, and open off the rim on the left of the screen.
+scenario("minimapbuttons", function()
+    local env, R = boot()
+    env.issecurevariable = function() return false end
+    local minimap = env.CreateFrame("Frame", "Minimap", env.UIParent)
+    minimap:SetSize(140, 140)
+    minimap:SetPoint("TOPRIGHT", env.UIParent, "TOPRIGHT", -40, -60)
+    local disc = minimap:CreateTexture(nil, "BACKGROUND")
+    disc:SetAllPoints(minimap)
+    disc:SetColorTexture(0.42, 0.25, 0.12, 1)
+    R.UI:CreateMinimapButton()
+    local names = { "LibDBIcon10_BugSack", "LibDBIcon10_Spoken", "AllTheThings-Minimap", "LueurMinimapButton",
+        "GearRefactorMinimapButton", "LibDBIcon10_ForeverDungeonJournal" }
+    for index, name in ipairs(names) do
+        local button = env.CreateFrame("Button", name, minimap)
+        button:SetSize(31, 31)
+        local backdrop = button:CreateTexture(nil, "BACKGROUND")
+        backdrop:SetSize(24, 24)
+        backdrop:SetPoint("CENTER")
+        backdrop:SetTexture(136467)
+        local icon = button:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(18, 18)
+        icon:SetPoint("CENTER")
+        icon:SetTexture(133000 + index)
+        local border = button:CreateTexture(nil, "OVERLAY")
+        border:SetSize(50, 50)
+        border:SetPoint("TOPLEFT")
+        border:SetTexture(136430)
+        R.UI:PlaceOnMinimapRim(button, 20 + index * 40)
+    end
+    write("minimapbuttons-before", env, R)
+    R.Settings:Set("interface.minimapButtons", true)
+    local module = R.moduleByID["interface.minimapButtons"]
+    reportErrors("minimapbuttons", R)
+    write("minimapbuttons", env, R)
+    -- The fade in is an AnimationGroup, which never plays here, so it is put at its end.
+    module:Open()
+    module.collector.fader:Snap(1)
+    write("minimapbuttons-open", env, R)
+    module:Close()
+    R.Settings:SetOption("minimapButtonsAttach", false)
+    local button = module.collector.button
+    button:ClearAllPoints()
+    button:SetPoint("CENTER", env.UIParent, "BOTTOMLEFT", 300, 260)
+    R.Settings:SetOption("minimapButtonsColumns", 3)
+    module:Open()
+    module.collector.fader:Snap(1)
+    write("minimapbuttons-free", env, R)
+end)
+
+scenario("window-second-profile", function()
+    local env, R = boot()
+    R.Settings:CreateProfile("Bank alt", "Default")
+    R.Settings:AssignProfile("Bank alt")
+    R.UI:Toggle()
+    write("window-second-profile", env, R)
+end)
+
+-- The whole UI visibility block on a tall sheet, since the window would cut it off: closed
+-- kinds with every action bar on Combat HUD, then the action bars opened with one set apart.
+scenario("visibility-panel", function()
     local env, R = boot()
     R.UI:Toggle()
-    R.UI.mode = "account"
-    R.Settings:SetScope("account")
-    write("window-account", env, R)
+    local Rules = R.Visibility
+    local bars = {}
+    for _, group in ipairs(Rules.groups) do
+        if group.kind == "bars" then bars[#bars + 1] = group.id end
+    end
+    Rules:Assign(bars, "world", "combatHud")
+    Rules:Assign({ "hud.minimap" }, "world", "cleanMounted")
+    R.UI:OpenModule("interface.visibility")
+    R.UI:CancelExpand()
+    local block = R.UI.moduleSettings["interface.visibility"]
+    env.UIParent:SetSize(820, 2000)
+    env.UIParent.width, env.UIParent.height = 820, 2000
+    local sheet = env.CreateFrame("Frame", nil, env.UIParent)
+    sheet:SetSize(760, 1960)
+    sheet:SetPoint("TOPLEFT", 20, -20)
+    local ground = sheet:CreateTexture(nil, "BACKGROUND")
+    ground:SetAllPoints()
+    ground:SetColorTexture(0.06, 0.06, 0.07, 0.95)
+    R.UI.frame:Hide()
+    block:SetParent(sheet)
+    block:ClearAllPoints()
+    block:SetPoint("TOPLEFT", 20, -20)
+    block:Show()
+    write("visibility-panel", env, R)
+    R.UI:VisToggleKind("bars")
+    block:ClearAllPoints()
+    block:SetPoint("TOPLEFT", 20, -20)
+    Rules:Assign({ "bars.pet" }, "world", "fadeAway")
+    R.UI:LoadVisibility()
+    write("visibility-panel-open", env, R)
 end)
 
 local run = {}

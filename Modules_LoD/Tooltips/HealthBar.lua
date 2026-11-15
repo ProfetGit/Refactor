@@ -6,7 +6,7 @@
 local _, R = ...
 
 local HideHealthBar = R:RegisterModule({
-    id = "tooltips.hideHealthBar", category = "Tooltips", nameKey = "TOOLTIP_HEALTHBAR_NAME",
+    id = "tooltips.hideHealthBar", category = "Interface", nameKey = "TOOLTIP_HEALTHBAR_NAME",
     descriptionKey = "TOOLTIP_HEALTHBAR_DESC", detailKey = "TOOLTIP_HEALTHBAR_DETAIL",
     requires = { "hooksecurefunc", "GameTooltip" },
     risk = "visible", defaultEnabled = false,

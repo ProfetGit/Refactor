@@ -286,7 +286,7 @@ describe("M2 Retail modules", function()
 
     it("explains a visit where every grey stack is protected", function()
         local env = vendor()
-        env.R.Settings.account.options.neverSellIDs = { [1] = true }
+        env.R.Settings:SetOption("neverSellIDs", { [1] = true })
         env:AddItem(1)
         env:AddItem(2, { quest = { questID = 7 } })
         env:AddItem(3, { quality = 2 })
@@ -336,11 +336,11 @@ describe("M2 Retail modules", function()
         env.repairCost = 1000001
         env:Fire("MERCHANT_SHOW")
         assert.equals(1, repairs)
-        env.R.Settings.account.options.repairCapGold = 0
+        env.R.Settings:SetOption("repairCapGold", 0)
         env.repairCost = 1
         env:Fire("MERCHANT_SHOW")
         assert.equals(1, repairs)
-        env.R.Settings.account.options.repairCapGold = 100
+        env.R.Settings:SetOption("repairCapGold", 100)
         env.money = 0
         env:Fire("MERCHANT_SHOW")
         assert.equals(1, repairs)

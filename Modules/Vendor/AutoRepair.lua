@@ -55,7 +55,7 @@ function AutoRepair:Attempt()
         self:Stop()
         return
     end
-    local cap = R.Settings.account.options.repairCapGold
+    local cap = R.Settings:GetOption("repairCapGold")
     if cap == nil then
         cap = 100
     end

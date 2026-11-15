@@ -34,6 +34,8 @@ you can search, and a new character starts with the settings your others already
   by element in Edit Mode.
 - New abilities go straight onto a free action bar slot, and a screenshot is taken when you
   level up.
+- Under the level-up banner, a strip lists the abilities that level unlocks, and which of
+  them you can train now.
 
 ### Chat and social
 
@@ -57,6 +59,25 @@ you can search, and a new character starts with the settings your others already
   that went wrong.
 
 ## Development notes
+
+New ranks on your bars (12 Nov 2026), checked headless, not yet in game:
+
+- Part of Place new abilities. Train a new rank and it takes the old rank's place on your bars,
+  on every bar, page and stance bar the old rank sits on, bars drawn by another addon included.
+- Only the highest rank you had is swapped. A lower rank you kept for less mana stays, and a
+  macro is never changed. A rank learned in combat is swapped when the fight ends.
+- Switch it off under Place new abilities in the settings to keep every rank as it is.
+
+Minimap button collector (11 Nov 2026), checked headless, not yet in game:
+
+- Every addon button on the minimap moves behind one satchel button. Click it and the buttons
+  open in a drawer, drawn like Blizzard's own dropdown menus, in rows of as many as you choose.
+- The satchel sits on the minimap's edge and drag slides it around it, like any other minimap
+  button. Turn Keep it on the minimap's edge off and you can drag it anywhere on screen.
+- The drawer opens away from the screen edge it is near, and closes when you click elsewhere.
+- Blizzard's buttons, map pins and protected frames stay where they are, no button is gathered
+  in combat, and switching the feature off puts every button back where it was. It stands aside
+  while MinimapButtonButton is loaded.
 
 Profession levelling plan (6 Nov 2026), checked headless and in the layout preview, not yet in
 game:

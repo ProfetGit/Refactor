@@ -39,6 +39,7 @@ local function world()
         SpellBookSpellBank = { Player = 0, Pet = 1 },
     }
     env.UnitClass = function() return "Mage", "MAGE", 8 end
+    env.UnitFactionGroup = function() return "Alliance", "Alliance" end
     env.UnitLevel = function() return PLAYER_LEVEL end
 
     local trainer = { services = {}, sets = {}, tradeskill = false, kind = env.Enum.TrainerType.General,
@@ -331,6 +332,53 @@ describe("interface.allSpells", function()
             env.R.Settings.account.classSpells = "garbage"
             enable(env)
             assert.same({}, env.R.Settings.account.classSpells)
+        end)
+    end)
+
+    describe("the shipped fallback", function()
+        it("is laid under a partial recorded list, such as a weapon master's", function()
+            local env = world()
+            env.R.Settings.account.classSpells = { MAGE = { [1953] = { level = 0, line = "Daggers" },
+                [99999] = { level = 0, line = "Staves" } } }
+            env.R.ClassSpells = {
+                spells = { MAGE = { [1953] = 6, [11366] = 20, [2948] = 22, [11129] = 28, [7302] = 5 } },
+                lines = { MAGE = { [1953] = "Arcane", [11366] = "Fire", [2948] = "Fire", [11129] = "Fire",
+                    [7302] = "Frost" } },
+                faction = { [2948] = "Alliance", [11129] = "Horde" },
+            }
+            local list, whole = env.R:ClassSpellList("MAGE", "Alliance")
+            assert.is_false(whole)
+            assert.equals(6, list[1953].level)
+            assert.equals("Arcane", list[1953].line)
+            assert.equals(0, list[99999].level)
+            assert.is_nil(list[11129])
+            assert.equals(22, list[2948].level)
+        end)
+
+        it("is not recorded from a trainer that teaches nothing by level", function()
+            local env = world()
+            enable(env)
+            env.trainer.services = {
+                { name = "Maces", status = "available", spellID = 198, level = 0, line = "Maces" },
+            }
+            env:Fire("TRAINER_SHOW")
+            assert.same({}, env.R.Settings.account.classSpells)
+        end)
+        it("stands in for the trainer list, grouped by line and held to the player's faction", function()
+            local env = world()
+            env.R.Settings.account.classSpells = {}
+            env.R.ClassSpells = {
+                spells = { MAGE = { [1953] = 6, [11366] = 20, [2948] = 22, [11129] = 28 } },
+                lines = { MAGE = { [1953] = "Arcane", [11366] = "Fire", [2948] = "Fire", [11129] = "Fire" } },
+                faction = { [2948] = "Alliance", [11129] = "Horde" },
+            }
+            local module = enable(env)
+            local list, recorded = module:BuildList()
+            assert.is_true(recorded)
+            assert.same({
+                "# Arcane", "Blink 6 unknown",
+                "# Fire", "Pyroblast 20 unknown", "Scorch 22 unknown",
+            }, shape(list))
         end)
     end)
 

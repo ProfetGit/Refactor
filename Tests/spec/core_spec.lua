@@ -227,74 +227,6 @@ describe("settings resolution and profiles", function()
         R, settings = env.R, env.R.Settings
     end)
 
-    it("resolves all 54 combinations of character profile account and default", function()
-        local states = { "inherit", true, false }
-        local checked = 0
-        for _, default in ipairs({ true, false }) do
-            for _, accountValue in ipairs(states) do
-                for _, profileValue in ipairs(states) do
-                    for _, overrideValue in ipairs(states) do
-                        local account = accountValue ~= "inherit" and { ["test.setting"] = accountValue } or {}
-                        local profile = profileValue ~= "inherit" and { ["test.setting"] = profileValue } or {}
-                        local override = overrideValue ~= "inherit" and { ["test.setting"] = overrideValue } or {}
-                        settings:Init({ modules = account, profiles = { Test = profile },
-                            assignments = { ["Player-test"] = "Test" } }, { overrides = override }, "Player-test")
-                        settings:RegisterDefaults("test.setting", default)
-                        local expected = default
-                        if accountValue ~= "inherit" then expected = accountValue end
-                        if profileValue ~= "inherit" then expected = profileValue end
-                        if overrideValue ~= "inherit" then expected = overrideValue end
-                        assert.equal(expected, settings:Get("test.setting"))
-                        checked = checked + 1
-                    end
-                end
-            end
-        end
-        assert.equal(54, checked)
-    end)
-
-    it("inherits account values on another GUID and supports explicit false", function()
-        settings:SetAccount("test.setting", true)
-        settings:SetOverride("test.setting", false)
-        assert.is_false(settings:Get("test.setting"))
-        settings:Init(settings.account, {}, "Player-other")
-        assert.is_true(settings:Get("test.setting"))
-        settings:SetOverride("test.setting", false)
-        settings:SetOverride("test.setting", nil)
-        assert.is_nil(settings:GetOverride("test.setting"))
-        assert.is_true(settings:Get("test.setting"))
-    end)
-
-    it("implements profile CRUD without stale GUID assignments or table aliasing", function()
-        local values = { ["test.setting"] = true }
-        assert.is_true(settings:CreateProfile("Levelling", values))
-        values["test.setting"] = false
-        assert.is_true(settings:AssignProfile("Levelling"))
-        assert.is_true(settings:Get("test.setting"))
-        local read = settings:GetProfile("Levelling")
-        read["test.setting"] = false
-        assert.is_true(settings:Get("test.setting"))
-        settings:UpdateProfile("Levelling", { ["test.setting"] = false })
-        assert.is_false(settings:Get("test.setting"))
-        settings:AssignProfile("Levelling", "Player-other")
-        assert.is_true(settings:DeleteProfile("Levelling"))
-        assert.same({}, settings.account.assignments)
-        assert.is_false(settings:AssignProfile("Levelling"))
-    end)
-
-    it("round trips sorted base64 exports and rejects overwrite by default", function()
-        local values = { ["test.one"] = true, ["test.two"] = false }
-        settings:CreateProfile("Test profile", values)
-        local encoded = settings:ExportProfile("Test profile")
-        assert.matches("^[A-Za-z0-9+/=]+$", encoded)
-        assert.is_false(settings:ImportProfile(encoded))
-        local ok, name = settings:ImportProfile(encoded, "Copy")
-        assert.is_true(ok)
-        assert.equal("Copy", name)
-        assert.same(values, settings:GetProfile("Copy"))
-        assert.equal(encoded, settings:ExportProfile("Test profile"))
-    end)
-
     it("rejects malformed oversized and executable imports without invoking code", function()
         local payloads = {
             "", "RF1", "!!!!", "AAAA=AAA", "AB==", "AAB=", string.rep("A", 32772),
@@ -306,7 +238,7 @@ describe("settings resolution and profiles", function()
         for _, payload in ipairs(payloads) do
             assert.is_false(settings:ImportProfile(payload))
         end
-        assert.same({}, settings.account.profiles)
+        assert.same({ "Default" }, settings:ProfileNames())
         assert.is_nil(env.owned)
     end)
 
@@ -331,27 +263,16 @@ describe("settings resolution and profiles", function()
         assert.equal(1002, settings:GetOption("gossipLearned").Creature[38038])
     end)
 
-    it("edits the account layer by default and remembers a switch to the character", function()
-        assert.equal("account", settings:GetScope())
-        assert.is_true(settings:SetScope("character"))
-        assert.equal("character", settings.character.scope)
-        settings:Init(settings.account, settings.character, "Player-test")
-        assert.equal("character", settings:GetScope())
-        assert.is_false(settings:SetScope("profile"))
-        settings:Init(settings.account, { scope = "profile" }, "Player-test")
-        assert.equal("account", settings:GetScope())
-    end)
-
     it("notifies about mutations and keeps getters safe before initialization", function()
         local calls, owner = {}, {}
         R.Broker:Subscribe("REFACTOR_SETTINGS_CHANGED", function(_, _, id) calls[#calls + 1] = id end, owner)
-        settings:SetAccount("test.setting", true)
-        settings:SetOverride("test.setting", false)
+        settings:Set("test.setting", true)
+        settings:Set("test.setting", false)
         assert.same({ "test.setting", "test.setting" }, calls)
         settings.account, settings.character = nil, nil
         assert.is_false(settings:Get("test.unknown"))
-        assert.is_nil(settings:GetOverride("test.unknown"))
-        assert.is_false(settings:SetAccount("test.setting", true))
+        assert.is_nil(settings:Stored("test.unknown"))
+        assert.is_false(settings:Set("test.setting", true))
     end)
 end)
 

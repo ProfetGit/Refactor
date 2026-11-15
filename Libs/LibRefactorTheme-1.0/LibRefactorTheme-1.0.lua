@@ -1,4 +1,4 @@
-local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 18)
+local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 20)
 if not Theme then return end
 
 local unpack = unpack
@@ -35,6 +35,11 @@ Theme.colors = {
     -- LOOT_ROW is the smudge behind a row, its alpha replaced by the opacity setting.
     LOOT_ROW = { 0.07, 0.05, 0.04, 0.85 },
     LOOT_UNDERLINE = { 0.48, 0.34, 0.20, 0.30 },
+    -- The quest banner's smoke, white plus alpha like the loot art. Its art runs to full alpha at
+    -- the middle, so this lands about as dense as the loot row's smudge.
+    QUEST_BANNER_BG = { 0.07, 0.05, 0.04, 0.75 },
+    -- The empty groove under a quest banner's count; the fill wears RING_FILL, then RING_DONE.
+    QUEST_BAR_TRACK = { 0.47, 0.41, 0.33, 0.50 },
     -- The farm HUD art is white with an alpha channel too. HUD_BG is the smudge behind the
     -- whole HUD, its alpha replaced by the opacity setting; HUD_TRACK is the unfilled half
     -- of the goal meter, which has to stay readable over snow without competing with the fill.
@@ -45,12 +50,14 @@ Theme.colors = {
     TEXT_LAST = { 1, 0.86, 0.36, 1 },
     PLATE_DIM = { 0, 0, 0, 0.55 },
     MAP_UNEXPLORED = { 0.72, 0.72, 0.72, 1 },
+    -- The zone exit arrows: green, so they read as "go this way" against any zone's art.
+    MAP_EXIT = { 0.3, 1, 0.4, 1 },
 }
 -- Shared immutable gradient endpoints; allocated once, never during progress updates.
 Theme.ringShadeBottom = CreateColor(0.55, 0.55, 0.55, 1)
 Theme.ringShadeTop = CreateColor(1, 1, 1, 1)
 Theme.fonts = { title = "GameFontNormalLarge", body = "GameFontNormal", small = "GameFontNormalSmall",
-    editLabel = "GameFontHighlightLarge" }
+    editLabel = "GameFontHighlightLarge", huge = "GameFontNormalHuge" }
 
 -- The window border is one of Blizzard's NineSliceLayouts (12.1.0 NineSliceLayouts.lua),
 -- applied by NineSliceUtil so every piece takes its size from the atlas. "Dialog" is the
@@ -108,6 +115,18 @@ Theme.assets = {
     rowDivider = { atlas = "Options_HorizontalDivider", fallback = "BORDER_BRONZE" },
     -- Interface\Common\help-i, the "i" Blizzard's HelpPlate and Communities frames use.
     infoIcon = { file = 616343 },
+    -- The tutorial's yellow up arrow, tinted green; a client without it gets the minimap's own
+    -- rotating arrow, which every client ships. Both point up, so a rotation of zero is north.
+    mapExitArrow = { atlas = "npe_arrowup", file = "Interface\\Minimap\\ROTATING-MINIMAPARROW", tint = "MAP_EXIT" },
+    -- A pin the client gave no atlas for, or an atlas this client does not have.
+    mapPinFallback = { file = "Interface\\Icons\\INV_Misc_Map_01" },
+    -- The Islands Expedition boats from the minimap object atlas, one per faction, for boats and
+    -- zeppelins alike. Each falls back to the generic pin on a client without the atlas.
+    mapPinTravelAlliance = { atlas = "islands-allianceboat", file = "Interface\\Icons\\INV_Misc_Map_01" },
+    mapPinTravelHorde = { atlas = "islands-hordeboat", file = "Interface\\Icons\\INV_Misc_Map_01" },
+    -- The dungeon door and the skull from the same atlas.
+    mapPinDungeon = { atlas = "dungeon", file = "Interface\\Icons\\INV_Misc_Map_01" },
+    mapPinRaid = { atlas = "dungeonskull", file = "Interface\\Icons\\INV_Misc_Map_01" },
     undoIcon = { atlas = "talents-button-undo", fallback = "ACCENT_COPPER" },
     -- PanelResizeButtonTemplate's grabber, the same one on every resizable Blizzard panel.
     resizeGrip = { file = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up" },
@@ -150,6 +169,12 @@ Theme.assets = {
     -- itself. IconMinimap.tga is a transparent mark, so it needs something to sit on.
     minimapIconBackdrop = { file = 136467 },
     minimapHighlight = { file = 136477 },
+    -- The minimap button collector's icon: inv_misc_bag_08, a satchel, for a bag that holds the
+    -- other buttons. Cropped 5 percent a side, which is how LibDBIcon draws every addon's icon.
+    collectorIcon = { file = 133633, texcoords = { 0.05, 0.95, 0.05, 0.95 } },
+    -- MenuStyle1Mixin's background (12.1.0 Blizzard_Menu MenuTemplates.lua): the panel every
+    -- Blizzard dropdown menu is drawn on, the addon compartment's included.
+    drawerBackground = { atlas = "common-dropdown-bg", fallback = "DIALOG_BG" },
     -- The mail attachment slot (MailFrame.xml): an empty slot to drop an item into, the white
     -- icon frame Blizzard tints with the item's quality, and the question mark for an item the
     -- client has not described yet.
@@ -177,6 +202,17 @@ Theme.assets = {
         fallback = "BORDER_BRONZE" },
     lootUnderline = { file = "Interface\\AddOns\\Refactor\\Media\\LootUnderline.tga",
         fallback = "LOOT_UNDERLINE" },
+    -- One symmetric strip of smoke behind each quest banner row, drawn whole rather than as halves.
+    questBannerBackdrop = { file = "Interface\\AddOns\\Refactor\\Media\\QuestBannerBackdrop.tga",
+        fallback = "QUEST_BANNER_BG" },
+    -- The banner's bar: a groove tapered to a point at both ends, and a beam of light with the same
+    -- taper, so a full bar ends exactly where its groove does. The beam is even along its length,
+    -- because the bar shows only its first part, cut at the count.
+    questBarTrack = { file = "Interface\\AddOns\\Refactor\\Media\\QuestBarTrack.tga", fallback = "QUEST_BAR_TRACK" },
+    questBarFill = { file = "Interface\\AddOns\\Refactor\\Media\\QuestBarFill.tga", fallback = "RING_FILL" },
+    -- The line under a ready or hand-in banner: the groove's own art, which is already symmetric
+    -- and pointed at both ends, so it is one piece rather than two mirrored halves.
+    questBannerRule = { file = "Interface\\AddOns\\Refactor\\Media\\QuestBarTrack.tga", fallback = "ACCENT_COPPER" },
     -- Blizzard's classic coin icons, the files the client's money text draws. Not the
     -- coin-*-20x20 atlases: the atlas index lists them, but GetAtlasInfo on Forever 1.60.1
     -- knew none of the three and every coin drew as its fallback square (25 Sep 2026).
@@ -254,7 +290,10 @@ function Theme:ApplyAsset(texture, key)
     local asset = self.assets[key]
     texture:SetTexCoord(0, 1, 0, 1)
     texture:SetVertexColor(1, 1, 1, 1)
-    if asset.file then
+    if asset.atlas and asset.file and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(asset.atlas) then
+        -- An asset with both prefers the atlas and keeps the file for a client without it.
+        texture:SetAtlas(asset.atlas, false)
+    elseif asset.file then
         texture:SetTexture(asset.file)
         if asset.texcoords then texture:SetTexCoord(unpack(asset.texcoords)) end
     elseif asset.atlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(asset.atlas) then
@@ -1817,4 +1856,44 @@ function Theme:MinimapButton(parent, size, inset, name)
     -- Use the same full-button highlight and default blending as BugSack's LibDBIcon.
     button:SetHighlightTexture(self.assets.minimapHighlight.file)
     return button
+end
+
+-- LibDBIcon's own button for a square icon (BugSack's copy, minor 57): the minimap's background
+-- disc under an 18 px icon and the tracking ring over both. Drawn this way, a button of ours on
+-- the rim is one more addon button among the others, not a stranger.
+local ICON_BUTTON_SIZE, ICON_BACKDROP_SIZE, ICON_SIZE, ICON_RING_SIZE = 31, 24, 18, 50
+function Theme:MinimapIconButton(parent, iconKey)
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(ICON_BUTTON_SIZE, ICON_BUTTON_SIZE)
+    button:SetFrameStrata("MEDIUM")
+    button:SetFrameLevel(parent:GetFrameLevel() + 8)
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    button:RegisterForDrag("LeftButton")
+    button:SetMovable(true)
+    button.backdrop = self:Texture(button, "minimapIconBackdrop", "BACKGROUND")
+    button.backdrop:SetSize(ICON_BACKDROP_SIZE, ICON_BACKDROP_SIZE)
+    button.backdrop:SetPoint("CENTER")
+    button.icon = self:Texture(button, iconKey, "ARTWORK")
+    button.icon:SetSize(ICON_SIZE, ICON_SIZE)
+    button.icon:SetPoint("CENTER")
+    button.border = self:Texture(button, "minimapBorder", "OVERLAY")
+    button.border:SetSize(ICON_RING_SIZE, ICON_RING_SIZE)
+    button.border:SetPoint("TOPLEFT", 0, 0)
+    button:SetHighlightTexture(self.assets.minimapHighlight.file)
+    -- LibDBIcon shows a press by dropping the crop, so the icon grows a little under the finger.
+    button:SetScript("OnMouseDown", function(widget) widget.icon:SetTexCoord(0, 1, 0, 1) end)
+    button:SetScript("OnMouseUp", function(widget) self:ApplyAsset(widget.icon, iconKey) end)
+    return button
+end
+
+-- Blizzard's dropdown menu panel. MenuStyle1Mixin lays the atlas 10 px past the menu on each
+-- side and 3 px above and below it, at 92.5 percent, and keeps the content 8 px in from three
+-- edges and 15 from the bottom, where the atlas carries its shadow.
+Theme.drawerInsets = { left = 8, top = 8, right = 8, bottom = 15 }
+function Theme:Drawer(frame)
+    local background = self:Texture(frame, "drawerBackground", "BACKGROUND")
+    background:SetPoint("TOPLEFT", -10, 3)
+    background:SetPoint("BOTTOMRIGHT", 10, -3)
+    background:SetAlpha(0.925)
+    return background
 end

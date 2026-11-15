@@ -276,7 +276,7 @@ describe("visibility rules", function()
                 city = { ["hud.bags"] = "test" } },
         } } }
         R.Settings:Init(account, {}, "Player-test")
-        local value = account.options.uiVisibility
+        local value = R.Settings:GetOption("uiVisibility")
         assert.equal(1, #value.behaviours)
         assert.same({ ["bars.main"] = "test" }, value.setups.world)
         assert.same({ ["hud.bags"] = "test" }, value.setups.city)
@@ -284,7 +284,7 @@ describe("visibility rules", function()
         -- Something that is not a table at all is replaced by the default.
         account = { options = { uiVisibility = "everything" } }
         R.Settings:Init(account, {}, "Player-test")
-        assert.same(Rules:Default(), account.options.uiVisibility)
+        assert.same(Rules:Default(), R.Settings:GetOption("uiVisibility"))
     end)
 
     it("converts the first version's rules, one behaviour per distinct rule and zone", function()
@@ -309,7 +309,7 @@ describe("visibility rules", function()
             ["bad id"] = rule(),
         } } } }
         R.Settings:Init(account, {}, "Player-test")
-        local value = account.options.uiVisibility
+        local value = R.Settings:GetOption("uiVisibility")
         assert.is_true(Rules:ValidSettings(value))
         for index, starter in ipairs(Rules.starters) do
             assert.equal(starter.id, value.behaviours[index].id)
@@ -392,7 +392,7 @@ describe("visibility rules", function()
 
         -- What Settings hands out is a copy: editing it changes nothing saved.
         Rules:Settings().behaviours[1].resting = 0.99
-        assert.equal(0, Rules:Behaviours()[1].resting)
+        assert.equal(Rules.starters[1].resting, Rules:Behaviours()[1].resting)
         -- There is a ceiling, and a copy past it is refused rather than dropped later.
         local last
         repeat last = Rules:CopyBehaviour("fadeAway") until not last
@@ -452,10 +452,19 @@ describe("visibility rules", function()
         end
     end)
 
-    it("names only frames and functions the API index has evidence for", function()
+    it("names only frames and functions the API indexes have evidence for", function()
         local file = assert(io.open("Data/api-retail.json", "r"))
-        local index = assert(json.decode(file:read("*a")))
+        local retail = assert(json.decode(file:read("*a")))
         file:close()
+        file = assert(io.open("Data/api-forever.json", "r"))
+        local forever = assert(json.decode(file:read("*a")))
+        file:close()
+        -- The same rule as make api-check: evidence in either index. A frame only Forever has,
+        -- like the totem bar, leaves its group missing on Retail and nothing else.
+        local index = { symbols = setmetatable({}, { __index = function(_, name)
+            -- Forever's dump records a symbol by its type name, not by a source entry.
+            return retail.symbols[name] or forever.symbols[name] and { type = forever.symbols[name] } or nil
+        end }), widgetMethods = retail.widgetMethods }
         local names = { "FCF_FadeInChatFrame", "GameTooltip", "GetCursorInfo", "EventRegistry", "hooksecurefunc",
             "EditModeSystemSettingsDialog" }
         for _, group in ipairs(Rules.groups) do
@@ -1171,6 +1180,8 @@ describe("interface.visibility", function()
         local env, R, module = base()
         local Rules = R.Visibility
         assert.is_true(Rules:Assign({ "bars.main", "bars.right" }, "world", "fadeAway"))
+        -- Resting at nothing, so every alpha below reads as which setup is in use.
+        assert.is_true(Rules:UpdateBehaviour("fadeAway", { resting = 0 }))
         assert.is_true(Rules:SetOwnSetup("city", true))
         assert.is_true(Rules:Assign({ "bars.main" }, "city", nil))
         assert.is_true(R.Registry:Enable(MODULE))

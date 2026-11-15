@@ -9,7 +9,7 @@
 local _, R = ...
 local Border = R.RarityBorderData
 local RarityBorder = R:RegisterModule({
-    id = "tooltips.rarityBorder", category = "Tooltips", nameKey = "TOOLTIP_BORDER_NAME",
+    id = "tooltips.rarityBorder", category = "Interface", nameKey = "TOOLTIP_BORDER_NAME",
     descriptionKey = "TOOLTIP_BORDER_DESC", detailKey = "TOOLTIP_BORDER_DETAIL",
     requires = { "TooltipDataProcessor.AddTooltipPostCall", "Enum.TooltipDataType.Item",
         "Enum.TooltipDataType.Unit", "TooltipUtil.GetDisplayedUnit", "UnitIsPlayer", "UnitClassBase",

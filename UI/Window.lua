@@ -7,14 +7,19 @@ local unpack = unpack
 -- module: a stacked group ("Quests & loot") hid which category a row belonged to and left
 -- the list with no structure of its own. Panels are the tool pages.
 --
--- The category entries are a table of contents, not a filter: every feature is in the list
--- at all times and a category row jumps to its section. An "All features" entry on top of
--- per-category filtering made the same list reachable two ways and hid the rest of it.
+-- A category entry is a page: the list shows that category alone, and a search reaches every
+-- category at once. One list of every feature with a jump per category (until 11 Nov 2026)
+-- never ended, and the sidebar only moved a scroll position. There is still no "All" entry:
+-- search is the way to see across categories.
 --
 -- Nameplate quest progress lists under Quest and the loot feed under Loot (PRD 7.2): each
 -- had a category of its own holding one row, which made two headings for two features.
+--
+-- Cut by what the player is doing, so no page runs past seven rows (11 Nov 2026): Interface
+-- had grown to thirteen, with the map, the camera and the spellbook all in one bucket.
+-- Chat's two features joined Social, and the tooltip ones joined Interface.
 local CATEGORY_ORDER = {
-    "Quest", "Loot", "Vendor", "Items", "Interface", "Chat", "Social", "Tooltips",
+    "Quest", "Levelling", "Map", "Loot", "Vendor", "Items", "Interface", "Camera", "Social",
 }
 -- Settings that belong to one feature live on that feature's row. General holds only the
 -- ones that belong to none of them, so it is a list section like any other rather than a
@@ -75,6 +80,8 @@ function UI:ListSections()
 end
 
 local PAD, SIDEBAR_WIDTH, SIDEBAR_ROW, SIDEBAR_TOP = 24, 148, 24, -64
+-- Room for the profile's name beside Profiles; a longer one is cut short, not wrapped.
+local SIDEBAR_PROFILE_WIDTH = 72
 local CONTENT_X = PAD + SIDEBAR_WIDTH + 22
 local SEARCH_TOP, SEARCH_HEIGHT = -22, 26
 local TAB_BASELINE, HELP_Y = -72, -80
@@ -92,10 +99,6 @@ local LIST_BAR_TOP = 32
 local LIST_LEAD = PAD
 -- Space above a heading, and between a heading and the first row under it.
 local LIST_SECTION_GAP, HEADER_GAP = 18, 4
--- How far past a section's heading the view can sit before the sidebar stops calling it the
--- section you are in: the lead-in a jump leaves above the heading, plus a hairline of slack
--- so a jump that lands a pixel short still reads as having arrived.
-local SPY_SLOP = LIST_LEAD + 4
 UI.layout = { x = CONTENT_X, top = -102, right = -36, bottom = 24 }
 local ROW_HEIGHT = UI.Widgets.ROW_HEIGHT
 local BLOCK_INDENT = UI.Widgets.BLOCK_INDENT
@@ -124,9 +127,6 @@ local MODIFIER_ENTRIES = {
     { value = "SHIFT", labelKey = "UI_SHIFT" },
     { value = "ALT", labelKey = "UI_ALT" },
 }
--- The editing bar at the head of the list: its inner padding, the gap between the switch and
--- its explanation, and how strongly its ground shows.
-local SCOPE_PAD, SCOPE_NOTE_GAP, SCOPE_FILL_ALPHA = 10, 4, 0.55
 -- The line that counts a search's results, and the space it keeps above the first heading.
 local SEARCH_COUNT_HEIGHT = 22
 local SIDE_ENTRIES = {
@@ -136,75 +136,29 @@ local SIDE_ENTRIES = {
 -- The width every dropdown and slider in a settings block shares.
 local CONTROL_WIDTH = 380
 
-local function accountValue(module)
-    local value = Settings.account and Settings.account.modules[module.id]
-    if value == nil then value = Settings.defaults[module.id] end
-    return value == true
-end
-
--- On or off, nothing else. A character override is written explicitly rather than cycling
--- through Inherit, so the checkbox always shows exactly what this character will do.
+-- On or off, nothing else: a click writes the profile this character uses, explicitly, so the
+-- checkbox always shows exactly what the feature will do.
 function UI:SetModuleEnabled(module, enabled)
     if not Settings.account then return end
-    if self.mode == "account" then
-        Settings:SetAccount(module.id, enabled)
-        self:DropOverride(module)
-    elseif self.mode == "profile" then
-        Settings:SetProfileValue(Settings:AssignedProfile(), module.id, enabled)
-        self:DropOverride(module)
-    else
-        Settings:SetOverride(module.id, enabled)
-    end
+    Settings:Set(module.id, enabled)
     self:Refresh()
 end
 
--- An account default this character overrides changes nothing the player can see, so
--- editing the account layer drops the override instead of writing behind it.
-function UI:DropOverride(module)
-    if Settings:GetOverride(module.id) ~= nil then
-        Settings:SetOverride(module.id, nil)
-    end
-end
-
--- What "undo" means depends on the tab: a character override goes back to inheriting,
--- an account value goes back to the shipped default.
+-- Modified means this profile holds a value that differs from Refactor's own default.
 function UI:IsModified(module)
-    if self.mode == "account" then
-        local value = Settings.account and Settings.account.modules[module.id]
-        return value ~= nil and value ~= Settings.defaults[module.id]
-    elseif self.mode == "profile" then
-        local profile = Settings.account.profiles[Settings:AssignedProfile()]
-        local value = profile and profile[module.id]
-        return value ~= nil and value ~= accountValue(module)
-    end
-    local override = Settings:GetOverride(module.id)
-    return override ~= nil and override ~= Settings:GetInherited(module.id)
+    local value = Settings:Stored(module.id)
+    return value ~= nil and value ~= Settings.defaults[module.id]
 end
 
--- Undo in a profile takes the feature out of it, so the profile follows the account again.
+-- Undo takes the feature out of the profile, so it follows Refactor's default again.
 function UI:ResetModule(module)
-    if self.mode == "account" then
-        Settings:SetAccount(module.id, nil)
-        self:DropOverride(module)
-    elseif self.mode == "profile" then
-        Settings:SetProfileValue(Settings:AssignedProfile(), module.id, nil)
-        self:DropOverride(module)
-    else
-        Settings:SetOverride(module.id, nil)
-    end
+    Settings:Set(module.id, nil)
     self:Refresh()
 end
 
--- The value the row's checkbox shows: the account default in account mode, what the
--- profile gives in profile mode, the resolved per-character value otherwise. Cycle and
--- Refresh read it from here so a click always flips the setting itself, never a checkbox
--- tick that drifted out of sync with it.
+-- The value the row's checkbox shows. Cycle and Refresh read it from here so a click always
+-- flips the setting itself, never a checkbox tick that drifted out of sync with it.
 function UI:DisplayedValue(module)
-    if self.mode == "account" then
-        return accountValue(module)
-    elseif self.mode == "profile" then
-        return Settings:GetInherited(module.id) == true
-    end
     return Settings:Get(module.id) == true
 end
 
@@ -283,17 +237,10 @@ function UI:ShowDetails(module, owner)
     GameTooltip:Show()
 end
 
--- What undo would put back, in the words of the layer on screen.
+-- What undo would put back: Refactor's own default for the feature.
 function UI:ShowUndoTip(module, owner)
     if not GameTooltip then return end
-    local target
-    if self.mode == "account" then
-        target = Settings.defaults[module.id] and L.UI_UNDO_DEFAULT_ON or L.UI_UNDO_DEFAULT_OFF
-    elseif self.mode == "profile" then
-        target = L.UI_UNDO_PROFILE
-    else
-        target = L.UI_UNDO_CHARACTER
-    end
+    local target = Settings.defaults[module.id] and L.UI_UNDO_DEFAULT_ON or L.UI_UNDO_DEFAULT_OFF
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
     GameTooltip:AddLine(L.UI_UNDO)
     local r, g, b = unpack(Theme.colors.TEXT_BODY)
@@ -427,6 +374,14 @@ function UI:ToggleExpanded(id)
     else
         self.expanded, self.collapsing = id, nil
         if id == "interface.actionCam" then self:FollowCameraSituation() end
+        -- Opening a feature from anywhere but its own row goes to its page first, or the
+        -- block would open on a page nobody is looking at.
+        local module = R.moduleByID and R.moduleByID[id]
+        local category = module and self:Category(module)
+        if category and category ~= self.category and self.sections[category]
+            and (self.search:GetText() or "") == "" then
+            self.category, self.pendingScroll = category, true
+        end
     end
     self:Refresh()
     -- A filtered list opens whatever the query reached, so there is no single block to
@@ -456,13 +411,9 @@ function UI:SelectCategory(key)
     self.search:ClearFocus()
     self:ClearSaveStatus()
     if key == "Profiles" then self:LoadProfiles() end
-    if self.panels and self.panels[key] then
-        self.scroll.slider:SetValue(0)
-    else
-        -- Where a section sits is only known once Refresh has laid the list out, so the
-        -- jump is what Refresh does last rather than something guessed from here.
-        self.pendingScroll = key
-    end
+    self.scroll.slider:SetValue(0)
+    -- A new page starts at its top once Refresh has laid it out and the extent is known.
+    self.pendingScroll = true
     self:Refresh()
 end
 
@@ -473,24 +424,7 @@ function UI:HighlightSidebar()
     for _, button in ipairs(self.categoryButtons) do
         Theme:ListButtonState(button, not searching and self.category == button.category, button.entry.tone)
     end
-end
-
--- The sidebar is a table of contents, so the row that reads as selected has to be the
--- section at the top of the view, not the last row clicked. A tool page owns the whole
--- view and keeps its own selection.
-function UI:SpySection(value)
-    if not self.sectionOffset then return end
-    if self.panels and self.panels[self.category] then return end
-    -- Above the first heading is the editing bar, which belongs to the first section's view.
-    local current = self.categories[1]
-    for _, category in ipairs(self.categories) do
-        local top = self.sectionOffset[category]
-        if top and top <= value + SPY_SLOP then current = category end
-    end
-    if current and current ~= self.category then
-        self.category = current
-        self:HighlightSidebar()
-    end
+    self:RefreshProfileName()
 end
 
 -- Open the window straight at one page. A module that offers a settings shortcut has to be
@@ -588,36 +522,31 @@ function UI:Refresh()
     self.overlaps = self:CollectOverlaps()
     -- One block per category, headed by its name: the list carries the same structure as
     -- the sidebar, and a search result says which category each row came from.
-    local count, offset, lastTop = 0, LIST_LEAD, nil
+    local count, offset = 0, LIST_LEAD
+    -- Unfiltered, the list is the page the sidebar picked; a search reaches every category,
+    -- since search is global (PRD 8.2).
+    local page = query == "" and (self.sections[self.category] and self.category or self.categories[1]) or nil
     self.placedCount = 0
-    -- A search shows results only, under one line that counts them; the editing bar comes
-    -- back with the whole list, or when the search is for it ("character", "profile").
-    local showBar = query == "" or self:MatchesText(self.scopeBarText, query)
-    self.scopeBar:SetShown(showBar)
+    -- A search shows results only, under one line that counts them.
     self.searchCount:SetShown(query ~= "")
     if query ~= "" then
         self:Place(self.searchCount, 0, offset, -BLOCK_RIGHT)
         offset = offset + SEARCH_COUNT_HEIGHT
     end
-    if showBar then
-        self:Place(self.scopeBar, 0, offset, -BLOCK_RIGHT)
-        offset = offset + self.scopeBar.height + LIST_SECTION_GAP
-    end
-    local offsets = self.sectionOffset
-    for _, category in ipairs(self.categories) do offsets[category] = nil end
     for _, category in ipairs(self.categories) do
         local header, rows = self.sections[category], self.sectionRows[category]
         local block = self.sectionBlocks[category]
+        local onPage = page == nil or category == page
         -- What survives the query is settled for the whole section first: the heading is
         -- placed before the rows under it, and only then knows whether it has any.
-        local blockVisible = block ~= nil and self:MatchesBlock(block, query)
+        local blockVisible = onPage and block ~= nil and self:MatchesBlock(block, query)
         local shown = blockVisible and 1 or 0
         for _, row in ipairs(rows) do
             local settings = self.moduleSettings[row.module.id]
             -- A search reaches a setting that has no row of its own and opens the block
             -- holding it: "repair limit" should not need you to know it is under Auto repair.
             local hit = settings ~= nil and query ~= "" and self:MatchesText(settings.searchText, query)
-            row.visible = hit or self:Matches(row.module, query, nil)
+            row.visible = onPage and (hit or self:Matches(row.module, query, nil))
             row.openSettings = settings ~= nil and row.visible
                 and (hit or (query == "" and (self.expanded == row.module.id
                     or self.collapsing == row.module.id)))
@@ -637,7 +566,6 @@ function UI:Refresh()
         end
         if shown > 0 then
             if count > 0 then offset = offset + LIST_SECTION_GAP end
-            offsets[category], lastTop = offset, offset
             self:Place(header, 0, offset)
             -- Anchored first, then measured: the rule can only be put on a whole pixel
             -- once its heading knows where it sits.
@@ -665,6 +593,8 @@ function UI:Refresh()
                     Theme:Color(row.chevron.art, "ACCENT_COPPER")
                 end
                 if row.openSettings then
+                    -- A block whose own layout follows the search settles it before it is measured.
+                    if settings.OnQuery then settings:OnQuery(query) end
                     settings.planIndex = self:Place(settings, BLOCK_INDENT, offset, -BLOCK_RIGHT)
                     offset = offset + settings.height
                 end
@@ -678,23 +608,11 @@ function UI:Refresh()
     self.searchCount:SetText(count == 1 and string.format(L.UI_SEARCH_ONE, shown)
         or string.format(L.UI_SEARCH_COUNT, count, shown))
     if count == 0 then self.searchCount:Hide() end
-    -- Without this the last sections share one scroll position: the list is barely taller
-    -- than the view, so a jump to anything past the halfway point stops at the end of the
-    -- track and the sidebar highlight would be naming a section that is not at the top.
-    -- Search results are never jumped to, so they get no tail, and a short result list
-    -- shows no scroll bar at all.
-    local tail = count > 0 and query == ""
-        and math.max(0, self.scroll:GetHeight() - LIST_LEAD - (offset - lastTop)) or 0
-    self.planExtent = offset + tail
+    self.planExtent = offset
     self.scroll:UpdateExtent(self.planExtent)
-    local target = self.pendingScroll
-    self.pendingScroll = nil
-    -- The first section is the head of the list, and the head starts with the editing bar.
-    if target == self.categories[1] then
+    if self.pendingScroll then
+        self.pendingScroll = nil
         self.scroll.slider:SetValue(0)
-    elseif target and offsets[target] then
-        local _, maximum = self.scroll.slider:GetMinMaxValues()
-        self.scroll.slider:SetValue(math.max(0, math.min(offsets[target] - LIST_LEAD, maximum)))
     end
 end
 
@@ -721,19 +639,17 @@ function UI:RefreshRow(row)
     row.name:SetText(self:ModuleText(module, "name"))
     row.desc:SetText(self:ModuleText(module, "description"))
     local reason = self:StatusReason(module)
-    -- Editing account defaults, a feature this character has pinned would read as the
-    -- account value while the game runs the override, so the row names it instead.
-    local pinned = self.mode ~= "character" and Settings:GetOverride(module.id) ~= nil
     -- A feature that is on while another addon does the same job is said on its own row,
     -- not only under Conflicts, which nobody opens until something happens twice.
-    local overlap = not reason and not pinned and Settings:Get(module.id) and self:OverlapsWith(module)
+    local overlap = not reason and Settings:Get(module.id) and self:OverlapsWith(module)
     row.meta:SetText(reason and (module.state == "failed" and L.UI_FAILED_SHORT or L.UI_UNAVAILABLE_SHORT)
-        or pinned and L.UI_SCOPE_PINNED or overlap and string.format(L.UI_OVERLAP_SHORT, overlap) or "")
+        or overlap and string.format(L.UI_OVERLAP_SHORT, overlap) or "")
     Theme:Color(row.meta, (reason or overlap) and "TEXT_WARNING" or "TEXT_MUTED", true)
     -- A feature that cannot run reads dimmer, so the list says which ones are live at a glance.
     Theme:Color(row.name, reason and "TEXT_MUTED" or "TEXT_BODY", true)
     row:FitText()
-    row.undo:SetShown(self:IsModified(module))
+    row.modified = self:IsModified(module)
+    row:UpdateUndo()
 end
 
 -- General is a section of the list, so it is there whenever the list is unfiltered. A
@@ -761,7 +677,6 @@ function UI:LoadGeneral()
     if not self.repairCap:HasFocus() then
         self.repairCap:SetText(tostring(Settings:GetOption("repairCapGold")))
     end
-    self:RefreshScope()
     self:RefreshMinimapButton()
 end
 
@@ -775,60 +690,19 @@ function UI:SaveRepairCap()
     self.repairStatus:SetText(L.UI_SAVED)
 end
 
--- Which layer the checkboxes write to decides what every click in the list means, so it
--- heads the list rather than sitting in General, where nobody looked for it before the
--- first surprise. It scrolls away with the list, so it costs no room once you are reading.
-function UI:BuildScopeBar(parent)
-    local bar = CreateFrame("Frame", nil, parent)
-    bar.fill = Theme:Fill(bar, "ROW_BG")
-    bar.fill:SetAlpha(SCOPE_FILL_ALPHA)
-    -- Not an option in the store: which layer the feature checkboxes write to is a state of
-    -- the window, so this one reads and writes self.mode rather than Settings.
-    self.scopeDropdown = Theme:Dropdown(bar, CONTROL_WIDTH, {},
-        function(value) return self.mode == value end,
-        function(value)
-            if Settings:SetScope(value) then self.mode = value end
-            self:Refresh()
-        end)
-    self.scopeDropdown:SetPoint("TOPLEFT", SCOPE_PAD, -SCOPE_PAD)
-    self.scopeDropdown:SetLabel(L.UI_SCOPE)
-    self.scopeHelp = Theme:Text(bar, "", "small", "TEXT_MUTED")
-    self.scopeHelp:SetPoint("TOPLEFT", self.scopeDropdown, "BOTTOMLEFT", 0, -SCOPE_NOTE_GAP)
-    self.scopeHelp:SetJustifyV("TOP")
-    self.scopeBar = bar
-    self.scopeBarText = table.concat({ L.UI_SCOPE, L.UI_ACCOUNT, L.UI_CHARACTER, L.UI_PROFILES,
-        L.UI_ACCOUNT_HELP, L.UI_CHARACTER_HELP }, " "):lower()
+function UI:ProfileLabel(name)
+    return name == Settings.DEFAULT_PROFILE and L.UI_PROFILE_DEFAULT or name
 end
 
--- The entries follow the assignment: the profile is only a layer while one is assigned.
-function UI:RefreshScope()
-    if not self.scopeDropdown then return end
-    local assigned = Settings:AssignedProfile()
-    if self.mode == "profile" and not assigned then self.mode = Settings:GetScope() end
-    local entries = { { value = "account", text = L.UI_ACCOUNT } }
-    if assigned then
-        entries[#entries + 1] = { value = "profile", text = string.format(L.UI_PROFILE_SCOPE, assigned) }
-    end
-    entries[#entries + 1] = { value = "character", text = L.UI_CHARACTER }
-    self.scopeDropdown:SetEntries(entries)
-    local help
-    if self.mode == "profile" then
-        help = string.format(L.UI_PROFILE_SCOPE_HELP, assigned)
-    elseif self.mode == "character" then
-        help = L.UI_CHARACTER_HELP
-    else
-        help = assigned and string.format(L.UI_ACCOUNT_HELP_PROFILE, assigned) or L.UI_ACCOUNT_HELP
-    end
-    for _, entry in ipairs(entries) do
-        if entry.value == self.mode then self.scopeDropdown:SetValueText(entry.text) end
-    end
-    local width = LIST_WIDTH - SCOPE_PAD * 2 - BLOCK_RIGHT
-    self.scopeHelp:SetText(help)
-    self.scopeHelp:SetWidth(width)
-    local height = math.ceil(self.scopeHelp:GetStringHeight() or 0)
-    self.scopeHelp:SetHeight(math.max(1, height))
-    self.scopeBar.height = SCOPE_PAD * 2 + Theme.dropdownRowHeight + SCOPE_NOTE_GAP + height
-    self.scopeBar:SetHeight(self.scopeBar.height)
+-- Choosing a profile lives on the Profiles page alone (12 Nov 2026): a bar heading every page
+-- took room on each of them for a choice made rarely. The sidebar still names the profile in
+-- use beside Profiles once there are two to tell apart, since every click in the list writes
+-- to it; with Default alone there is nothing to say.
+function UI:RefreshProfileName()
+    local text = self.profileNameText
+    if not text then return end
+    local several = #Settings:ProfileNames() > 1
+    text:SetText(several and self:ProfileLabel(Settings:ActiveProfile()) or "")
 end
 
 -- The pause modifier guards every automatic action in the addon, so it belongs to no one
@@ -943,7 +817,6 @@ end
 
 function UI:Initialize()
     if self.frame then return end
-    self.mode = Settings:GetScope()
     local frame = CreateFrame("Frame", nil, UIParent)
     self.frame = frame
     frame:SetSize(WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -1010,6 +883,15 @@ function UI:Initialize()
         end)
         button:SetPoint("TOPLEFT", PAD, y)
         button.category, button.entry = entry.key, entry
+        if entry.key == "Profiles" then
+            local name = Theme:Text(button, "", "small", "TEXT_MUTED")
+            name:SetPoint("RIGHT", -8, 0)
+            name:SetWidth(SIDEBAR_PROFILE_WIDTH)
+            name:SetJustifyH("RIGHT")
+            name:SetWordWrap(false)
+            button.label:SetPoint("RIGHT", name, "LEFT", -6, 0)
+            self.profileNameText = name
+        end
         self.categoryButtons[#self.categoryButtons + 1] = button
         y = y - SIDEBAR_ROW
     end
@@ -1028,13 +910,12 @@ function UI:Initialize()
     self.scroll:SetPoint("BOTTOMRIGHT", -LIST_RIGHT, LIST_BOTTOM)
     -- Rows are created once, grouped by the category they will be listed under; Refresh
     -- only ever re-anchors them.
-    self.scroll.onScroll = function(value) self:SpySection(value) end
-    self.rows, self.sectionRows, self.sections, self.sectionOffset = {}, {}, {}, {}
+    self.rows, self.sectionRows, self.sections = {}, {}, {}
     self.moduleSettings, self.sectionBlocks, self.displayToggles = {}, {}, {}
     self.optionSliders, self.optionDropdowns = {}, {}
     self.placed, self.placedCount = {}, 0
     self.categories = self:ListSections()
-    -- The list opens at its head, and the sidebar names the section that is there.
+    -- The window opens on the first page.
     self.category = self.categories[1] or TOOL_ENTRIES[1].key
     for _, category in ipairs(self.categories) do
         self.sectionRows[category] = {}
@@ -1066,7 +947,6 @@ function UI:Initialize()
     self.empty:SetPoint("RIGHT", -12, 0)
     -- Every block is built once, here, and only ever re-anchored afterwards: a chevron
     -- click is an event handler, and no frame is created inside one.
-    self:BuildScopeBar(self.scroll.child)
     self:BuildGeneral(self.scroll.child)
     self:BuildSellSettings(self.scroll.child)
     self:BuildRepairSettings(self.scroll.child)
@@ -1077,6 +957,7 @@ function UI:Initialize()
     self:BuildQuestSettings(self.scroll.child)
     self:BuildGossipSettings(self.scroll.child)
     self:BuildResurrectSettings(self.scroll.child)
+    self:BuildPlaceSpellsSettings(self.scroll.child)
     self:BuildBagUpgradeSettings(self.scroll.child)
     self:BuildMailAltsSettings(self.scroll.child)
     self:BuildPlannerSettings(self.scroll.child)
@@ -1086,6 +967,7 @@ function UI:Initialize()
     self:BuildCameraSettings(self.scroll.child)
     self:BuildCameraDistanceSettings(self.scroll.child)
     self:BuildGroundEffectSettings(self.scroll.child)
+    self:BuildMinimapButtonsSettings(self.scroll.child)
     self:BuildVisibilitySettings(self.scroll.child)
     self.panels = {}
     self:BuildProfiles(frame)

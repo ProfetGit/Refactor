@@ -47,7 +47,14 @@ R.Integrations.neighbours = {
         modules = { "chat.urls", "chat.copy" } },
     { addon = "XLoot_Monitor", labelKey = "NEIGHBOUR_XLOOT_MONITOR",
         modules = { "toasts.loot" } },
+    { addon = "MinimapButtonButton", labelKey = "NEIGHBOUR_MINIMAPBUTTONBUTTON",
+        modules = { "interface.minimapButtons" } },
 }
+
+-- Two button collectors would each take the buttons from the other, so Refactor's stands down
+-- while MinimapButtonButton is loaded.
+R.Integrations.providers = R.Integrations.providers or {}
+R.Integrations.providers["MinimapButtonButton"] = "interface.minimapButtons"
 
 function R.Integrations:Conflicts(into)
     local found = into or {}

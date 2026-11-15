@@ -5,7 +5,7 @@
 --- Hot: no
 local _, R = ...
 local GroundEffects = R:RegisterModule({
-    id = "interface.groundEffects", category = "Interface", nameKey = "GROUND_EFFECTS_NAME",
+    id = "interface.groundEffects", category = "Camera", nameKey = "GROUND_EFFECTS_NAME",
     descriptionKey = "GROUND_EFFECTS_DESC", detailKey = "GROUND_EFFECTS_DETAIL",
     requires = { "C_CVar.SetCVar", "C_CVar.GetCVarDefault" },
     risk = "visible", defaultEnabled = false,

@@ -1,6 +1,6 @@
 --- @core bootstrap
 --- Purpose: wire saved variables, modules, window and slash commands to the login sequence.
---- Requires: UnitGUID, DEFAULT_CHAT_FRAME
+--- Requires: UnitGUID, UnitName, DEFAULT_CHAT_FRAME
 --- Events: PLAYER_LOGIN
 --- Hot: no
 local _, R = ...
@@ -24,8 +24,11 @@ end
 function bootstrap:OnLogin()
     R.Broker:Unsubscribe("PLAYER_LOGIN", self)
     local guid = R.Capabilities:Resolve("UnitGUID")
-    R:InitSavedVariables(guid and guid("player") or nil)
-    -- Reconciling on every settings change is what makes the three-state toggle live.
+    -- The name only labels a profile made from a character's old switches of its own. On
+    -- Forever the second value is a surname, which the label does without.
+    local name = R.Capabilities:Resolve("UnitName")
+    R:InitSavedVariables(guid and guid("player") or nil, name and name("player") or nil)
+    -- Reconciling on every settings change is what makes the toggle live.
     -- An option is a value inside a feature, never whether one is on, and a slider writes
     -- its option on every step of a drag.
     function R.Settings:OnChanged(id)

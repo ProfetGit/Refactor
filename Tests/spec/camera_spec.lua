@@ -169,13 +169,13 @@ describe("camera profiles", function()
         -- Init keeps a good table and resets a selection whose profile is gone.
         local account = { options = { cameraProfile = "custom:Gone", cameraProfiles = { Kept = values } } }
         Settings:Init(account, {}, "Player-test")
-        assert.equal("immersive", account.options.cameraProfile)
-        assert.same(values, account.options.cameraProfiles.Kept)
+        assert.equal("immersive", Settings:GetOption("cameraProfile"))
+        assert.same(values, Settings:GetOption("cameraProfiles").Kept)
         -- A bad record is dropped on its own; the good one and the selection of it stay.
         account = { options = { cameraProfile = "custom:Kept", cameraProfiles = { Kept = values, Bad = {} } } }
         Settings:Init(account, {}, "Player-test")
         assert.same({ Kept = values }, account.options.cameraProfiles)
-        assert.equal("custom:Kept", account.options.cameraProfile)
+        assert.equal("custom:Kept", Settings:GetOption("cameraProfile"))
         account = { options = { cameraProfiles = "not a table" } }
         Settings:Init(account, {}, "Player-test")
         assert.same({}, account.options.cameraProfiles)
@@ -195,7 +195,7 @@ describe("camera profiles", function()
         local account = { options = { cameraProfile = "custom:My Melee",
             cameraProfiles = { ["My Melee"] = MY_MELEE } } }
         Settings:Init(account, {}, "Player-test")
-        assert.equal("custom:My Melee", account.options.cameraProfile)
+        assert.equal("custom:My Melee", Settings:GetOption("cameraProfile"))
         local upgraded = account.options.cameraProfiles["My Melee"]
         assert.is_true(Profiles:Valid(upgraded))
         assert.is_nil(upgraded.pitch)

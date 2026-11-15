@@ -6,7 +6,7 @@
 --- Hot: no
 local _, R = ...
 local MapReveal = R:RegisterModule({
-    id = "interface.mapReveal", category = "Interface", nameKey = "MAP_REVEAL_NAME",
+    id = "interface.mapReveal", category = "Map", nameKey = "MAP_REVEAL_NAME",
     descriptionKey = "MAP_REVEAL_DESC", detailKey = "MAP_REVEAL_DETAIL",
     requires = { "WorldMapFrame", "hooksecurefunc", "C_Map.GetMapArtID", "C_Map.GetMapArtLayers",
         "GetBuildInfo" },

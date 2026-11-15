@@ -7,7 +7,7 @@
 --- Hot: no, the hook returns on an unchanged label after one text read
 local _, R = ...
 local MapZoneLevels = R:RegisterModule({
-    id = "interface.mapZoneLevels", category = "Interface", nameKey = "MAP_LEVELS_NAME",
+    id = "interface.mapZoneLevels", category = "Map", nameKey = "MAP_LEVELS_NAME",
     descriptionKey = "MAP_LEVELS_DESC", detailKey = "MAP_LEVELS_DETAIL",
     requires = { "WorldMapFrame", "hooksecurefunc", "C_Map.GetMapInfoAtPosition", "C_Map.GetMapLevels",
         "UnitLevel", "GetQuestDifficultyColor" },

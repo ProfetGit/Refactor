@@ -100,14 +100,130 @@ function Codec:EncodeProfile(name, values)
     return encode(table.concat(lines, "\n") .. "\n")
 end
 
-function Codec:DecodeProfile(data)
-    local payload = decode(data)
-    if not payload or payload:sub(-1) ~= "\n" then
-        return nil, "invalid_encoding"
+-- RF2 carries a profile's settings as well as its switches, and settings nest. Each value is
+-- a tag and its content: b1 or b0, n<number>; s<length>:<bytes>, t<count>: then that many
+-- key and value pairs. Length prefixes mean no byte inside a string ever needs escaping, and
+-- the reader below builds tables only, so nothing in a pasted string can run.
+local MAX_DEPTH, MAX_NODES, MAX_STRING = 12, 4096, 4096
+
+local function keyOrder(a, b)
+    local ta, tb = type(a), type(b)
+    if ta ~= tb then
+        return ta == "number"
     end
-    local version, name, body = payload:match("^([^\n]*)\n([^\n]*)\n(.*)$")
-    if version ~= "RF1" or not self:ValidName(name) then
+    return a < b
+end
+
+local function finite(value)
+    return value == value and value ~= math.huge and value ~= -math.huge
+end
+
+local function serialize(value, out, depth)
+    local kind = type(value)
+    if kind == "boolean" then
+        out[#out + 1] = value and "b1" or "b0"
+    elseif kind == "number" then
+        if not finite(value) then
+            return false
+        end
+        out[#out + 1] = "n" .. string.format("%.17g", value) .. ";"
+    elseif kind == "string" then
+        if #value > MAX_STRING then
+            return false
+        end
+        out[#out + 1] = "s" .. #value .. ":" .. value
+    elseif kind == "table" then
+        if depth >= MAX_DEPTH then
+            return false
+        end
+        local keys = {}
+        for key in pairs(value) do
+            local keyKind = type(key)
+            if keyKind ~= "string" and (keyKind ~= "number" or not finite(key)) then
+                return false
+            end
+            keys[#keys + 1] = key
+        end
+        table.sort(keys, keyOrder)
+        out[#out + 1] = "t" .. #keys .. ":"
+        for _, key in ipairs(keys) do
+            if not serialize(key, out, depth + 1) or not serialize(value[key], out, depth + 1) then
+                return false
+            end
+        end
+    else
+        return false
+    end
+    return true
+end
+
+-- Returns the value and the position after it, or nil and nil on anything malformed.
+local function parse(data, position, depth, state)
+    state.nodes = state.nodes + 1
+    if state.nodes > MAX_NODES then
+        return nil, nil
+    end
+    local tag = data:sub(position, position)
+    if tag == "b" then
+        local flag = data:sub(position + 1, position + 1)
+        if flag == "1" or flag == "0" then
+            return flag == "1", position + 2
+        end
+    elseif tag == "n" then
+        local text, after = data:match("^([%-%+%d%.eE]+);()", position + 1)
+        local number = text and tonumber(text)
+        if number and finite(number) then
+            return number, after
+        end
+    elseif tag == "s" then
+        local length, start = data:match("^(%d+):()", position + 1)
+        length = tonumber(length)
+        if length and length <= MAX_STRING and start + length - 1 <= #data then
+            return data:sub(start, start + length - 1), start + length
+        end
+    elseif tag == "t" and depth < MAX_DEPTH then
+        local count, cursor = data:match("^(%d+):()", position + 1)
+        count = tonumber(count)
+        if not count or count > MAX_NODES then
+            return nil, nil
+        end
+        local result = {}
+        for _ = 1, count do
+            local key, value
+            key, cursor = parse(data, cursor, depth + 1, state)
+            if not cursor or type(key) ~= "string" and type(key) ~= "number" or result[key] ~= nil then
+                return nil, nil
+            end
+            value, cursor = parse(data, cursor, depth + 1, state)
+            if not cursor then
+                return nil, nil
+            end
+            result[key] = value
+        end
+        return result, cursor
+    end
+    return nil, nil
+end
+
+-- data is { modules = id to boolean, options = key to value }.
+function Codec:EncodeProfileData(name, data)
+    if not self:ValidName(name) or type(data) ~= "table" or not self:ValidateValues(data.modules or {}) then
         return nil, "invalid_profile"
+    end
+    local out = { "RF2\n", name, "\n" }
+    if not serialize({ modules = data.modules or {}, options = data.options or {} }, out, 0) then
+        return nil, "invalid_profile"
+    end
+    local encoded = encode(table.concat(out))
+    if #encoded > MAX_ENCODED then
+        return nil, "invalid_profile"
+    end
+    return encoded
+end
+
+local function decodeLegacy(self, name, body)
+    if body:sub(-1) ~= "\n" and body ~= "" then
+        return nil, "invalid_encoding"
     end
     local values, count = {}, 0
     for line in body:gmatch("([^\n]*)\n") do
@@ -118,5 +234,29 @@ function Codec:DecodeProfile(data)
         end
         values[key] = value == "1"
     end
-    return { name = name, values = values }
+    return { name = name, modules = values, options = {} }
+end
+
+-- Both formats come back as { name, modules, options }. An RF1 string from 0.1.0 has no
+-- settings, so its options are empty and the importer fills them from the defaults.
+function Codec:DecodeProfile(data)
+    local payload = decode(data)
+    if not payload then
+        return nil, "invalid_encoding"
+    end
+    local version, name, body = payload:match("^([^\n]*)\n([^\n]*)\n(.*)$")
+    if not self:ValidName(name) then
+        return nil, "invalid_profile"
+    end
+    if version == "RF1" then
+        return decodeLegacy(self, name, body)
+    elseif version ~= "RF2" then
+        return nil, "invalid_profile"
+    end
+    local value, after = parse(body, 1, 0, { nodes = 0 })
+    if not after or after ~= #body + 1 or type(value) ~= "table" or type(value.modules) ~= "table"
+        or type(value.options) ~= "table" or not self:ValidateValues(value.modules) then
+        return nil, "invalid_profile"
+    end
+    return { name = name, modules = value.modules, options = value.options }
 end

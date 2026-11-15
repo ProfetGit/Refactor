@@ -16,7 +16,7 @@ local function loaded()
     local env = Runtime.new()
     Widgets.install(env)
     -- The one symbol the vendor summary asks for, so at least one row is plainly available:
-    -- the scope specs need a row with nothing in its warning slot.
+    -- the profile specs need a row with nothing in its warning slot.
     env.C_CurrencyInfo = { GetCoinTextureString = function(amount) return tostring(amount) end }
     local R
     for _, path in ipairs(tocFiles()) do
@@ -80,14 +80,20 @@ describe("sidebar groups", function()
         assert.equal(expected, groups)
     end)
 
-    it("head every visible block with its category", function()
+    it("head every page with its category, and list every feature on one of them", function()
         local _, R = loaded()
         local UI = R.UI
         UI:Toggle()
         local seen = 0
         for _, category in ipairs(UI.categories) do
+            UI:SelectCategory(category)
             local header, last = UI.sections[category], nil
             assert.is_true(header:IsShown(), category .. " has no heading")
+            for _, other in ipairs(UI.categories) do
+                if other ~= category then
+                    assert.is_false(UI.sections[other]:IsShown(), other .. " shows on the " .. category .. " page")
+                end
+            end
             assert.equal(R.L["UI_" .. category], header.title:GetText())
             for _, row in ipairs(UI.sectionRows[category]) do
                 if row:IsShown() then last = row; seen = seen + 1 end
@@ -101,7 +107,7 @@ describe("sidebar groups", function()
         assert.equal(#R.modules, seen)
     end)
 
-    it("jump to a section rather than filtering the list down to it", function()
+    it("show one category per page, and a search reaches every page", function()
         local _, R = loaded()
         local UI = R.UI
         UI:Toggle()
@@ -109,29 +115,34 @@ describe("sidebar groups", function()
             assert.is_not.equal("All", entry.key)
         end
         assert.equal(UI.categories[1], UI.category)
+        UI.scroll.slider:SetValue(40)
         UI:SelectCategory("Vendor")
         assert.equal("Vendor", UI.category)
-        for _, category in ipairs(UI.categories) do
-            assert.is_true(UI.sections[category]:IsShown(), category .. " was hidden by a jump")
+        assert.equal(0, UI.scroll.slider:GetValue())
+        for _, row in ipairs(UI.rows) do
+            assert.equal(UI:Category(row.module) == "Vendor", row:IsShown(), row.module.id)
         end
-        -- A jump stops short of the heading by the lead-in, so no heading lands against
-        -- the border, and the sidebar still counts the section as arrived at.
-        local vendor = UI.scroll.slider:GetValue()
-        assert.is_true(vendor < UI.sectionOffset.Vendor)
-        UI.scroll.onScroll(vendor)
+        -- A search reaches every category, and clearing it goes back to the page it left.
+        UI.search:SetText("auto")
+        UI.search:GetScript("OnTextChanged")(UI.search)
+        local pages = {}
+        for _, row in ipairs(UI.rows) do
+            if row:IsShown() then pages[UI:Category(row.module)] = true end
+        end
+        assert.is_true(pages.Quest and pages.Vendor and pages.Social)
+        UI.search:SetText("")
+        UI.search:GetScript("OnTextChanged")(UI.search)
         assert.equal("Vendor", UI.category)
-        -- The tail past the last section is what lets it reach the top of the view: without
-        -- it the bottom half of the sidebar would all land on the same scroll position.
-        local last = UI.categories[#UI.categories]
-        UI:SelectCategory(last)
-        assert.is_true(UI.sectionOffset[last] > 0)
-        UI.scroll.onScroll(UI.scroll.slider:GetValue())
-        assert.equal(last, UI.category)
-        -- Scrolling moves the sidebar with the view, not with the last click.
-        UI.scroll.onScroll(0)
-        assert.equal(UI.categories[1], UI.category)
-        UI.scroll.onScroll(UI.sectionOffset.Vendor)
-        assert.equal("Vendor", UI.category)
+        assert.is_true(UI.sections.Vendor:IsShown())
+        assert.is_false(UI.sections.Quest:IsShown())
+        -- Opening a feature from anywhere but its own row goes to its page.
+        UI:ToggleExpanded("toasts.loot")
+        assert.equal("Loot", UI.category)
+        assert.is_true(UI.moduleSettings["toasts.loot"]:IsShown())
+        -- A catch-all is how the list got messy: no page runs past seven features.
+        for _, category in ipairs(UI.categories) do
+            assert.is_true(#UI.sectionRows[category] <= 7, category .. " has more than seven features")
+        end
     end)
 
     it("keep search global regardless of the selected group", function()
@@ -144,7 +155,7 @@ describe("sidebar groups", function()
 end)
 
 describe("window chrome", function()
-    it("selects exactly one sidebar row and keeps the scope switch out of the feature list", function()
+    it("selects exactly one sidebar row and keeps the profile bar out of the feature list", function()
         local _, R = loaded()
         local UI = R.UI
         UI:Toggle()
@@ -156,32 +167,12 @@ describe("window chrome", function()
             return count
         end
         assert.equal(1, selectedCount())
-        assert.equal("account", UI.mode)
         assert.equal("", UI.help:GetText())
         UI:SelectCategory("General")
         assert.equal(1, selectedCount())
         assert.is_true(UI.general:IsShown())
-        assert.equal(R.L.UI_SCOPE, UI.scopeDropdown.label:GetText())
-        assert.equal(R.L.UI_ACCOUNT, UI.scopeDropdown.button:GetDefaultText())
-        -- Opening the menu runs the real generator, so the entries and the setter behind
-        -- them are exercised rather than assumed.
-        -- With no profile assigned there are two layers, and the account one is selected.
-        local entries = UI.scopeDropdown.button:OpenMenu()
-        assert.equal(2, #entries)
-        assert.equal("account", entries[1].value)
-        assert.is_true(entries[1].selected)
-        for _, entry in ipairs(entries) do
-            if entry.value == "character" then entry.choose() end
-        end
-        assert.equal("character", UI.mode)
-        assert.equal(R.L.UI_CHARACTER, UI.scopeDropdown.button:GetDefaultText())
-        -- The switch heads the list, so it is there whenever the list is unfiltered.
-        assert.is_true(UI.scopeBar:IsShown())
-        UI.search:SetText("loot")
-        UI.search:GetScript("OnTextChanged")(UI.search)
-        assert.is_false(UI.scopeBar:IsShown())
-        UI.search:SetText("")
-        UI.search:GetScript("OnTextChanged")(UI.search)
+        -- Choosing a profile is on the Profiles page alone: no page of the list carries it.
+        assert.is_nil(UI.profileBar)
         UI:SelectCategory("Profiles")
         assert.equal(1, selectedCount())
         assert.is_true(UI.panelTitle:IsShown())
@@ -287,28 +278,36 @@ describe("window chrome", function()
         UI:Toggle()
         local row = UI.rows[1]
         UI:Toggle()
-        UI.mode = "character"
-        R.Settings:SetOverride(row.module.id, not UI:DisplayedValue(row.module))
+        R.Settings:Set(row.module.id, not UI:DisplayedValue(row.module))
         assert.is_not.equal(UI:DisplayedValue(row.module), row.toggle:GetChecked())
         UI:Toggle()
         assert.equal(UI:DisplayedValue(row.module), row.toggle:GetChecked())
     end)
 
-    it("shows undo only while the value differs from what it would inherit", function()
+    it("shows undo only while the profile holds a value that differs from Refactor's default", function()
         local _, R = loaded()
-        local UI = R.UI
+        local UI, Settings = R.UI, R.Settings
         UI:Toggle()
-        UI.mode = "character"
         local row = UI.rows[1]
+        local id = row.module.id
+        UI:SelectCategory(UI:Category(row.module))
         assert.is_false(row.undo:IsShown())
-        R.Settings:SetOverride(row.module.id, not R.Settings:GetInherited(row.module.id))
+        Settings:Set(id, not Settings.defaults[id])
         UI:Refresh()
+        -- Changed, but quiet until the row is under the pointer.
+        assert.is_false(row.undo:IsShown())
+        row:GetScript("OnEnter")(row)
         assert.is_true(row.undo:IsShown())
         row.undo:GetScript("OnClick")(row.undo)
-        assert.is_nil(R.Settings:GetOverride(row.module.id))
+        assert.is_nil(Settings:Stored(id))
         assert.is_false(row.undo:IsShown())
-        R.Settings:SetOverride(row.module.id, R.Settings:GetInherited(row.module.id))
+        Settings:Set(id, Settings.defaults[id])
         UI:Refresh()
+        assert.is_false(row.undo:IsShown())
+        Settings:Set(id, not Settings.defaults[id])
+        UI:Refresh()
+        assert.is_true(row.undo:IsShown())
+        row:GetScript("OnLeave")(row)
         assert.is_false(row.undo:IsShown())
     end)
 
@@ -384,6 +383,7 @@ describe("window chrome", function()
         end
         local toastRow, gossipRow = rowFor("toasts.loot"), rowFor("quest.autoGossip")
         local toasts, gossip = UI.moduleSettings["toasts.loot"], UI.moduleSettings["quest.autoGossip"]
+        UI:SelectCategory("Loot")
         assert.is_true(toastRow.chevron:IsShown())
         assert.is_false(toasts:IsShown())
         -- Clicking the row opens the block; only the checkbox flips the feature itself.
@@ -394,6 +394,7 @@ describe("window chrome", function()
         settle(toasts)
         assert.is_nil(toasts:GetScript("OnUpdate"), "the expand animation left its handler on")
         -- One at a time: the blocks are tall enough that two open leaves nothing scannable.
+        UI:SelectCategory("Quest")
         gossipRow.chevron:GetScript("OnClick")(gossipRow.chevron)
         assert.equal("quest.autoGossip", UI.expanded)
         assert.is_false(toasts:IsShown())
@@ -587,51 +588,109 @@ describe("window chrome", function()
         assert.equal("raid", UI.cameraSituation)
     end)
 
-    it("visibility block hands behaviours out per setup and edits a behaviour in one place", function()
+    it("visibility block sets a whole kind at once and opens a kind for its elements", function()
         local _, R = loaded()
         local UI, Rules, L = R.UI, R.Visibility, R.L
         UI:Toggle()
         UI:ToggleExpanded("interface.visibility")
-        assert.is_true(UI.moduleSettings["interface.visibility"]:IsShown())
-        -- One row per element, and a fresh install gives none of them a behaviour.
+        local block = UI.moduleSettings["interface.visibility"]
+        assert.is_true(block:IsShown())
+        -- One row per kind, closed: no single element shows until its kind opens.
+        assert.equal(#Rules.kinds, #UI.visKinds)
         assert.equal(#Rules.groups, #UI.visRows)
-        local main
         for _, row in ipairs(UI.visRows) do
-            assert.equal(L.VIS_BEHAVIOUR_NONE, row.button:GetDefaultText(), row.groupId)
-            if row.groupId == "bars.main" then main = row end
+            assert.is_false(row:IsShown(), row.groupId)
         end
-        local entries = main.button:OpenMenu()
+        local bars
+        for _, kind in ipairs(UI.visKinds) do
+            assert.equal(L.VIS_BEHAVIOUR_NONE, kind.button:GetDefaultText(), kind.kind)
+            if kind.kind == "bars" then bars = kind end
+        end
+        -- Everywhere is always a setup of its own, so it has no tick to show.
+        assert.is_false(UI.visOwnSetup:IsShown())
+        local closed = block.height
+
+        -- Set all gives every action bar the behaviour, and the editor follows the choice.
+        local entries = bars.button:OpenMenu()
         assert.equal(#Rules.starters + 1, #entries)
-        assert.is_true(entries[1].selected)
         assert.equal(L.VIS_BEHAVIOUR_combatHud, entries[3].text)
         entries[3].choose()
-        assert.equal("combatHud", Rules:BehaviourFor("bars.main", "world").id)
-        assert.equal(L.VIS_BEHAVIOUR_combatHud, main.button:GetDefaultText())
-        -- A place with no setup of its own shows World's choices and takes no clicks there.
+        for _, group in ipairs(Rules.groups) do
+            if group.kind == "bars" then
+                assert.equal("combatHud", Rules:BehaviourFor(group.id, "world").id, group.id)
+            else
+                assert.is_nil(Rules:BehaviourFor(group.id, "world"), group.id)
+            end
+        end
+        assert.equal(L.VIS_BEHAVIOUR_combatHud, bars.button:GetDefaultText())
+        assert.equal("combatHud", UI.visBehaviour)
+        assert.equal(string.format(L.UI_VIS_USED_BY, L.VIS_KIND_ALL_bars), UI.visUses:GetText())
+
+        -- Opening the kind lists its elements and grows the block; one set apart makes it Mixed.
+        bars.toggle:GetScript("OnClick")(bars.toggle)
+        assert.is_true(block.height > closed)
+        local main
+        for _, row in ipairs(UI.visRows) do
+            assert.equal(Rules:Group(row.groupId).kind == "bars", row:IsShown(), row.groupId)
+            if row.groupId == "bars.main" then main = row end
+        end
+        main.button:OpenMenu()[2].choose()
+        assert.equal("fadeAway", Rules:BehaviourFor("bars.main", "world").id)
+        assert.equal(L.UI_VIS_MIXED, bars.button:GetDefaultText())
+        assert.equal("fadeAway", UI.visBehaviour)
+        assert.equal(string.format(L.UI_VIS_USED_BY_ONE, L.VIS_GROUP_BAR_1), UI.visUses:GetText())
+        bars.toggle:GetScript("OnClick")(bars.toggle)
+        assert.equal(closed, block.height)
+        assert.is_false(main:IsShown())
+
+        -- A place without a setup of its own shows Everywhere's choices greyed, and the tick appears.
         local places = UI.visSetupDropdown.button:OpenMenu()
         assert.equal(#Rules.places, #places)
+        assert.equal(L.VIS_PLACE_world, places[1].text)
         assert.equal(string.format(L.UI_VIS_SETUP_USES_WORLD, L.VIS_PLACE_city), places[2].text)
         places[2].choose()
         assert.equal("city", UI.visPlace)
-        assert.is_false(main.button:IsEnabled())
-        assert.equal(L.VIS_BEHAVIOUR_combatHud, main.button:GetDefaultText())
-        assert.is_true(UI.visOwnSetup:IsEnabled())
+        assert.is_true(UI.visOwnSetup:IsShown())
+        assert.is_false(bars.button:IsEnabled())
+        assert.equal(L.UI_VIS_MIXED, bars.button:GetDefaultText())
         UI.visOwnSetup:SetChecked(true)
         UI.visOwnSetup:GetScript("OnClick")(UI.visOwnSetup)
         assert.is_true(Rules:HasOwnSetup("city"))
-        assert.is_true(main.button:IsEnabled())
-        main.button:OpenMenu()[1].choose()
+        assert.is_true(bars.button:IsEnabled())
+        bars.button:OpenMenu()[1].choose()
         assert.is_nil(Rules:BehaviourFor("bars.main", "city"))
-        assert.equal("combatHud", Rules:BehaviourFor("bars.main", "world").id)
-        -- World is always a setup of its own.
+        assert.is_nil(Rules:BehaviourFor("bars.pet", "city"))
+        assert.equal("fadeAway", Rules:BehaviourFor("bars.main", "world").id)
         UI.visSetupDropdown.button:OpenMenu()[1].choose()
-        assert.is_false(UI.visOwnSetup:IsEnabled())
+        assert.is_false(UI.visOwnSetup:IsShown())
 
-        -- The editor opens on the first behaviour; one change reaches every element with it.
-        assert.equal("fadeAway", UI.visBehaviour)
-        UI.visBehaviourDropdown.button:OpenMenu()[2].choose()
+        -- A search for one element opens the kind holding it, and clearing it closes it again.
+        UI.search:SetText("minimap buttons")
+        UI.search:GetScript("OnTextChanged")(UI.search)
+        assert.is_true(block:IsShown())
+        for _, row in ipairs(UI.visRows) do
+            assert.equal(Rules:Group(row.groupId).kind == "hud", row:IsShown(), row.groupId)
+        end
+        UI.search:SetText("")
+        UI.search:GetScript("OnTextChanged")(UI.search)
+        for _, row in ipairs(UI.visRows) do
+            assert.is_false(row:IsShown(), row.groupId)
+        end
+        assert.equal(0, #R.errors)
+    end)
+
+    it("visibility editor opens on the behaviour used most and says what a change reaches", function()
+        local _, R = loaded()
+        local UI, Rules, L = R.UI, R.Visibility, R.L
+        assert.is_true(Rules:Assign({ "bars.main", "bars.bottomLeft" }, "world", "combatHud"))
+        UI:Toggle()
+        UI:ToggleExpanded("interface.visibility")
         assert.equal("combatHud", UI.visBehaviour)
-        assert.equal(L.UI_VIS_USES_ONE, UI.visUses:GetText())
+        local picks = UI.visBehaviourDropdown.button:OpenMenu()
+        assert.equal(string.format(L.UI_VIS_NOT_USED, L.VIS_BEHAVIOUR_fadeAway), picks[1].text)
+        assert.equal(L.VIS_BEHAVIOUR_combatHud, picks[2].text)
+        assert.equal(string.format(L.UI_VIS_USED_BY,
+            string.format(L.UI_VIS_LIST_AND, L.VIS_GROUP_BAR_1, L.VIS_GROUP_BAR_2)), UI.visUses:GetText())
         local resting
         for _, slider in ipairs(UI.visSliders) do
             if slider.field == "resting" then resting = slider end
@@ -639,20 +698,34 @@ describe("window chrome", function()
         resting.slider:GetScript("OnValueChanged")(resting.slider, 0.35)
         assert.equal(0.35, Rules:Behaviour("combatHud").resting)
         assert.equal("35%", resting.valueText:GetText())
-        -- Each condition is listed once; ticking Hide on a revealing one moves it across.
+
+        -- Each condition is one choice of three, so it can never both show and hide.
         local combat
         for _, row in ipairs(UI.visConditions) do
             if row.condition == "combat" then combat = row end
         end
-        assert.is_true(combat.reveal:GetChecked())
-        combat.hide:SetChecked(true)
-        combat.hide:GetScript("OnClick")(combat.hide)
+        assert.equal(L.UI_VIS_COND_SHOW, combat.button:GetDefaultText())
+        local choices = combat.button:OpenMenu()
+        assert.equal(3, #choices)
+        choices[3].choose()
         assert.equal("hide", Rules:ConditionRole(Rules:Behaviour("combatHud"), "combat"))
-        assert.is_false(combat.reveal:GetChecked())
-        combat.hide:SetChecked(false)
-        combat.hide:GetScript("OnClick")(combat.hide)
+        assert.equal(L.UI_VIS_COND_HIDE, combat.button:GetDefaultText())
+        combat.button:OpenMenu()[1].choose()
         assert.is_nil(Rules:ConditionRole(Rules:Behaviour("combatHud"), "combat"))
+        assert.equal(L.UI_VIS_COND_NONE, combat.button:GetDefaultText())
+
+        -- Past four names the rest are counted.
+        assert.is_true(Rules:Assign({ "chat.frames", "chat.tabs", "unit.player", "unit.target", "hud.bags",
+            "hud.minimap" }, "world", "fadeAway"))
+        UI.visBehaviourDropdown.button:OpenMenu()[1].choose()
+        assert.equal("fadeAway", UI.visBehaviour)
+        local first = table.concat({ L.VIS_GROUP_CHAT_FRAMES, L.VIS_GROUP_CHAT_TABS, L.VIS_GROUP_PLAYER,
+            L.VIS_GROUP_TARGET }, L.UI_LIST_SEPARATOR)
+        assert.equal(string.format(L.UI_VIS_USED_BY, string.format(L.UI_VIS_LIST_MORE, first, 2)),
+            UI.visUses:GetText())
+
         -- Copy as new selects the copy; a name takes on Enter, and a taken one is refused and said so.
+        UI.visBehaviourDropdown.button:OpenMenu()[2].choose()
         UI.visCopy:GetScript("OnClick")(UI.visCopy)
         local copy = UI.visBehaviour
         assert.is_not.equal("combatHud", copy)
@@ -667,9 +740,10 @@ describe("window chrome", function()
         assert.equal(L.UI_VIS_ERR_name_taken, UI.visStatus:GetText())
         -- Deleted, its elements go back to the game's look and the editor moves on.
         UI.visBehaviourDropdown.button:OpenMenu()[2].choose()
+        assert.equal("combatHud", UI.visBehaviour)
         UI.visDelete:GetScript("OnClick")(UI.visDelete)
         assert.is_nil(Rules:Behaviour("combatHud"))
-        assert.equal(L.VIS_BEHAVIOUR_NONE, main.button:GetDefaultText())
+        assert.is_nil(Rules:BehaviourFor("bars.main", "world"))
         assert.equal(L.UI_VIS_DELETED, UI.visStatus:GetText())
         assert.equal("fadeAway", UI.visBehaviour)
 
@@ -679,11 +753,12 @@ describe("window chrome", function()
         companion:Open(UI.frame, { "bars.main" })
         assert.equal(L.VIS_BEHAVIOUR_NONE, companion.behaviour.button:GetDefaultText())
         assert.equal(string.format(L.UI_VIS_COMPANION_SETUP, L.VIS_PLACE_world), companion.setup:GetText())
-        local picks = companion.behaviour.button:OpenMenu()
-        assert.equal(#Rules:Behaviours() + 1, #picks)
-        picks[2].choose()
+        local options = companion.behaviour.button:OpenMenu()
+        assert.equal(#Rules:Behaviours() + 1, #options)
+        options[2].choose()
         assert.equal(Rules:Behaviours()[1].id, Rules:BehaviourFor("bars.main", "world").id)
         assert.equal(Rules:Name(Rules:Behaviours()[1]), companion.behaviour.button:GetDefaultText())
+        assert.is_true(Rules:SetOwnSetup("city", true))
         module.place = "city"
         companion:Load()
         assert.equal(string.format(L.UI_VIS_COMPANION_SETUP, L.VIS_PLACE_city), companion.setup:GetText())
@@ -739,7 +814,7 @@ describe("window chrome", function()
         assert.equal(0, placed)
         assert.equal(0, reconciled)
         -- A feature switched on or off still lays the list out and reconciles.
-        R.Settings:SetAccount(UI.rows[1].module.id, true)
+        R.Settings:Set(UI.rows[1].module.id, true)
         assert.is_true(placed > 0)
         assert.equal(1, reconciled)
         UI.Place, R.Registry.ReconcileAll = place, reconcile
@@ -855,10 +930,10 @@ describe("window chrome", function()
         for _, row in ipairs(UI.rows) do
             if row.module.id == "vendor.autoRepair" then assert.is_true(row:IsShown()) end
         end
-        -- General is a section of the list, so a query that reaches none of it hides it.
+        -- General is a page of its own, so a query that reaches none of it hides it.
         assert.is_false(UI.general:IsShown())
         UI.search:SetText("")
-        UI:Refresh()
+        UI:SelectCategory("General")
         assert.is_true(UI.general:IsShown())
         assert.is_false(UI.moduleSettings["vendor.autoRepair"]:IsShown())
     end)
@@ -971,7 +1046,7 @@ describe("smooth scrolling", function()
     end)
 end)
 
-describe("editing scope", function()
+describe("profile bar", function()
     -- A row with nothing in its meta slot: no warning state to compete with the marker.
     local function plainRow(UI)
         for _, row in ipairs(UI.rows) do
@@ -979,98 +1054,169 @@ describe("editing scope", function()
         end
     end
 
-    it("opens on the account layer and keeps the choice for the character", function()
+    it("names the profile in use beside Profiles once there are two to tell apart", function()
         local _, R = loaded()
-        assert.equal("account", R.UI.mode)
-        assert.is_true(R.Settings:SetScope("character"))
-        R.UI.frame = nil
-        R.UI:Initialize()
-        assert.equal("character", R.UI.mode)
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        assert.equal("Default", Settings:ActiveProfile())
+        assert.equal("", UI.profileNameText:GetText())
+        assert.is_true(Settings:CreateProfile("Alts", "Default"))
+        UI:Refresh()
+        assert.equal(R.L.UI_PROFILE_DEFAULT, UI.profileNameText:GetText())
+        assert.is_true(Settings:AssignProfile("Alts"))
+        UI:Refresh()
+        assert.equal("Alts", UI.profileNameText:GetText())
+        assert.is_true(Settings:DeleteProfile("Alts"))
+        UI:Refresh()
+        assert.equal("", UI.profileNameText:GetText())
     end)
 
-    it("clears this character's override when the account layer is edited", function()
+    it("switches the profile and the rows and sliders show the new profile's values", function()
         local _, R = loaded()
-        local UI = R.UI
+        local UI, Settings = R.UI, R.Settings
         UI:Toggle()
-        UI.mode = "character"
-        local module = plainRow(UI).module
-        UI:SetModuleEnabled(module, true)
-        assert.is_true(R.Settings:GetOverride(module.id))
-        UI.mode = "account"
-        -- Without the clear this writes false behind an override that is still true, and
-        -- the click changes nothing the player can see.
-        UI:SetModuleEnabled(module, false)
-        assert.is_nil(R.Settings:GetOverride(module.id))
-        assert.is_false(R.Settings:Get(module.id))
-        UI:SetModuleEnabled(module, true)
-        assert.is_true(R.Settings:Get(module.id))
-    end)
-
-    it("drops the override when undo runs on the account layer", function()
-        local _, R = loaded()
-        local UI = R.UI
-        UI:Toggle()
-        UI.mode = "character"
-        local module = plainRow(UI).module
-        UI:SetModuleEnabled(module, true)
-        UI.mode = "account"
-        UI:ResetModule(module)
-        assert.is_nil(R.Settings:GetOverride(module.id))
-        assert.is_nil(R.Settings.account.modules[module.id])
-        assert.equal(R.Settings.defaults[module.id] == true, R.Settings:Get(module.id))
-    end)
-
-    it("names a character override while the account layer is on screen", function()
-        local _, R = loaded()
-        local UI = R.UI
-        UI:Toggle()
-        UI.mode = "character"
         local row = plainRow(UI)
-        R.Settings:SetOverride(row.module.id, true)
+        local id = row.module.id
+        local before = Settings:Get(id)
+        assert.is_true(Settings:CreateProfile("Alts", "Default"))
+        assert.is_true(Settings:AssignProfile("Alts"))
+        Settings:Set(id, not before)
+        Settings:SetOption("farmOpacity", 0.5)
+        assert.is_true(Settings:AssignProfile("Default"))
         UI:Refresh()
-        assert.equal("", row.meta:GetText())
-        UI.mode = "account"
-        UI:Refresh()
-        assert.equal(R.L.UI_SCOPE_PINNED, row.meta:GetText())
+        assert.equal(before, row.toggle:GetChecked())
+        UI:SelectCategory("Profiles")
+        local entries = UI.profileAssign.button:OpenMenu()
+        assert.equal(2, #entries)
+        assert.equal("Alts", entries[2].value)
+        entries[2].choose()
+        assert.equal("Alts", Settings:ActiveProfile())
+        UI:SelectCategory(UI:Category(row.module))
+        assert.equal(not before, row.toggle:GetChecked())
+        for _, slider in ipairs(UI.sliders or {}) do
+            if slider.spec.key == "farmOpacity" then assert.equal(50, slider.slider:GetValue()) end
+        end
     end)
 
-    it("edits the assigned profile, since the account layer no longer reaches the character", function()
+    it("writes a checkbox click to the active profile only", function()
         local _, R = loaded()
         local UI, Settings = R.UI, R.Settings
         UI:Toggle()
         local module = plainRow(UI).module
         local before = Settings:Get(module.id)
-        assert.is_true(Settings:CreateProfile("Alts", { [module.id] = before }))
-        -- No profile, no profile layer: the scope refuses it.
-        assert.is_false(Settings:SetScope("profile"))
+        assert.is_true(Settings:CreateProfile("Alts", "Default"))
         assert.is_true(Settings:AssignProfile("Alts"))
-        UI:Refresh()
-        -- Account defaults say, in words, that they do not reach this character any more.
-        assert.equal(string.format(R.L.UI_ACCOUNT_HELP_PROFILE, "Alts"), UI.scopeHelp:GetText())
-        local entries = UI.scopeDropdown.button:OpenMenu()
-        assert.equal(3, #entries)
-        assert.equal("profile", entries[2].value)
-        entries[2].choose()
-        assert.equal("profile", UI.mode)
-        assert.equal("profile", Settings:GetScope())
-        -- A click writes into the profile, never the account, and clears an override.
-        Settings:SetOverride(module.id, before)
         UI:SetModuleEnabled(module, not before)
-        assert.equal(not before, Settings:GetProfile("Alts")[module.id])
-        assert.is_nil(Settings.account.modules[module.id])
-        assert.is_nil(Settings:GetOverride(module.id))
-        assert.equal(not before, Settings:Get(module.id))
+        assert.equal(not before, Settings:GetProfile("Alts").modules[module.id])
+        assert.is_nil(Settings:GetProfile("Default").modules[module.id])
         assert.equal(not before, UI:DisplayedValue(module))
-        -- Undo takes the feature out of the profile, so it follows the account again.
+        Settings:AssignProfile("Default")
+        assert.equal(before, UI:DisplayedValue(module))
+    end)
+
+    it("undoes back to the module default in this profile", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        local module = plainRow(UI).module
+        local default = Settings.defaults[module.id] == true
+        UI:SetModuleEnabled(module, not default)
         assert.is_true(UI:IsModified(module))
         UI:ResetModule(module)
-        assert.is_nil(Settings:GetProfile("Alts")[module.id])
-        assert.equal(Settings.defaults[module.id] == true, Settings:Get(module.id))
-        -- Unassigned, the stored scope falls back to the account layer.
-        assert.is_true(Settings:AssignProfile(nil))
+        assert.is_nil(Settings:Stored(module.id))
+        assert.is_false(UI:IsModified(module))
+        assert.equal(default, Settings:Get(module.id))
+    end)
+end)
+
+describe("profiles panel", function()
+    it("lists Default first, and its Delete button is disabled", function()
+        local _, R = loaded()
+        local UI = R.UI
+        UI:Toggle()
+        UI:SelectCategory("Profiles")
+        local row = UI.profileRows[1]
+        assert.is_true(row:IsShown())
+        assert.equal(R.L.UI_PROFILE_DEFAULT, row.name:GetText())
+        assert.is_false(row.delete:IsEnabled())
+        assert.matches(R.L.UI_PROFILE_IN_USE, row.summary:GetText(), 1, true)
+        assert.matches(string.format("^%%d+ of %d features on", #R.modules), row.summary:GetText())
+    end)
+
+    it("counts a feature the profile does not mention by its module default", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        local expected = 0
+        for _, module in ipairs(R.modules) do
+            if Settings.defaults[module.id] then expected = expected + 1 end
+        end
+        UI:SelectCategory("Profiles")
+        assert.equal(string.format(R.L.UI_PROFILE_SUMMARY, expected, #R.modules) .. R.L.UI_PROFILE_IN_USE,
+            UI.profileRows[1].summary:GetText())
+    end)
+
+    it("creates a copy of the active profile with its settings and switches to it", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        UI:SelectCategory("Profiles")
+        Settings:SetOption("repairCapGold", 7)
+        UI.profileName:SetText("Raid")
+        UI:CreateProfileFromActive()
+        assert.equal("Raid", Settings:ActiveProfile())
+        assert.equal(7, Settings:GetOption("repairCapGold"))
+        assert.equal(string.format(R.L.UI_PROFILE_CREATED, "Raid"), UI.profileStatus:GetText())
+        assert.equal("Raid", UI.profileAssign.button:GetDefaultText())
+        assert.equal(2, #R.Settings:ProfileNames())
+        UI.profileName:SetText("Raid")
+        UI:CreateProfileFromActive()
+        assert.equal(R.L.UI_PROFILE_ERR_profile_exists, UI.profileStatus:GetText())
+        UI.profileName:SetText("")
+        UI:CreateProfileFromActive()
+        assert.equal(R.L.UI_PROFILE_NAME_MISSING, UI.profileStatus:GetText())
+    end)
+
+    it("assigns through the same choice as the bar", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        UI:SelectCategory("Profiles")
+        assert.is_true(Settings:CreateProfile("Alts", "Default"))
         UI:Refresh()
-        assert.equal("account", UI.mode)
-        assert.equal("account", Settings:GetScope())
-        assert.equal(2, #UI.scopeDropdown.button:OpenMenu())
+        local entries = UI.profileAssign.button:OpenMenu()
+        assert.equal(2, #entries)
+        entries[2].choose()
+        assert.equal("Alts", Settings:ActiveProfile())
+        UI:SelectCategory("Vendor")
+        assert.equal("Alts", UI.profileNameText:GetText())
+    end)
+
+    it("shows the final name an import ended up with", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        UI:SelectCategory("Profiles")
+        assert.is_true(Settings:CreateProfile("Shared", "Default"))
+        UI.profileString:SetText(Settings:ExportProfile("Shared"))
+        UI.profileImport:GetScript("OnClick")(UI.profileImport)
+        assert.is_not_nil(Settings.account.profiles["Shared 2"])
+        assert.equal(string.format(R.L.UI_PROFILE_IMPORTED, "Shared 2"), UI.profileStatus:GetText())
+    end)
+
+    it("arms Delete on the first press and removes the profile on the second", function()
+        local _, R = loaded()
+        local UI, Settings = R.UI, R.Settings
+        UI:Toggle()
+        UI:SelectCategory("Profiles")
+        Settings:CreateProfile("Temp", "Default")
+        UI:Refresh()
+        local row = UI.profileRows[2]
+        assert.equal("Temp", row.profileName)
+        row.delete:GetScript("OnClick")(row.delete)
+        assert.is_not_nil(Settings.account.profiles.Temp)
+        assert.equal(R.L.UI_PROFILE_CONFIRM, row.delete.label:GetText())
+        row.delete:GetScript("OnClick")(row.delete)
+        assert.is_nil(Settings.account.profiles.Temp)
     end)
 end)

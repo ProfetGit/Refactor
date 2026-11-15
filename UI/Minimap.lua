@@ -31,13 +31,27 @@ local function place(button, angle)
     button:SetPoint("CENTER", parent, "CENTER", math.cos(radians) * radius, math.sin(radians) * radius)
 end
 
--- Dragging is the one thing here that genuinely animates, so it takes an OnUpdate and
--- gives it back the moment the mouse is released.
-local function drag(button)
+-- The cursor's angle around the button's parent, in degrees.
+local function cursorAngle(button)
     local x, y = GetCursorPosition()
     local scale = button:GetParent():GetEffectiveScale()
     local centerX, centerY = button:GetParent():GetCenter()
-    local angle = math.deg(math.atan2(y / scale - centerY, x / scale - centerX))
+    return math.deg(math.atan2(y / scale - centerY, x / scale - centerX))
+end
+
+-- The minimap button collector rides the same rim, so it shares the two.
+function UI:PlaceOnMinimapRim(button, angle)
+    place(button, angle)
+end
+
+function UI:MinimapCursorAngle(button)
+    return cursorAngle(button)
+end
+
+-- Dragging is the one thing here that genuinely animates, so it takes an OnUpdate and
+-- gives it back the moment the mouse is released.
+local function drag(button)
+    local angle = cursorAngle(button)
     local store = saved()
     if store then
         store.angle = angle

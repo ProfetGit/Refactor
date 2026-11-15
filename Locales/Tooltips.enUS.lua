@@ -1,7 +1,6 @@
 local _, R = ...
 R.L = R.L or {}
 local L = R.L
-L.UI_Tooltips = "Tooltips"
 L.TOOLTIP_BORDER_NAME = "Coloured tooltip border"
 L.TOOLTIP_BORDER_DESC = "Tint the tooltip border with the item's quality colour, or a player's class colour."
 L.TOOLTIP_BORDER_DETAIL = "Applies to the main, linked and comparison tooltips. Hovering a player tints the "

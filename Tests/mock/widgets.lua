@@ -32,6 +32,8 @@ local noops = {
     -- box that selects its own text so Ctrl C works.
     "SetSpacing", "SetVerticalScrollRange", "HighlightText",
     "SetRadians",
+    -- The minimap button collector keeps its button lit while the drawer is open or dragged.
+    "LockHighlight", "UnlockHighlight",
 }
 
 local values = {
@@ -144,6 +146,7 @@ function Widgets.install(env)
     -- the code under test must fall back rather than guess.
     function Frame:GetTop() return nil end
     function Frame:GetLeft() return nil end
+    function Frame:GetCenter() return nil end
     -- Recorded, not dropped: a row refuses a click while its toggle is disabled, and that
     -- is only testable if the mock remembers being disabled.
     function Frame:SetEnabled(enabled) self.enabled = enabled ~= false end

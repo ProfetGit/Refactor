@@ -114,6 +114,11 @@ local GROUND_DIST = { key = "groundEffectDist", minimum = 10, maximum = 500, ste
     labelKey = "UI_GROUND_EFFECT_DIST", formatter = groundEffectText }
 local GROUND_FADE = { key = "groundEffectFade", minimum = 10, maximum = 370, step = 10,
     labelKey = "UI_GROUND_EFFECT_FADE", formatter = groundEffectText }
+local function perRowText(value)
+    return string.format(L.UI_MINIMAP_BUTTONS_COLUMN_COUNT, value)
+end
+local MINIMAP_COLUMNS = { key = "minimapButtonsColumns", minimum = 1, maximum = 10, step = 1,
+    labelKey = "UI_MINIMAP_BUTTONS_COLUMNS", formatter = perRowText }
 -- Zero is off. A thousand gold kept back is past what a levelling character carries.
 local MAIL_KEEP_GOLD = { key = "mailKeepGold", minimum = 0, maximum = 1000, step = 10,
     labelKey = "UI_MAIL_ALTS_KEEP_GOLD", formatter = keepGoldText }
@@ -326,6 +331,15 @@ function UI:BuildGroundEffectSettings(parent)
     self:RegisterModuleSettings("interface.groundEffects", block)
 end
 
+function UI:BuildMinimapButtonsSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent, L.UI_MINIMAP_BUTTONS_HELP)
+    self:OptionCheckbox(block, "minimapButtonsAttach", "UI_MINIMAP_BUTTONS_ATTACH")
+    self:OptionCheckbox(block, "minimapButtonsCloseOnClick", "UI_MINIMAP_BUTTONS_CLOSE")
+    self:OptionSlider(block, MINIMAP_COLUMNS)
+    block:Finish()
+    self:RegisterModuleSettings("interface.minimapButtons", block)
+end
+
 function UI:BuildQuestSettings(parent)
     local quests = self.Widgets:SettingsBlock(parent)
     self:OptionCheckbox(quests, "questAcceptLists", "UI_QUEST_LISTS")
@@ -341,6 +355,13 @@ function UI:BuildResurrectSettings(parent)
     self:OptionCheckbox(block, "resurrectWorld", "UI_RESURRECT_WORLD")
     block:Finish()
     self:RegisterModuleSettings("social.acceptResurrect", block)
+end
+
+function UI:BuildPlaceSpellsSettings(parent)
+    local block = self.Widgets:SettingsBlock(parent)
+    self:OptionCheckbox(block, "placeSpellsRanks", "UI_PLACE_SPELLS_RANKS")
+    block:Finish()
+    self:RegisterModuleSettings("interface.placeNewSpells", block)
 end
 
 function UI:BuildBagUpgradeSettings(parent)

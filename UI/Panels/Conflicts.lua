@@ -27,8 +27,7 @@ function UI:BuildConflicts(parent)
         row.detail:SetWordWrap(false)
         row.resolve = Theme:Button(row, BUTTON_WIDTH, L.UI_CONFLICT_DISABLE, function()
             if row.moduleID then
-                Settings:SetAccount(row.moduleID, false)
-                Settings:SetOverride(row.moduleID, nil)
+                Settings:Set(row.moduleID, false)
                 self:Refresh()
             end
         end)

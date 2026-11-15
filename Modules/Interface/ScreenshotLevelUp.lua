@@ -5,7 +5,7 @@
 --- Hot: no
 local _, R = ...
 local ScreenshotLevelUp = R:RegisterModule({
-    id = "interface.screenshotLevelUp", category = "Interface", nameKey = "SCREENSHOT_NAME",
+    id = "interface.screenshotLevelUp", category = "Levelling", nameKey = "SCREENSHOT_NAME",
     descriptionKey = "SCREENSHOT_DESC", detailKey = "SCREENSHOT_DETAIL",
     requires = { "Screenshot" },
     risk = "visible", defaultEnabled = false,

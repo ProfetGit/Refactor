@@ -17789,6 +17789,11 @@
       "line": 28,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/ExpansionDocumentation.lua"
     },
+    "GetActionInfo": {
+      "kind": "source-reference",
+      "line": 515,
+      "path": "Interface/AddOns/Blizzard_ActionBar/Shared/ActionButton.lua"
+    },
     "GetAddOnCPUUsage": {
       "line": 10,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PerformanceDocumentation.lua"
@@ -19401,6 +19406,11 @@
       "line": 76,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/RaidMarkersDocumentation.lua"
     },
+    "PlaySound": {
+      "kind": "source-reference",
+      "line": 154,
+      "path": "Interface/AddOns/Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.lua"
+    },
     "PlayerCanTeleport": {
       "line": 1327,
       "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/PlayerScriptDocumentation.lua"
@@ -20046,6 +20056,21 @@
       "kind": "source-reference",
       "line": 77,
       "path": "Interface/AddOns/Blizzard_SharedXML/Mainline/UIDropDownMenu.lua"
+    },
+    "UIErrorsFrame": {
+      "kind": "source-reference",
+      "line": 3,
+      "path": "Interface/AddOns/Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.xml"
+    },
+    "UIErrorsFrame.GetMessagesSuppressed": {
+      "kind": "source-reference",
+      "line": 178,
+      "path": "Interface/AddOns/Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.lua"
+    },
+    "UIErrorsFrame.SetMessageTypeEnabled": {
+      "kind": "source-reference",
+      "line": 103,
+      "path": "Interface/AddOns/Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.lua"
     },
     "UIParent": {
       "kind": "source-reference",

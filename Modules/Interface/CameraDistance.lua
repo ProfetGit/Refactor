@@ -5,7 +5,7 @@
 --- Hot: no
 local _, R = ...
 local CameraDistance = R:RegisterModule({
-    id = "interface.cameraDistance", category = "Interface", nameKey = "CAMERA_DISTANCE_NAME",
+    id = "interface.cameraDistance", category = "Camera", nameKey = "CAMERA_DISTANCE_NAME",
     descriptionKey = "CAMERA_DISTANCE_DESC", detailKey = "CAMERA_DISTANCE_DETAIL",
     requires = { "C_CVar.SetCVar", "C_CVar.GetCVarDefault" },
     risk = "visible", defaultEnabled = false,
