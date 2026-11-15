@@ -1,4 +1,4 @@
-local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 20)
+local Theme = LibStub:NewLibrary("LibRefactorTheme-1.0", 21)
 if not Theme then return end
 
 local unpack = unpack
@@ -49,6 +49,11 @@ Theme.colors = {
     QUEST_TOTAL = { 0.90, 0.90, 0.86, 1 },
     TEXT_LAST = { 1, 0.86, 0.36, 1 },
     PLATE_DIM = { 0, 0, 0, 0.55 },
+    -- The friendly plate tags wear the client's own chat colours for party and raid, and the
+    -- Battle.net blue of the friends list, so each reads as what the player already knows.
+    PLATE_PARTY = { 0.67, 0.67, 1, 1 },
+    PLATE_RAID = { 1, 0.50, 0, 1 },
+    PLATE_FRIEND = { 0.51, 0.77, 1, 1 },
     MAP_UNEXPLORED = { 0.72, 0.72, 0.72, 1 },
     -- The zone exit arrows: green, so they read as "go this way" against any zone's art.
     MAP_EXIT = { 0.3, 1, 0.4, 1 },
@@ -1116,6 +1121,34 @@ function Theme:PlateDim(parent)
     self:Fill(dim, "PLATE_DIM")
     dim:Hide()
     return dim
+end
+
+local PLATE_TAG_FONT = 10
+
+-- One word by a friendly player's name: party, raid or friend. Refactor's own text on the
+-- plate; Blizzard's name keeps its own colour and alpha.
+function Theme:PlateTag(parent)
+    local tag = CreateFrame("Frame", nil, parent)
+    tag:SetSize(80, PLATE_TAG_FONT + 2)
+    tag.label = self:Text(tag, "", "small", "PLATE_FRIEND")
+    tag.label:SetPoint("CENTER")
+    tag.label:SetJustifyH("CENTER")
+    local fontFile = tag.label:GetFont()
+    tag.label:SetFont(fontFile, PLATE_TAG_FONT, "OUTLINE")
+    tag.label:SetShadowOffset(1, -1)
+    local theme = self
+    function tag:SetTag(text, token)
+        self.label:SetText(text)
+        theme:Color(self.label, token, true)
+    end
+    function tag:ResetTag()
+        self.label:SetText("")
+        self:ClearAllPoints()
+        self:SetParent(nil)
+        self:Hide()
+    end
+    tag:Hide()
+    return tag
 end
 
 local CHECK_SIZE = 26

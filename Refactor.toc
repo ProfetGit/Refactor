@@ -121,6 +121,7 @@ Modules/Interface/MapZoneLevels.lua
 Data/MapOverlays.lua
 Modules/Interface/MapReveal.lua
 Modules/Interface/Visibility.lua
+Modules/Interface/NameplateClassNames.lua
 
 Integrations/Neighbours.lua
 Integrations/Questie.lua
@@ -134,6 +135,7 @@ Integrations/GearRefactor.lua
 
 Modules_LoD/Nameplates/QuestProgress_Data.lua
 Modules_LoD/Nameplates/QuestProgress.lua
+Modules_LoD/Nameplates/FriendTags.lua
 Modules_LoD/Tooltips/RarityBorder_Data.lua
 Modules_LoD/Tooltips/RarityBorder.lua
 Modules_LoD/Tooltips/Anchor.lua
